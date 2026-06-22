@@ -85,7 +85,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
               `;
 
               const response = await ai.models.generateContent({
-                  model: 'gemini-1.5-flash',
+                  model: 'gemini-2.5-flash',
                   contents: prompt,
                   config: {
                       responseMimeType: 'application/json',

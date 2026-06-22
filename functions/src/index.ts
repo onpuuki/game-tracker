@@ -18,7 +18,9 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
 
   try {
     // 1. Fetch Configuration
+    functions.logger.info(`[${traceId}] Before fetching config`, { traceId });
     const configDoc = await db.collection('settings').doc('config').get();
+    functions.logger.info(`[${traceId}] After fetching config`, { traceId });
     if (!configDoc.exists) {
         functions.logger.warn(`[${traceId}] Configuration settings/config not found.`, { traceId });
         return { success: false, message: 'Configuration not found.' };
@@ -37,18 +39,23 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
         functions.logger.error(`[${traceId}] Gemini API Key not found in configuration.`, { traceId });
         return { success: false, message: 'Gemini API Key missing.' };
     }
+    functions.logger.info(`[${traceId}] Before instantiating GoogleGenAI`, { traceId });
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    functions.logger.info(`[${traceId}] After instantiating GoogleGenAI`, { traceId });
 
     for (const game of targetGames) {
+      functions.logger.info(`[${traceId}] Starting for loop over games`, { traceId });
       functions.logger.info(`[${traceId}] Processing game: ${game.gameName} - ${game.url}`, { traceId });
 
       let htmlContent = '';
       try {
+        functions.logger.info(`[${traceId}] Before fetch call for ${game.gameName}`, { traceId });
         const response = await fetch(game.url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           }
         });
+        functions.logger.info(`[${traceId}] After fetch call for ${game.gameName}`, { traceId });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -163,7 +170,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
     return { success: true, message: 'Sync completed.' };
 
   } catch (error) {
-    functions.logger.error(`[${traceId}] Unhandled error in syncEvents`, { error, traceId });
+    functions.logger.error(`[${traceId}] Unhandled error in syncEvents: ${error instanceof Error ? error.stack : String(error)}`, { traceId });
     throw new functions.https.HttpsError('internal', 'Internal error occurred during sync.');
   }
 });

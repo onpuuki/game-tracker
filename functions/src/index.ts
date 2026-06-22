@@ -81,9 +81,19 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
           let extractedEvents: any[] = [];
           try {
               // HTMLから不要な要素を除去し、テキストのみを抽出
+              // 1. HTMLを読み込み
               const $ = cheerio.load(htmlContent);
-              $('script, style, noscript, iframe, img, svg, header, footer, nav').remove();
-              const cleanText = $('body').text().replace(/\s+/g, ' ').trim();
+
+              // 2. 露骨な不要エリア（サイドバー、メニュー、ヘッダー等）を根こそぎ削除
+              $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
+
+              // 3. GameWith等のメインコンテンツ領域を優先して取得
+              let mainContentText = $('article').text();
+              if (!mainContentText) mainContentText = $('main').text();
+              if (!mainContentText) mainContentText = $('.kw-article').text();
+              if (!mainContentText) mainContentText = $('body').text();
+
+              const cleanText = mainContentText.replace(/\s+/g, ' ').trim();
 
               const prompt = `
               このHTMLは『${game.gameName}』のサイトです。
@@ -94,7 +104,7 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
               - imageUrl: イベントの画像URL (取得できなければnull)
 
               HTML:
-              ${cleanText.substring(0, 40000)} // Truncate to avoid exceeding token limits
+              ${cleanText.substring(0, 25000)} // Truncate to avoid exceeding token limits
               `;
 
               const response = await ai.models.generateContent({

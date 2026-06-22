@@ -13,7 +13,7 @@ Future<void> _initializeFirebase() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').settings = const Settings(persistenceEnabled: true);
 }
 
 class MyApp extends StatelessWidget {

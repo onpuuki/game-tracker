@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class UrlManagerScreen extends StatefulWidget {
   const UrlManagerScreen({super.key});
@@ -29,7 +30,7 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('settings').doc('config');
+      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config');
       await docRef.set({
         'targets': FieldValue.arrayUnion([
           {'gameName': gameName, 'url': url}
@@ -65,7 +66,7 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('settings').doc('config');
+      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config');
       await docRef.update({
         'targets': FieldValue.arrayRemove([target])
       });
@@ -129,7 +130,7 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
           const Divider(),
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('settings').doc('config').snapshots(),
+              stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config').snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));

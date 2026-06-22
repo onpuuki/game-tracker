@@ -1,6 +1,5 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import puppeteer from 'puppeteer';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 
 admin.initializeApp();
@@ -40,29 +39,26 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
     }
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-    // 2. Launch Puppeteer
-    functions.logger.info(`[${traceId}] Launching Puppeteer`, { traceId });
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    for (const game of targetGames) {
+      functions.logger.info(`[${traceId}] Processing game: ${game.gameName} - ${game.url}`, { traceId });
 
-    try {
-        for (const game of targetGames) {
-          functions.logger.info(`[${traceId}] Processing game: ${game.gameName} - ${game.url}`, { traceId });
-
-          let htmlContent = '';
-          try {
-            const page = await browser.newPage();
-            await page.goto(game.url, { waitUntil: 'networkidle2', timeout: 30000 });
-            htmlContent = await page.content();
-            await page.close();
-          } catch (err) {
-            functions.logger.error(`[${traceId}] Failed to scrape HTML for ${game.gameName}`, { error: err, traceId });
-            continue;
+      let htmlContent = '';
+      try {
+        const response = await fetch(game.url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           }
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        htmlContent = await response.text();
+      } catch (err) {
+        functions.logger.error(`[${traceId}] Failed to fetch HTML for ${game.gameName}`, { error: err, traceId });
+        continue;
+      }
 
-          // 3. Extract via Gemini
+      // 3. Extract via Gemini
           functions.logger.info(`[${traceId}] Requesting Gemini API for ${game.gameName}`, { traceId });
 
           let extractedEvents: any[] = [];
@@ -161,9 +157,6 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
               functions.logger.error(`[${traceId}] Failed to sync to Firestore for ${game.gameName}`, { error: err, traceId });
           }
 
-        }
-    } finally {
-        await browser.close();
     }
 
     functions.logger.info(`[${traceId}] syncEvents completed successfully`, { traceId });

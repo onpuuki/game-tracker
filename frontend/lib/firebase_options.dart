@@ -41,9 +41,10 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDummyKeyPlaceholderForAndroid',
-    appId: '1:156839959882:android:dummyappidplaceholder',
+    apiKey: 'AIzaSyAP1AHYOhnsg2QFYpNp_YCr44FiwI5hvfU',
+    appId: '1:156839959882:android:cce07f89b08587e61ef5b3',
     messagingSenderId: '156839959882',
     projectId: 'game-tracker-444b2',
+    storageBucket: 'game-tracker-444b2.firebasestorage.app',
   );
 }

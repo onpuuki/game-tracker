@@ -29,4 +29,4 @@ jobs:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only functions --project game-tracker-444b2 --non-interactive --debug
+        run: npx firebase-tools deploy --only functions --project game-tracker-444b2 --non-interactive --debug --force

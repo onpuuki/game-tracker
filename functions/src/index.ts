@@ -7,10 +7,6 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// Initialize Gemini API Client
-// Note: Requires GEMINI_API_KEY environment variable set in Cloud Functions
-const ai = new GoogleGenAI({});
-
 interface ConfigItem {
   gameName: string;
   url: string;
@@ -36,6 +32,13 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
         functions.logger.info(`[${traceId}] No games configured.`, { traceId });
         return { success: true, message: 'No games configured to sync.' };
     }
+
+    const geminiApiKey = configData?.geminiApiKey;
+    if (!geminiApiKey) {
+        functions.logger.error(`[${traceId}] Gemini API Key not found in configuration.`, { traceId });
+        return { success: false, message: 'Gemini API Key missing.' };
+    }
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
     // 2. Launch Puppeteer
     functions.logger.info(`[${traceId}] Launching Puppeteer`, { traceId });

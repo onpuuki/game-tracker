@@ -174,3 +174,4 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
     throw new functions.https.HttpsError('internal', 'Internal error occurred during sync.');
   }
 });
+// force cold start

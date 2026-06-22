@@ -14,7 +14,7 @@ interface ConfigItem {
   url: string;
 }
 
-export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(async (data, context) => {
+export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
   const traceId = data.traceId || 'unknown-trace-id';
 
   functions.logger.info(`[${traceId}] Starting syncEvents`, { traceId });

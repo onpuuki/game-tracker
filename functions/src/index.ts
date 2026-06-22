@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 admin.initializeApp();
 
@@ -72,10 +73,10 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
 
           let extractedEvents: any[] = [];
           try {
-              const cleanHtml = htmlContent
-                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                .substring(0, 300000);
+              // HTMLから不要な要素を除去し、テキストのみを抽出
+              const $ = cheerio.load(htmlContent);
+              $('script, style, noscript, iframe, img, svg, header, footer, nav').remove();
+              const cleanText = $('body').text().replace(/\s+/g, ' ').trim();
 
               const prompt = `
               このHTMLは『${game.gameName}』のサイトです。
@@ -86,7 +87,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
               - imageUrl: イベントの画像URL (取得できなければnull)
 
               HTML:
-              ${cleanHtml} // Truncate to avoid exceeding token limits
+              ${cleanText.substring(0, 40000)} // Truncate to avoid exceeding token limits
               `;
 
               const response = await ai.models.generateContent({

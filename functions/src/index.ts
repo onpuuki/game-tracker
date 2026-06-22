@@ -72,6 +72,11 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
 
           let extractedEvents: any[] = [];
           try {
+              const cleanHtml = htmlContent
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                .substring(0, 300000);
+
               const prompt = `
               このHTMLは『${game.gameName}』のサイトです。
               HTML内からイベント情報を抽出し、JSONの配列形式で返してください。
@@ -81,7 +86,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
               - imageUrl: イベントの画像URL (取得できなければnull)
 
               HTML:
-              ${htmlContent.substring(0, 30000)} // Truncate to avoid exceeding token limits
+              ${cleanHtml} // Truncate to avoid exceeding token limits
               `;
 
               const response = await ai.models.generateContent({

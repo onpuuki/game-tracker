@@ -1,11 +1,12 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import axios from 'axios';
 
 admin.initializeApp();
 
-const db = admin.firestore();
+const db = getFirestore(admin.app(), 'default');
 
 interface ConfigItem {
   gameName: string;

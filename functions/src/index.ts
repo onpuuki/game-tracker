@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
+import axios from 'axios';
 
 admin.initializeApp();
 
@@ -50,16 +51,16 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
       let htmlContent = '';
       try {
         functions.logger.info(`[${traceId}] Before fetch call for ${game.gameName}`, { traceId });
-        const response = await fetch(game.url, {
+
+        const response = await axios.get(game.url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          }
+          },
+          timeout: 10000 // 10秒タイムアウト
         });
+
         functions.logger.info(`[${traceId}] After fetch call for ${game.gameName}`, { traceId });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        htmlContent = await response.text();
+        htmlContent = response.data;
       } catch (err) {
         functions.logger.error(`[${traceId}] Failed to fetch HTML for ${game.gameName}`, { error: err, traceId });
         continue;

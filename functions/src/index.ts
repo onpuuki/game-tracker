@@ -46,6 +46,8 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
     const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
     functions.logger.info(`[${traceId}] After instantiating GoogleGenAI`, { traceId });
 
+    const debugInfo: any[] = [];
+
     for (const game of targetGames) {
       functions.logger.info(`[${traceId}] Starting for loop over games`, { traceId });
       functions.logger.info(`[${traceId}] Processing game: ${game.gameName} - ${game.url}`, { traceId });
@@ -63,6 +65,11 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
 
         functions.logger.info(`[${traceId}] After fetch call for ${game.gameName}`, { traceId });
         htmlContent = response.data;
+        debugInfo.push({
+          game: game.gameName,
+          length: htmlContent.length,
+          snippet: htmlContent.substring(0, 200)
+        });
       } catch (err) {
         functions.logger.error(`[${traceId}] Failed to fetch HTML for ${game.gameName}`, { error: err, traceId });
         continue;
@@ -175,7 +182,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
     }
 
     functions.logger.info(`[${traceId}] syncEvents completed successfully`, { traceId });
-    return { success: true, message: 'Sync completed.' };
+    return { success: true, message: 'Sync completed.', debugInfo };
 
   } catch (error) {
     functions.logger.error(`[${traceId}] Unhandled error in syncEvents: ${error instanceof Error ? error.stack : String(error)}`, { traceId });

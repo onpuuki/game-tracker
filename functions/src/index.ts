@@ -42,7 +42,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
         return { success: false, message: 'Gemini API Key missing.' };
     }
     functions.logger.info(`[${traceId}] Before instantiating GoogleGenAI`, { traceId });
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
     functions.logger.info(`[${traceId}] After instantiating GoogleGenAI`, { traceId });
 
     for (const game of targetGames) {
@@ -85,7 +85,7 @@ export const syncEvents = functions.runWith({ memory: '1GB' }).https.onCall(asyn
               `;
 
               const response = await ai.models.generateContent({
-                  model: 'gemini-1.5-pro',
+                  model: 'gemini-1.5-flash',
                   contents: prompt,
                   config: {
                       responseMimeType: 'application/json',

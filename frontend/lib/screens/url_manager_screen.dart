@@ -11,6 +11,7 @@ class UrlManagerScreen extends StatefulWidget {
 class _UrlManagerScreenState extends State<UrlManagerScreen> {
   final _gameNameController = TextEditingController();
   final _urlController = TextEditingController();
+  bool _isLoading = false;
 
   Future<void> _addTarget() async {
     final gameName = _gameNameController.text.trim();
@@ -22,6 +23,10 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
       );
       return;
     }
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final docRef = FirebaseFirestore.instance.collection('settings').doc('config');
@@ -45,10 +50,20 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
           SnackBar(content: Text('Error adding target: $e')),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _deleteTarget(Map<String, dynamic> target) async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final docRef = FirebaseFirestore.instance.collection('settings').doc('config');
       await docRef.update({
@@ -64,6 +79,12 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error deleting target: $e')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -93,8 +114,14 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: _addTarget,
-                  child: const Text('Add Target'),
+                  onPressed: _isLoading ? null : _addTarget,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Add Target'),
                 ),
               ],
             ),
@@ -127,7 +154,7 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
                       subtitle: Text(target['url'] ?? ''),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteTarget(target),
+                        onPressed: _isLoading ? null : () => _deleteTarget(target),
                       ),
                     );
                   },

@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
@@ -96,34 +96,22 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
               const cleanText = mainContentText.replace(/\s+/g, ' ').trim();
 
               const prompt = `
-              このHTMLは『${game.gameName}』のサイトです。
-              HTML内からイベント情報を抽出し、JSONの配列形式で返してください。
-              各イベントは以下のプロパティを持つオブジェクトとしてください。
-              - title: イベントのタイトル
-              - period: イベントの期間
-              - imageUrl: イベントの画像URL (取得できなければnull)
+このテキストは『${game.gameName}』の攻略サイトのメインコンテンツです。
+テキスト内から現在開催中のイベント情報を抽出し、必ずJSONの配列形式のみを出力してください。
+各イベントは以下のプロパティを持つオブジェクトとしてください。
+- title: イベントのタイトル
+- period: イベントの期間
+- imageUrl: イベントの画像URL (取得できなければnull)
 
-              HTML:
-              ${cleanText.substring(0, 25000)} // Truncate to avoid exceeding token limits
-              `;
+テキスト:
+${cleanText.substring(0, 20000)}
+`;
 
               const response = await ai.models.generateContent({
                   model: 'gemini-2.5-flash',
                   contents: prompt,
                   config: {
-                      responseMimeType: 'application/json',
-                      responseSchema: {
-                          type: Type.ARRAY,
-                          items: {
-                              type: Type.OBJECT,
-                              properties: {
-                                  title: { type: Type.STRING },
-                                  period: { type: Type.STRING },
-                                  imageUrl: { type: Type.STRING, nullable: true },
-                              },
-                              required: ['title', 'period']
-                          }
-                      } as Schema
+                      responseMimeType: 'application/json'
                   }
               });
 

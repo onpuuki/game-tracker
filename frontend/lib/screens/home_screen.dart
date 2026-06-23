@@ -16,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
+  bool _isClearingEvents = false;
 
   Future<void> _triggerSync() async {
     setState(() {
@@ -103,6 +104,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(builder: (context) => const DebugLogScreen()),
                 );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete),
+              title: _isClearingEvents
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Clear All Events'),
+              onTap: _isClearingEvents ? null : () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirmation'),
+                    content: const Text('本当に削除しますか？'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('キャンセル'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('はい'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  setState(() {
+                    _isClearingEvents = true;
+                  });
+
+                  try {
+                    final callable = FirebaseFunctions.instance.httpsCallable('clearAllEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
+                    await callable.call();
+
+                    if (mounted) {
+                      Navigator.pop(context); // Close drawer
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Events cleared successfully')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to clear events: $e')),
+                      );
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() {
+                        _isClearingEvents = false;
+                      });
+                    }
+                  }
+                }
               },
             ),
           ],
@@ -220,12 +276,56 @@ class _HomeScreenState extends State<HomeScreen> {
             final eventData = events[index].data() as Map<String, dynamic>;
             final title = eventData['title'] as String? ?? 'No Title';
             final period = eventData['period'] as String? ?? 'Unknown Period';
+            final imageUrl = eventData['imageUrl'] as String?;
+            final endDateStr = eventData['endDate'] as String?;
+
+            int? remainingDays;
+            if (endDateStr != null) {
+              final endDate = DateTime.tryParse(endDateStr);
+              if (endDate != null) {
+                final now = DateTime.now();
+                // Normalize dates to midnight to calculate correct difference
+                final end = DateTime(endDate.year, endDate.month, endDate.day);
+                final today = DateTime(now.year, now.month, now.day);
+                remainingDays = end.difference(today).inDays;
+              }
+            }
 
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: ListTile(
+                leading: imageUrl != null && imageUrl.isNotEmpty
+                    ? SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.image_not_supported),
+                        ),
+                      )
+                    : null,
                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(period),
+                trailing: remainingDays != null && remainingDays >= 0
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red),
+                        ),
+                        child: Text(
+                          '残り$remainingDays日',
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
             );
           },

@@ -84,6 +84,22 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
               // 1. HTMLを読み込み
               const $ = cheerio.load(htmlContent);
 
+              // 1.5 <a>タグからリンクを抽出してテキストに埋め込む
+              $('a').each((_, element) => {
+                  const href = $(element).attr('href');
+                  if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                      try {
+                          const absoluteUrl = new URL(href, game.url).href;
+                          const currentText = $(element).text();
+                          if (currentText.trim()) {
+                              $(element).text(`${currentText} [詳細URL: ${absoluteUrl}]`);
+                          }
+                      } catch (e) {
+                          // Ignore invalid URLs
+                      }
+                  }
+              });
+
               // 2. 露骨な不要エリア（サイドバー、メニュー、ヘッダー等）を根こそぎ削除
               $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
 
@@ -104,6 +120,12 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
 - endDate: イベントの終了日（YYYY-MM-DD形式。終了日が不明な場合はnull）
 - imageUrl: イベントの画像URL (取得できなければnull)
 - eventUrl: イベント詳細のURL (なければnull)
+
+【抽出除外の厳格な条件】
+以下のいずれかに該当するイベント・コンテンツは、抽出対象から絶対に除外してください。
+1. 常設コンテンツ（期限が設定されていないもの）
+2. 常時開催のイベント
+3. 毎月1日〜月末など、毎月定期的に開催されるイベント
 
 テキスト:
 ${cleanText.substring(0, 20000)}

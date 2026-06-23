@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/debug_log_manager.dart';
 import 'debug_log_screen.dart';
 import 'url_manager_screen.dart';
@@ -215,122 +216,137 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: Text('No targets found. Add targets in URL Manager.'));
                 }
 
-                return DefaultTabController(
-                  length: targets.length,
-                  child: Column(
-                    children: [
-                      TabBar(
-                        isScrollable: true,
-                        labelColor: Theme.of(context).primaryColor,
-                        unselectedLabelColor: Colors.grey,
-                        tabs: targets.map((target) {
-                          return Tab(text: target['gameName'] ?? 'Unknown');
-                        }).toList(),
-                      ),
-                      Expanded(
-                        child: TabBarView(
-                          children: targets.map((target) {
-                            final gameName = target['gameName'] as String?;
-                            if (gameName == null) {
-                              return const Center(child: Text('Invalid target configuration'));
-                            }
-                            return _buildEventList(gameName);
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+                      .collectionGroup('events')
+                      .snapshots(),
+                  builder: (context, eventSnapshot) {
+                    if (eventSnapshot.hasError) {
+                      return Center(child: Text('Error loading events: ${eventSnapshot.error}'));
+                    }
+                    if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final events = eventSnapshot.data?.docs ?? [];
+
+                    if (events.isEmpty) {
+                      return const Center(child: Text('No events found.'));
+                    }
+
+                    return ListView.builder(
+                      itemCount: events.length,
+                      itemBuilder: (context, index) {
+                        final eventData = events[index].data() as Map<String, dynamic>;
+                        final eventGameName = eventData['gameName'] as String? ?? 'Unknown Game';
+                        final title = eventData['title'] as String? ?? 'No Title';
+                        final period = eventData['period'] as String? ?? 'Unknown Period';
+                        final imageUrl = eventData['imageUrl'] as String?;
+                        final endDateStr = eventData['endDate'] as String?;
+                        final eventUrl = eventData['eventUrl'] as String?;
+
+                        int? remainingDays;
+                        if (endDateStr != null) {
+                          final endDate = DateTime.tryParse(endDateStr);
+                          if (endDate != null) {
+                            final now = DateTime.now();
+                            final end = DateTime(endDate.year, endDate.month, endDate.day);
+                            final today = DateTime(now.year, now.month, now.day);
+                            remainingDays = end.difference(today).inDays;
+                          }
+                        }
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                          child: InkWell(
+                            onTap: () async {
+                              String? targetUrl = eventUrl;
+                              if (targetUrl == null || targetUrl.isEmpty) {
+                                // Fallback to settings config url for the game
+                                final targetConfig = targets.firstWhere(
+                                  (t) => t['gameName'] == eventGameName,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                targetUrl = targetConfig['url'] as String?;
+                              }
+
+                              if (targetUrl != null && targetUrl.isNotEmpty) {
+                                final uri = Uri.parse(targetUrl);
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                } else {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Could not launch URL')),
+                                    );
+                                  }
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('No URL available')),
+                                  );
+                                }
+                              }
+                            },
+                            child: ListTile(
+                              leading: imageUrl != null && imageUrl.isNotEmpty
+                                  ? SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: Image.network(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            const Icon(Icons.image_not_supported),
+                                      ),
+                                    )
+                                  : null,
+                              title: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    eventGameName,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Theme.of(context).primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              subtitle: Text(period),
+                              trailing: remainingDays != null && remainingDays >= 0
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.red),
+                                      ),
+                                      child: Text(
+                                        '残り$remainingDays日',
+                                        style: const TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildEventList(String gameName) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-          .collection('games')
-          .doc(gameName)
-          .collection('events')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error loading events: ${snapshot.error}'));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final events = snapshot.data?.docs ?? [];
-
-        if (events.isEmpty) {
-          return const Center(child: Text('No events found for this game.'));
-        }
-
-        return ListView.builder(
-          itemCount: events.length,
-          itemBuilder: (context, index) {
-            final eventData = events[index].data() as Map<String, dynamic>;
-            final title = eventData['title'] as String? ?? 'No Title';
-            final period = eventData['period'] as String? ?? 'Unknown Period';
-            final imageUrl = eventData['imageUrl'] as String?;
-            final endDateStr = eventData['endDate'] as String?;
-
-            int? remainingDays;
-            if (endDateStr != null) {
-              final endDate = DateTime.tryParse(endDateStr);
-              if (endDate != null) {
-                final now = DateTime.now();
-                // Normalize dates to midnight to calculate correct difference
-                final end = DateTime(endDate.year, endDate.month, endDate.day);
-                final today = DateTime(now.year, now.month, now.day);
-                remainingDays = end.difference(today).inDays;
-              }
-            }
-
-            return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: ListTile(
-                leading: imageUrl != null && imageUrl.isNotEmpty
-                    ? SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.image_not_supported),
-                        ),
-                      )
-                    : null,
-                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(period),
-                trailing: remainingDays != null && remainingDays >= 0
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red),
-                        ),
-                        child: Text(
-                          '残り$remainingDays日',
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    : null,
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

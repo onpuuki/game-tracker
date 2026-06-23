@@ -151,11 +151,11 @@ ${cleanText.substring(0, 20000)}
                   if (currentEventsMap.has(event.title)) {
                       // Update existing
                       const docRef = eventsCollection.doc(currentEventsMap.get(event.title));
-                      batch.set(docRef, { ...event, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                      batch.set(docRef, { ...event, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
                   } else {
                       // Add new
                       const docRef = eventsCollection.doc();
-                      batch.set(docRef, { ...event, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+                      batch.set(docRef, { ...event, gameName: game.gameName, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
                   }
                   batchCount++;
               }

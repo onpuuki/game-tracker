@@ -190,11 +190,33 @@ ${cleanText.substring(0, 20000)}
   }
 });
 
-export const clearAllEvents = functions.https.onCall(async (data, context) => {
-    const snapshot = await db.collectionGroup('events').get();
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    return { success: true, deletedCount: snapshot.size };
+export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    try {
+        const snapshot = await db.collectionGroup('events').get();
+        if (snapshot.empty) {
+            return { success: true, deletedCount: 0 };
+        }
+
+        const batches: Promise<any>[] = [];
+        let currentBatch = db.batch();
+        let count = 0;
+
+        snapshot.docs.forEach((doc, index) => {
+            currentBatch.delete(doc.ref);
+            count++;
+            if (count === 500 || index === snapshot.docs.length - 1) {
+                batches.push(currentBatch.commit());
+                currentBatch = db.batch();
+                count = 0;
+            }
+        });
+
+        await Promise.all(batches);
+        functions.logger.info(`Successfully deleted ${snapshot.size} events.`);
+        return { success: true, deletedCount: snapshot.size };
+    } catch (error) {
+        functions.logger.error('Error clearing events:', error instanceof Error ? error.stack : String(error));
+        throw new functions.https.HttpsError('internal', 'Unable to clear events', error);
+    }
 });
 // force cold start

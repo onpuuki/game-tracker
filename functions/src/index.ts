@@ -101,7 +101,9 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
 各イベントは以下のプロパティを持つオブジェクトとしてください。
 - title: イベントのタイトル
 - period: イベントの期間
+- endDate: イベントの終了日（YYYY-MM-DD形式。終了日が不明な場合はnull）
 - imageUrl: イベントの画像URL (取得できなければnull)
+- eventUrl: イベント詳細のURL (なければnull)
 
 テキスト:
 ${cleanText.substring(0, 20000)}
@@ -186,5 +188,13 @@ ${cleanText.substring(0, 20000)}
     functions.logger.error(`[${traceId}] Unhandled error in syncEvents: ${error instanceof Error ? error.stack : String(error)}`, { traceId });
     throw new functions.https.HttpsError('internal', 'Internal error occurred during sync.');
   }
+});
+
+export const clearAllEvents = functions.https.onCall(async (data, context) => {
+    const snapshot = await db.collectionGroup('events').get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    return { success: true, deletedCount: snapshot.size };
 });
 // force cold start

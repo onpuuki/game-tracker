@@ -104,12 +104,14 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
               $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
 
               // 3. GameWith等のメインコンテンツ領域を優先して取得
+              $('br').replaceWith('\n');
+              $('td, th, div, p, li, h1, h2, h3, h4').append('\n');
               let mainContentText = $('article').text();
               if (!mainContentText) mainContentText = $('main').text();
               if (!mainContentText) mainContentText = $('.kw-article').text();
               if (!mainContentText) mainContentText = $('body').text();
 
-              const cleanText = mainContentText.replace(/\s+/g, ' ').trim();
+              const cleanText = mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();
 
               const prompt = `
 このテキストは『${game.gameName}』の攻略サイトのメインコンテンツです。
@@ -117,7 +119,7 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
 各イベントは以下のプロパティを持つオブジェクトとしてください。
 - title: イベントのタイトル
 - period: 開催期間（例: "2024/01/01 ~ 2024/01/15", "x月x日メンテ後〜" など、テキストの記載通りに抽出）
-- endDate: イベントの終了日（YYYY-MM-DD形式。終了日が不明な場合はnull）
+- endDate: イベントの終了日（YYYY-MM-DD形式。テキストに「月日」しか書かれていない場合は、2026年の出来事として年を補完してください。終了日が不明な場合はnull）
 - imageUrl: イベントの画像URL (取得できなければnull)
 - eventUrl: テキスト内に付与された [詳細URL: https://...] の情報からURLを確実に抽出してください。見つからない場合はnull。
 

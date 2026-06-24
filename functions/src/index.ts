@@ -9,6 +9,8 @@ admin.initializeApp();
 
 const db = getFirestore(admin.app(), 'default');
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 interface ConfigItem {
   gameName: string;
   url: string;
@@ -176,6 +178,7 @@ ${cleanText.substring(0, 20000)}
               const event = extractedEvents[i];
               if (event.eventUrl) {
                   try {
+                      await sleep(3000);
                       functions.logger.info(`[${traceId}] Fetching detail page for event: ${event.title || 'Unknown'} at ${event.eventUrl}`, { traceId });
                       const detailCleanText = await fetchAndCleanHtml(event.eventUrl, game.url, traceId);
 

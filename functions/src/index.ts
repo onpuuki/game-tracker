@@ -131,6 +131,38 @@ async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string,
     return '';
 }
 
+/**
+ * Gemini API専用のリトライ関数。503 (Service Unavailable) などの一時エラー時に指数的バックオフで再試行する。
+ */
+async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, traceId: string, maxRetries = 3): Promise<any> {
+    let attempt = 0;
+    const baseDelay = 5000; // 初期待機時間 (5秒)
+
+    while (attempt < maxRetries) {
+        try {
+            return await ai.models.generateContent({
+                model: model,
+                contents: contents,
+                config: { responseMimeType: 'application/json' }
+            });
+        } catch (err: any) {
+            attempt++;
+            const isLastAttempt = attempt >= maxRetries;
+
+            functions.logger.warn(`[${traceId}] Gemini API failed (Attempt ${attempt}/${maxRetries}). Error: ${err.message}`);
+
+            if (isLastAttempt || (err.status && err.status !== 503 && err.status !== 429)) {
+                // 最終試行、または 503/429 以外（再試行しても無駄なエラー）の場合は諦める
+                throw err;
+            }
+
+            // 503 または 429 の場合はバックオフで待機
+            const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+            await sleep(exponentialDelay);
+        }
+    }
+}
+
 export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     const traceId = data.traceId || `trace-${Date.now()}`;
     functions.logger.info(`[${traceId}] Starting syncEvents execution`, { traceId });
@@ -217,11 +249,7 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
 テキスト:
 ${cleanText.substring(0, 20000)}`;
 
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: { responseMimeType: 'application/json' }
-                });
+                const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, traceId);
 
                 if (response.text) {
                     const parsedData = sanitizeAndParseJson(response.text, traceId);
@@ -276,11 +304,7 @@ ${cleanText.substring(0, 20000)}`;
 テキスト:
 ${detailCleanText.substring(0, 20000)}`;
 
-                    const detailResponse = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash',
-                        contents: detailPrompt,
-                        config: { responseMimeType: 'application/json' }
-                    });
+                    const detailResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', detailPrompt, traceId);
 
                     if (detailResponse.text) {
                         const detailData = sanitizeAndParseJson(detailResponse.text, traceId);

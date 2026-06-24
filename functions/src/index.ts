@@ -8,6 +8,20 @@ import * as cheerio from 'cheerio';
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
 
+async function writeDebugLog(traceId: string, message: string, detailObj: any = ''): Promise<void> {
+    try {
+        const detailStr = typeof detailObj === 'string' ? detailObj : JSON.stringify(detailObj, null, 2);
+        await db.collection('debug_logs').add({
+            traceId,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            message,
+            detail: detailStr,
+        });
+    } catch (e: any) {
+        functions.logger.error(`[${traceId}] Failed to write debug log to Firestore`, { error: e.message, message });
+    }
+}
+
 // ユーティリティ: 待機処理（バックオフ用）
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -175,6 +189,8 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
     functions.logger.info(`[${traceId}] Starting syncEvents execution`, { traceId });
 
     try {
+        await writeDebugLog(traceId, 'Starting syncEvents execution', { traceId });
+
         // 設定ドキュメントのフェッチ
         const configDoc = await db.collection('settings').doc('config').get();
         if (!configDoc.exists) {
@@ -205,7 +221,6 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
             }
         });
 
-        const debugInfo: any[] = [];
 
         for (const game of targetGames) {
             functions.logger.info(`[${traceId}] Processing game: ${game.gameName}`, { url: game.url });
@@ -218,12 +233,7 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
                 continue;
             }
 
-            debugInfo.push({
-                stage: 1,
-                type: 'HTML Fetched',
-                url: game.url,
-                snippet: cleanText.substring(0, 1000)
-            });
+            await writeDebugLog(traceId, `Stage 1: HTML Fetched for ${game.gameName}`, { url: game.url, snippet: cleanText.substring(0, 1000) });
 
             // Stage 1: Geminiによるイベントメタデータの抽出
             let extractedEvents: any[] = [];
@@ -260,19 +270,11 @@ ${cleanText.substring(0, 20000)}`;
                 const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, traceId);
 
                 if (response.text) {
-                    debugInfo.push({
-                        stage: 1,
-                        type: 'Gemini Raw Response',
-                        text: response.text
-                    });
+                    await writeDebugLog(traceId, `Stage 1: Gemini Raw Response for ${game.gameName}`, { text: response.text });
                     const parsedData = sanitizeAndParseJson(response.text, traceId);
                     if (Array.isArray(parsedData)) {
                         extractedEvents = parsedData;
-                        debugInfo.push({
-                            stage: 1,
-                            type: 'JSON Parsed Array',
-                            data: JSON.stringify(extractedEvents)
-                        });
+                        await writeDebugLog(traceId, `Stage 1: JSON Parsed Array for ${game.gameName}`, { data: JSON.stringify(extractedEvents) });
                         functions.logger.info(`[${traceId}] Stage 1 extracted ${extractedEvents.length} events for ${game.gameName}`);
                     }
                 }
@@ -298,12 +300,7 @@ ${cleanText.substring(0, 20000)}`;
 
                     if (!detailCleanText) continue;
 
-                    debugInfo.push({
-                        stage: 2,
-                        type: 'HTML Fetched',
-                        url: event.eventUrl,
-                        snippet: detailCleanText.substring(0, 1000)
-                    });
+                    await writeDebugLog(traceId, `Stage 2: HTML Fetched for ${event.title}`, { url: event.eventUrl, snippet: detailCleanText.substring(0, 1000) });
 
                     const detailPrompt = `あなたは情報補完専門のAIです。
 以下のテキストは『${game.gameName}』の特定のイベント詳細ページのメインコンテンツです。
@@ -332,19 +329,11 @@ ${detailCleanText.substring(0, 20000)}`;
                     const detailResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', detailPrompt, traceId);
 
                     if (detailResponse.text) {
-                        debugInfo.push({
-                            stage: 2,
-                            type: 'Gemini Raw Response',
-                            text: detailResponse.text
-                        });
+                        await writeDebugLog(traceId, `Stage 2: Gemini Raw Response for ${event.title}`, { text: detailResponse.text });
                         const detailData = sanitizeAndParseJson(detailResponse.text, traceId);
 
                         if (detailData && typeof detailData === 'object') {
-                            debugInfo.push({
-                                stage: 2,
-                                type: 'JSON Parsed Object',
-                                data: JSON.stringify(detailData)
-                            });
+                            await writeDebugLog(traceId, `Stage 2: JSON Parsed Object for ${event.title}`, { data: JSON.stringify(detailData) });
                             // 【防御的マージ処理の実行】有効なデータのみをStage 1のオブジェクトに適用する
                             event.title   = getValidString(detailData.title, event.title);
                             event.period  = getValidString(detailData.period, event.period);
@@ -353,11 +342,7 @@ ${detailCleanText.substring(0, 20000)}`;
                             event.imageUrl= getValidString(detailData.imageUrl, event.imageUrl);
 
                             extractedEvents[i] = event;
-                            debugInfo.push({
-                                stage: 2,
-                                type: 'Merged Event Data',
-                                data: JSON.stringify(event)
-                            });
+                            await writeDebugLog(traceId, `Stage 2: Merged Event Data for ${event.title}`, { data: JSON.stringify(event) });
                             functions.logger.info(`[${traceId}] Successfully enriched details for: ${event.title}`);
                         }
                     }
@@ -421,17 +406,21 @@ ${detailCleanText.substring(0, 20000)}`;
                     await batch.commit();
                 }
                 functions.logger.info(`[${traceId}] Successfully synchronized Firestore events for ${game.gameName}`);
+                await writeDebugLog(traceId, `Successfully synchronized Firestore events for ${game.gameName}`);
 
             } catch (err) {
                 functions.logger.error(`[${traceId}] Firestore synchronization failed for ${game.gameName}`, { error: err });
+                await writeDebugLog(traceId, `Firestore synchronization failed for ${game.gameName}`, { error: String(err) });
             }
         }
 
         functions.logger.info(`[${traceId}] syncEvents process completed successfully.`);
-        return { success: true, message: 'Sync completed.', debugInfo };
+        await writeDebugLog(traceId, 'syncEvents process completed successfully.');
+        return { success: true, message: 'Sync completed.' };
 
     } catch (error) {
         functions.logger.error(`[${traceId}] Unhandled catastrophic error: ${error instanceof Error ? error.stack : String(error)}`);
+        await writeDebugLog(traceId, 'Unhandled catastrophic error', { error: error instanceof Error ? error.stack : String(error) });
         throw new functions.https.HttpsError('internal', 'Internal error occurred during the sync process.');
     }
 });

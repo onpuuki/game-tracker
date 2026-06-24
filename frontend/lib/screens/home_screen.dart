@@ -27,19 +27,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final traceId = const Uuid().v4();
     final logManager = DebugLogManager();
 
-    logManager.addLog('Starting syncEvents call', traceId: traceId);
+    await logManager.addLog('Starting syncEvents call', traceId: traceId);
 
     try {
       final callable = FirebaseFunctions.instance.httpsCallable('syncEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
-      final result = await callable.call({'traceId': traceId});
+      await callable.call({'traceId': traceId});
 
-      logManager.addLog('syncEvents call successful.', traceId: traceId);
-      final debugInfoList = result.data['debugInfo'] as List<dynamic>?;
-      if (debugInfoList != null) {
-        for (var i = 0; i < debugInfoList.length; i++) {
-          logManager.addLog('--- Debug Step $i ---\n${debugInfoList[i].toString()}', traceId: traceId);
-        }
-      }
+      await logManager.addLog('syncEvents call successful.', traceId: traceId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -47,14 +41,14 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } on FirebaseFunctionsException catch (e) {
-      logManager.addLog('syncEvents call failed (FirebaseFunctionsException): [${e.code}] ${e.message}', traceId: traceId);
+      await logManager.addLog('syncEvents call failed (FirebaseFunctionsException): [${e.code}] ${e.message}', traceId: traceId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Sync failed: ${e.message}')),
         );
       }
     } catch (e) {
-      logManager.addLog('syncEvents call failed (Exception): $e', traceId: traceId);
+      await logManager.addLog('syncEvents call failed (Exception): $e', traceId: traceId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Sync failed: $e')),
@@ -158,18 +152,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     final callable = FirebaseFunctions.instance.httpsCallable('clearAllEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
                     await callable.call();
 
-                    if (mounted) {
-                      Navigator.pop(context); // Close drawer
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Events cleared successfully')),
-                      );
-                    }
+                    if (!context.mounted) return;
+                    Navigator.pop(context); // Close drawer
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Events cleared successfully')),
+                    );
                   } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to clear events: $e')),
-                      );
-                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to clear events: $e')),
+                    );
                   } finally {
                     if (mounted) {
                       setState(() {
@@ -323,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ? Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
+                                  color: Colors.red.withAlpha(26),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(color: Colors.red),
                                 ),

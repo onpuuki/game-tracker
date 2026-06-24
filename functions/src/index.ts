@@ -14,6 +14,54 @@ interface ConfigItem {
   url: string;
 }
 
+async function fetchAndCleanHtml(url: string, baseUrl: string, traceId: string): Promise<string> {
+    try {
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 10000 // 10秒タイムアウト
+        });
+
+        const htmlContent = response.data;
+        const $ = cheerio.load(htmlContent);
+
+        // <a>タグからリンクを抽出してテキストに埋め込む
+        $('a').each((_, element) => {
+            const href = $(element).attr('href');
+            if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                try {
+                    const absoluteUrl = new URL(href, baseUrl).href;
+                    const currentText = $(element).text();
+                    if (currentText.trim()) {
+                        $(element).append(` [詳細URL: ${absoluteUrl}] `);
+                    }
+                } catch (e) {
+                    // Ignore invalid URLs
+                }
+            }
+        });
+
+        // 露骨な不要エリア（サイドバー、メニュー、ヘッダー等）を根こそぎ削除
+        $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
+
+        // メインコンテンツ領域を優先して取得
+        $('br').replaceWith('\n');
+        $('td, th, div, p, li, h1, h2, h3, h4').append('\n');
+
+        let mainContentText = $('article').text();
+        if (!mainContentText) mainContentText = $('main').text();
+        if (!mainContentText) mainContentText = $('.kw-article').text();
+        if (!mainContentText) mainContentText = $('body').text();
+
+        const cleanText = mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();
+        return cleanText;
+    } catch (err) {
+        functions.logger.error(`[${traceId}] Failed to fetch and clean HTML for ${url}`, { error: err, traceId });
+        return '';
+    }
+}
+
 export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
   const traceId = data.traceId || 'unknown-trace-id';
 
@@ -52,27 +100,26 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
       functions.logger.info(`[${traceId}] Starting for loop over games`, { traceId });
       functions.logger.info(`[${traceId}] Processing game: ${game.gameName} - ${game.url}`, { traceId });
 
-      let htmlContent = '';
+      let cleanText = '';
       try {
         functions.logger.info(`[${traceId}] Before fetch call for ${game.gameName}`, { traceId });
 
-        const response = await axios.get(game.url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          },
-          timeout: 10000 // 10秒タイムアウト
-        });
+        cleanText = await fetchAndCleanHtml(game.url, game.url, traceId);
 
         functions.logger.info(`[${traceId}] After fetch call for ${game.gameName}`, { traceId });
-        htmlContent = response.data;
         debugInfo.push({
           game: game.gameName,
-          length: htmlContent.length,
-          snippet: htmlContent.substring(0, 200)
+          length: cleanText.length,
+          snippet: cleanText.substring(0, 200)
         });
       } catch (err) {
         functions.logger.error(`[${traceId}] Failed to fetch HTML for ${game.gameName}`, { error: err, traceId });
         continue;
+      }
+
+      if (!cleanText) {
+          functions.logger.warn(`[${traceId}] Cleaned text is empty for ${game.gameName}, skipping extraction`, { traceId });
+          continue;
       }
 
       // 3. Extract via Gemini
@@ -80,48 +127,16 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
 
           let extractedEvents: any[] = [];
           try {
-              // HTMLから不要な要素を除去し、テキストのみを抽出
-              // 1. HTMLを読み込み
-              const $ = cheerio.load(htmlContent);
-
-              // 1.5 <a>タグからリンクを抽出してテキストに埋め込む
-              $('a').each((_, element) => {
-                  const href = $(element).attr('href');
-                  if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
-                      try {
-                          const absoluteUrl = new URL(href, game.url).href;
-                          const currentText = $(element).text();
-                          if (currentText.trim()) {
-                              $(element).append(` [詳細URL: ${absoluteUrl}] `);
-                          }
-                      } catch (e) {
-                          // Ignore invalid URLs
-                      }
-                  }
-              });
-
-              // 2. 露骨な不要エリア（サイドバー、メニュー、ヘッダー等）を根こそぎ削除
-              $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
-
-              // 3. GameWith等のメインコンテンツ領域を優先して取得
-              $('br').replaceWith('\n');
-              $('td, th, div, p, li, h1, h2, h3, h4').append('\n');
-              let mainContentText = $('article').text();
-              if (!mainContentText) mainContentText = $('main').text();
-              if (!mainContentText) mainContentText = $('.kw-article').text();
-              if (!mainContentText) mainContentText = $('body').text();
-
-              const cleanText = mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();
-
               const prompt = `
-このテキストは『${game.gameName}』の攻略サイトのメインコンテンツです。
-テキスト内から現在開催中のイベント情報を抽出し、必ずJSONの配列形式のみを出力してください。
+このテキストは『${game.gameName}』の攻略サイト（一覧ページ）のメインコンテンツです。
+テキスト内から現在開催中のイベント情報のリストを抽出し、必ずJSONの配列形式のみを出力してください。
+ここでは各イベントの詳細ページへのURL抽出を最優先とします。
 各イベントは以下のプロパティを持つオブジェクトとしてください。
-- title: イベントのタイトル
-- period: 開催期間（例: "2024/01/01 ~ 2024/01/15", "x月x日メンテ後〜" など、テキストの記載通りに抽出）
-- endDate: イベントの終了日（YYYY-MM-DD形式。テキストに「月日」しか書かれていない場合は、2026年の出来事として年を補完してください。終了日が不明な場合はnull）
+- title: イベントの仮のタイトル
 - imageUrl: イベントの画像URL (取得できなければnull)
 - eventUrl: テキスト内に付与された [詳細URL: https://...] の情報からURLを確実に抽出してください。見つからない場合はnull。
+- period: 開催期間（詳細ページがない場合のフォールバック用。例: "2024/01/01 ~ 2024/01/15" など。取得できなければnull）
+- endDate: イベントの終了日（詳細ページがない場合のフォールバック用。YYYY-MM-DD形式。テキストに「月日」しか書かれていない場合は、2026年の出来事として年を補完してください。終了日が不明な場合はnull）
 
 【抽出除外の厳格な条件】
 以下のいずれかに該当するイベント・コンテンツは、抽出対象から絶対に除外してください。
@@ -153,6 +168,61 @@ ${cleanText.substring(0, 20000)}
           } catch (err) {
               functions.logger.error(`[${traceId}] Failed to extract data from Gemini for ${game.gameName}`, { error: err, traceId });
               continue;
+          }
+
+          // 3.5. Stage 2: Detail Page Extraction
+          functions.logger.info(`[${traceId}] Starting Stage 2: Detail Page Extraction for ${extractedEvents.length} events`, { traceId });
+          for (let i = 0; i < extractedEvents.length; i++) {
+              const event = extractedEvents[i];
+              if (event.eventUrl) {
+                  try {
+                      functions.logger.info(`[${traceId}] Fetching detail page for event: ${event.title || 'Unknown'} at ${event.eventUrl}`, { traceId });
+                      const detailCleanText = await fetchAndCleanHtml(event.eventUrl, game.url, traceId);
+
+                      if (detailCleanText) {
+                          const detailPrompt = `
+このテキストは『${game.gameName}』の特定のイベント詳細ページのメインコンテンツです。
+以下の仮のイベント情報（一覧ページから取得したもの）を、詳細ページの内容を元に補完・修正し、1つのJSONオブジェクト（配列ではなく単一のオブジェクト）として出力してください。
+
+【仮の情報】
+- title: ${event.title}
+- period: ${event.period || '不明'}
+- endDate: ${event.endDate || '不明'}
+- imageUrl: ${event.imageUrl || 'なし'}
+
+【出力要件（JSONプロパティ）】
+- title: 正式なイベントのタイトル（詳細ページの内容を優先して修正）
+- period: 開催期間（例: "2024/01/01 ~ 2024/01/15", "x月x日メンテ後〜" など、詳細ページから厳格に抽出）
+- endDate: イベントの終了日（YYYY-MM-DD形式。テキストに「月日」しか書かれていない場合は、2026年の出来事として年を補完してください。終了日が不明な場合はnull）
+- imageUrl: イベントの画像URL（詳細ページにより適切な画像URLの記載があれば更新、なければ仮の情報を維持、取得できなければnull）
+- eventUrl: "${event.eventUrl}"（この値はそのまま維持してください）
+
+テキスト:
+${detailCleanText.substring(0, 20000)}
+`;
+                          const detailResponse = await ai.models.generateContent({
+                              model: 'gemini-2.5-flash',
+                              contents: detailPrompt,
+                              config: {
+                                  responseMimeType: 'application/json'
+                              }
+                          });
+
+                          if (detailResponse.text) {
+                              const detailData = JSON.parse(detailResponse.text);
+                              // Merge detail data into the event object
+                              extractedEvents[i] = { ...event, ...detailData };
+                              functions.logger.info(`[${traceId}] Successfully updated event details for: ${extractedEvents[i].title}`, { traceId });
+                          } else {
+                              functions.logger.warn(`[${traceId}] No text returned from Gemini for detail page: ${event.eventUrl}`, { traceId });
+                          }
+                      } else {
+                           functions.logger.warn(`[${traceId}] Failed to fetch or clean detail page: ${event.eventUrl}`, { traceId });
+                      }
+                  } catch (err) {
+                      functions.logger.error(`[${traceId}] Error processing detail page for event ${event.title}`, { error: err, traceId });
+                  }
+              }
           }
 
           // 4. Sync to Firestore (Mirroring)

@@ -178,7 +178,7 @@ ${cleanText.substring(0, 20000)}
               const event = extractedEvents[i];
               if (event.eventUrl) {
                   try {
-                      await sleep(3000);
+                      await sleep(8000);
                       functions.logger.info(`[${traceId}] Fetching detail page for event: ${event.title || 'Unknown'} at ${event.eventUrl}`, { traceId });
                       const detailCleanText = await fetchAndCleanHtml(event.eventUrl, game.url, traceId);
 
@@ -195,6 +195,7 @@ ${cleanText.substring(0, 20000)}
 
 【出力要件（JSONプロパティ）】
 - title: 正式なイベントのタイトル（詳細ページの内容を優先して修正）
+- summary: イベントの概要（文字列。取得できない場合は空文字）
 - period: 開催期間（例: "2024/01/01 ~ 2024/01/15", "x月x日メンテ後〜" など、詳細ページから厳格に抽出）
 - endDate: イベントの終了日（YYYY-MM-DD形式。テキストに「月日」しか書かれていない場合は、2026年の出来事として年を補完してください。終了日が不明な場合はnull）
 - imageUrl: イベントの画像URL（詳細ページにより適切な画像URLの記載があれば更新、なければ仮の情報を維持、取得できなければnull）
@@ -213,8 +214,13 @@ ${detailCleanText.substring(0, 20000)}
 
                           if (detailResponse.text) {
                               const detailData = JSON.parse(detailResponse.text);
-                              // Merge detail data into the event object
-                              extractedEvents[i] = { ...event, ...detailData };
+                              // Merge detail data into the event object safely
+                              event.title = detailData.title || event.title;
+                              event.period = detailData.period || event.period;
+                              event.summary = detailData.summary || '';
+                              event.endDate = detailData.endDate || event.endDate;
+                              event.imageUrl = detailData.imageUrl || event.imageUrl;
+                              extractedEvents[i] = event;
                               functions.logger.info(`[${traceId}] Successfully updated event details for: ${extractedEvents[i].title}`, { traceId });
                           } else {
                               functions.logger.warn(`[${traceId}] No text returned from Gemini for detail page: ${event.eventUrl}`, { traceId });

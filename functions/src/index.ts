@@ -89,14 +89,9 @@ async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string,
         try {
             const response = await axios.get(url, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache',
-                    'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
-                    'sec-ch-ua-mobile': '?0',
-                    'sec-ch-ua-platform': '"Windows"'
+                    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
                 },
                 timeout: 10000 // 10秒の接続タイムアウト
             });
@@ -121,13 +116,14 @@ async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string,
             });
 
             // サイドバー等のノイズ領域をDOMツリーから完全に削除
-            $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side').remove();
+            $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side, .p-common-header, .p-common-footer').remove();
 
             // 改行を維持するための置換処理
             $('br').replaceWith('\n');
             $('td, th, div, p, li, h1, h2, h3, h4').append('\n');
 
-            let mainContentText = $('article').text() || $('main').text() || $('.kw-article').text() || $('body').text();
+            // GameWith等の記事メイン領域を優先して取得
+            let mainContentText = $('.p-article__content').text() || $('.p-article').text() || $('.article-body').text() || $('article').text() || $('main').text() || $('body').text();
 
             // 連続する空白や改行を正規化し、LLMへのトークン数を最適化
             return mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();

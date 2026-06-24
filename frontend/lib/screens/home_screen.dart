@@ -222,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final eventGameName = eventData['gameName'] as String? ?? 'Unknown Game';
                   final title = eventData['title'] as String? ?? 'No Title';
                   final period = eventData['period'] as String? ?? 'Unknown Period';
+                  final summary = eventData['summary'] as String? ?? '';
                   final imageUrl = eventData['imageUrl'] as String?;
                   final endDateStr = eventData['endDate'] as String?;
                   final eventUrl = eventData['eventUrl'] as String?;
@@ -297,7 +298,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                           ],
                         ),
-                        subtitle: Text(period),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(period, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                            if (summary.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ],
+                        ),
                         trailing: remainingDays != null && remainingDays >= 0
                             ? Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

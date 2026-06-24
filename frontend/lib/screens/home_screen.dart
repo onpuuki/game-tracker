@@ -33,7 +33,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final callable = FirebaseFunctions.instance.httpsCallable('syncEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
       final result = await callable.call({'traceId': traceId});
 
-      logManager.addLog('syncEvents call successful. Result: ${result.data}', traceId: traceId);
+      logManager.addLog('syncEvents call successful.', traceId: traceId);
+      final debugInfoList = result.data['debugInfo'] as List<dynamic>?;
+      if (debugInfoList != null) {
+        for (var i = 0; i < debugInfoList.length; i++) {
+          logManager.addLog('--- Debug Step $i ---\n${debugInfoList[i].toString()}', traceId: traceId);
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

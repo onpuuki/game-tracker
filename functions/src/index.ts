@@ -212,9 +212,10 @@ export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300
             }
 
             debugInfo.push({
-                game: game.gameName,
-                length: cleanText.length,
-                snippet: cleanText.substring(0, 200)
+                stage: 1,
+                type: 'HTML Fetched',
+                url: game.url,
+                snippet: cleanText.substring(0, 1000)
             });
 
             // Stage 1: Geminiによるイベントメタデータの抽出
@@ -252,9 +253,19 @@ ${cleanText.substring(0, 20000)}`;
                 const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, traceId);
 
                 if (response.text) {
+                    debugInfo.push({
+                        stage: 1,
+                        type: 'Gemini Raw Response',
+                        text: response.text
+                    });
                     const parsedData = sanitizeAndParseJson(response.text, traceId);
                     if (Array.isArray(parsedData)) {
                         extractedEvents = parsedData;
+                        debugInfo.push({
+                            stage: 1,
+                            type: 'JSON Parsed Array',
+                            data: JSON.stringify(extractedEvents)
+                        });
                         functions.logger.info(`[${traceId}] Stage 1 extracted ${extractedEvents.length} events for ${game.gameName}`);
                     }
                 }
@@ -279,6 +290,13 @@ ${cleanText.substring(0, 20000)}`;
                     const detailCleanText = await fetchHtmlWithRetry(event.eventUrl, game.url, traceId);
 
                     if (!detailCleanText) continue;
+
+                    debugInfo.push({
+                        stage: 2,
+                        type: 'HTML Fetched',
+                        url: event.eventUrl,
+                        snippet: detailCleanText.substring(0, 1000)
+                    });
 
                     const detailPrompt = `あなたは情報補完専門のAIです。
 以下のテキストは『${game.gameName}』の特定のイベント詳細ページのメインコンテンツです。
@@ -307,9 +325,19 @@ ${detailCleanText.substring(0, 20000)}`;
                     const detailResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', detailPrompt, traceId);
 
                     if (detailResponse.text) {
+                        debugInfo.push({
+                            stage: 2,
+                            type: 'Gemini Raw Response',
+                            text: detailResponse.text
+                        });
                         const detailData = sanitizeAndParseJson(detailResponse.text, traceId);
 
                         if (detailData && typeof detailData === 'object') {
+                            debugInfo.push({
+                                stage: 2,
+                                type: 'JSON Parsed Object',
+                                data: JSON.stringify(detailData)
+                            });
                             // 【防御的マージ処理の実行】有効なデータのみをStage 1のオブジェクトに適用する
                             event.title   = getValidString(detailData.title, event.title);
                             event.period  = getValidString(detailData.period, event.period);
@@ -318,6 +346,11 @@ ${detailCleanText.substring(0, 20000)}`;
                             event.imageUrl= getValidString(detailData.imageUrl, event.imageUrl);
 
                             extractedEvents[i] = event;
+                            debugInfo.push({
+                                stage: 2,
+                                type: 'Merged Event Data',
+                                data: JSON.stringify(event)
+                            });
                             functions.logger.info(`[${traceId}] Successfully enriched details for: ${event.title}`);
                         }
                     }

@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await logManager.addLog('Starting syncEvents call', traceId: traceId);
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('syncEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
+      final callable = FirebaseFunctions.instance.httpsCallable('syncEvents', options: HttpsCallableOptions(timeout: const Duration(minutes: 5)));
       await callable.call({'traceId': traceId});
 
       await logManager.addLog('syncEvents call successful.', traceId: traceId);
@@ -161,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   });
 
                   try {
-                    final callable = FirebaseFunctions.instance.httpsCallable('clearAllEvents', options: HttpsCallableOptions(timeout: const Duration(seconds: 300)));
+                    final callable = FirebaseFunctions.instance.httpsCallable('clearAllEvents', options: HttpsCallableOptions(timeout: const Duration(minutes: 5)));
                     await callable.call();
 
                     if (!context.mounted) return;

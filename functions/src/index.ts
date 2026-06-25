@@ -2,7 +2,6 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { GoogleGenAI } from '@google/genai';
-import * as cheerio from 'cheerio';
 
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
@@ -26,135 +25,10 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface ConfigItem {
     gameName: string;
-    url: string;
+    url?: string; // スクレイピングはしないが互換性のため残す
 }
 
-/**
- * 【防御的マージロジック】
- * 新しい値（Stage 2）が真に有効な文字列であるかを検証する。
- * 無効な値（null, undefined, '不明', 'なし' 等のLLMのハルシネーション）であれば古い値（Stage 1）を維持し、データの破壊を完全に防ぐ。
- */
-function getValidString(newValue: any, oldValue: any): string | null {
-    if (newValue === null || newValue === undefined) return oldValue || null;
-    if (typeof newValue === 'string') {
-        const trimmed = newValue.trim();
-        const invalidKeywords = ['', '不明', 'なし', 'null', 'undefined', 'Unknown Period', '未定', 'Unknown'];
-        if (invalidKeywords.includes(trimmed)) {
-            return oldValue || null;
-        }
-        return trimmed;
-    }
-    return oldValue || null;
-}
-
-/**
- * 【JSONサニタイズ処理】
- * LLMが返すレスポンスからMarkdownタグ（```json ... ```）などの不要な装飾を安全に除去し、パースを成功させる。
- */
-function sanitizeAndParseJson(rawText: string, traceId: string): any {
-    try {
-        let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-        // 前後の不要なテキストを切り落とし、純粋なJSONオブジェクトまたは配列領域のみを抽出
-        const firstBrace = cleaned.indexOf('{');
-        const firstBracket = cleaned.indexOf('[');
-        const startIdx = (firstBrace !== -1 && firstBracket !== -1) ? Math.min(firstBrace, firstBracket) : Math.max(firstBrace, firstBracket);
-
-        const lastBrace = cleaned.lastIndexOf('}');
-        const lastBracket = cleaned.lastIndexOf(']');
-        const endIdx = Math.max(lastBrace, lastBracket);
-
-        if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
-            cleaned = cleaned.substring(startIdx, endIdx + 1);
-        }
-
-        return JSON.parse(cleaned);
-    } catch (e: any) {
-        functions.logger.error(`[${traceId}] Failed to parse JSON from LLM response`, { error: e.message, rawText });
-        return null;
-    }
-}
-
-/**
- * 【耐障害性ロジック】
- * エクスポネンシャル・バックオフとフルジッターを伴う堅牢なHTTPリクエスト処理。
- * 対象サイトからの 500系エラーやタイムアウト時に自動で再試行を行い、システムダウンを回避する。
- */
-async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string, maxRetries = 3): Promise<string> {
-    let attempt = 0;
-    const baseDelay = 3000;
-
-    while (attempt < maxRetries) {
-        let browser = null;
-        try {
-            // Puppeteerを起動し、Bot検知をすり抜けるための設定を追加
-            browser = await require('puppeteer').launch({
-                headless: "new",
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled' // WebDriverのフラグを消す
-                ]
-            });
-            const page = await browser.newPage();
-
-            // リアルなブラウザを偽装
-            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
-
-            // ページ遷移し、ネットワークが落ち着くまで待機
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-
-            // HTMLの取得
-            const htmlContent = await page.content();
-            await browser.close();
-
-            const $ = cheerio.load(htmlContent);
-
-            // <a>タグからリンクを抽出し、テキストフローに埋め込む
-            $('a').each((_, element) => {
-                const href = $(element).attr('href');
-                if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
-                    try {
-                        const absoluteUrl = new URL(href, baseUrl).href;
-                        const currentText = $(element).text();
-                        if (currentText.trim()) {
-                            $(element).append(` [詳細URL: ${absoluteUrl}] `);
-                        }
-                    } catch (e) {
-                        // パース不可能なURLは無視して処理を継続
-                    }
-                }
-            });
-
-            // サイドバー等のノイズ領域をDOMツリーから完全に削除
-            $('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .menu, #side, .p-common-header, .p-common-footer').remove();
-
-            // 改行を維持するための置換処理
-            $('br').replaceWith('\n');
-            $('td, th, div, p, li, h1, h2, h3, h4').append('\n');
-
-            // GameWith等の記事メイン領域を優先して取得
-            let mainContentText = $('.p-article__content').text() || $('.p-article').text() || $('.article-body').text() || $('article').text() || $('main').text() || $('body').text();
-
-            // 連続する空白や改行を正規化し、LLMへのトークン数を最適化
-            return mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();
-
-        } catch (err: any) {
-            if (browser) await browser.close();
-            attempt++;
-            functions.logger.warn(`[${traceId}] Puppeteer fetch failed for ${url} (Attempt ${attempt}/${maxRetries}). Error: ${err.message}`);
-
-            if (attempt >= maxRetries) return '';
-            await sleep(baseDelay * Math.pow(2, attempt));
-        }
-    }
-    return '';
-}
-
-/**
- * Gemini API専用のリトライ関数。503 (Service Unavailable) などの一時エラー時に指数的バックオフで再試行する。
- */
-async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, traceId: string, maxRetries = 3): Promise<any> {
+async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
     let attempt = 0;
     const baseDelay = 5000; // 初期待機時間 (5秒)
 
@@ -163,7 +37,7 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
             return await ai.models.generateContent({
                 model: model,
                 contents: contents,
-                config: { responseMimeType: 'application/json' }
+                config: config
             });
         } catch (err: any) {
             attempt++;
@@ -183,244 +57,133 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
     }
 }
 
-export const syncEvents = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+
+export const syncEvents = functions.runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     const traceId = data.traceId || `trace-${Date.now()}`;
-    functions.logger.info(`[${traceId}] Starting syncEvents execution`, { traceId });
+    functions.logger.info(`[${traceId}] Starting syncEvents with Grounded Gemini`, { traceId });
 
     try {
-        await writeDebugLog(traceId, 'Starting syncEvents execution', { traceId });
-
-        // 設定ドキュメントのフェッチ
         const configDoc = await db.collection('settings').doc('config').get();
-        if (!configDoc.exists) {
-            functions.logger.warn(`[${traceId}] Configuration settings/config not found.`);
-            return { success: false, message: 'Configuration settings/config not found.' };
-        }
-
-        const configData = configDoc.data();
+        const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
         const geminiApiKey = configData?.geminiApiKey;
 
-        if (targetGames.length === 0) return { success: true, message: 'No games configured to sync.' };
+        // Firestoreからプロンプトテンプレートを取得（なければデフォルトを使用）
+        const defaultPromptTemplate = `あなたは最新のゲーム情報を提供する専門AIです。
+Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開催中】および【近日開催予定】の期間限定イベントやガチャ、コラボ情報を最新のウェブ検索結果から調査してください。
 
-        if (!geminiApiKey) {
-            functions.logger.error(`[${traceId}] Gemini API Key missing.`);
-            return { success: false, message: 'Gemini API Key missing.' };
+【出力要件】
+調査結果を以下のJSON配列形式で出力してください。Markdown装飾(\`\`\`json等)は不要です。
+[
+  {
+    "title": "イベントの正式名称",
+    "summary": "イベントの概要や報酬内容",
+    "period": "開催期間（例: 2024/01/01 ~ 2024/01/15）",
+    "endDate": "YYYY-MM-DD形式（不明な場合はnull）",
+    "eventUrl": "公式ページや大手メディアの詳細URL",
+    "imageUrl": null
+  }
+]
+
+【厳格な除外条件】
+終了日のない常設コンテンツ、恒常ガチャ、毎月定期開催されるコンテンツは含めないでください。`;
+
+        const promptTemplate = configData?.promptTemplate || defaultPromptTemplate;
+
+        if (!geminiApiKey || targetGames.length === 0) {
+            await writeDebugLog(traceId, 'Sync failed: Invalid config');
+            return { success: false, message: 'Invalid config' };
         }
 
-        // 【耐障害性ロジック】
-        // @google/genai SDKに組み込まれたリトライ機構を構成し、503(Overloaded)等のエラーに自動対処する。
-        const ai = new GoogleGenAI({
-            apiKey: geminiApiKey.trim(),
-            httpOptions: {
-                retryOptions: {
-                    attempts: 4           // 初回を含む最大試行回数
-                },
-                timeout: 120000           // クライアント側タイムアウトを長めに設定
-            }
-        });
-
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
+        const debugInfo: any[] = [];
 
         for (const game of targetGames) {
-            functions.logger.info(`[${traceId}] Processing game: ${game.gameName}`, { url: game.url });
+            functions.logger.info(`[${traceId}] Requesting Gemini with Search for: ${game.gameName}`);
+            await writeDebugLog(traceId, `Requesting Gemini with Search for: ${game.gameName}`);
 
-            // Stage 1: 一覧ページのHTMLをフェッチし、テキストを正規化（リトライ機構付き）
-            const cleanText = await fetchHtmlWithRetry(game.url, game.url, traceId);
+            // テンプレートのプレースホルダーを実際のゲーム名に置換
+            const prompt = promptTemplate.replace(/{{gameName}}/g, game.gameName);
 
-            if (!cleanText) {
-                functions.logger.warn(`[${traceId}] Cleaned text is empty for ${game.gameName}, skipping extraction.`);
-                continue;
-            }
-
-            await writeDebugLog(traceId, `Stage 1: HTML Fetched for ${game.gameName}`, { url: game.url, snippet: cleanText.substring(0, 1000) });
-
-            // Stage 1: Geminiによるイベントメタデータの抽出
-            let extractedEvents: any[] = [];
             try {
-                // 【プロンプトエンジニアリングの再構築】未来イベントの明確な包含と、代替文字列の利用禁止
-                const prompt = `あなたはゲームのイベント情報を抽出する専門のAIアシスタントです。
-以下のテキストは『${game.gameName}』の攻略サイト（一覧ページ）のメインコンテンツです。
-テキスト内から「現在開催中の期間限定イベント」および「近日開催予定の期間限定イベント」のリストを抽出し、必ずJSONの配列形式のみを出力してください。
-
-【抽出対象の厳格な条件】
-- 「現在開催中」の期間限定イベント
-- 「これから開催される予定（未来）」の期間限定イベント（テキスト内に存在する場合は絶対に抽出対象に含めること）
-
-【抽出除外の厳格な条件】
-以下のいずれかに該当するものは、抽出対象から絶対に除外してください。
-1. 終了日が設定されていない常設コンテンツ
-2. 常に開催されている恒常イベントや恒常ガチャ
-3. 毎月自動的に開催される定常的なスケジュールコンテンツ
-
-【出力要件（JSONプロパティ）】
-各イベントは以下のプロパティを持つオブジェクトとしてください。
-- title: イベントのタイトル
-- imageUrl: イベントの画像URL
-- eventUrl: テキスト内に付与された [詳細URL: https://...] の情報から抽出したURL
-- period: 開催期間（例: "2024/01/01 ~ 2024/01/15"）
-- endDate: イベントの終了日（YYYY-MM-DD形式。年が不明な場合は現在の年や文脈から補完）
-
-【極めて重要な禁止事項】
-情報が存在しない、または特定できないプロパティについては、「不明」「なし」「未定」などの文字列を値として使用せず、厳密にJSONの \`null\` を指定してください。
-
-テキスト:
-${cleanText.substring(0, 20000)}`;
-
-                const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, traceId);
+                // Google Search Groundingを有効化して呼び出し
+                const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, {
+                        tools: [{ googleSearch: {} }],
+                        responseMimeType: 'application/json'
+                    }, traceId);
 
                 if (response.text) {
-                    await writeDebugLog(traceId, `Stage 1: Gemini Raw Response for ${game.gameName}`, { text: response.text });
-                    const parsedData = sanitizeAndParseJson(response.text, traceId);
-                    if (Array.isArray(parsedData)) {
-                        extractedEvents = parsedData;
-                        await writeDebugLog(traceId, `Stage 1: JSON Parsed Array for ${game.gameName}`, { data: JSON.stringify(extractedEvents) });
-                        functions.logger.info(`[${traceId}] Stage 1 extracted ${extractedEvents.length} events for ${game.gameName}`);
-                    }
-                }
-            } catch (err) {
-                // 組み込みリトライを使い切った上での致命的エラーの場合
-                functions.logger.error(`[${traceId}] Stage 1 extraction completely failed for ${game.gameName}`, { error: err });
-                continue; // 次のゲームへ移行してシステム全体の中断を防ぐ
-            }
+                    debugInfo.push({ stage: 1, type: 'Grounded Gemini Response', game: game.gameName, text: response.text });
+                    await writeDebugLog(traceId, `Grounded Gemini Response for ${game.gameName}`, { text: response.text });
 
-            if (extractedEvents.length === 0) continue;
+                    // パース処理（Markdownの除去）
+                    let cleanedText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const extractedEvents = JSON.parse(cleanedText);
 
-            // Stage 2: 各イベントの詳細ページに対するデータ補完
-            functions.logger.info(`[${traceId}] Starting Stage 2 enrichment for ${extractedEvents.length} events`);
+                    // 抽出できた場合はFirestoreへ同期
+                    if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
+                        const eventsCollection = db.collection(`games/${game.gameName}/events`);
+                        const currentEventsSnapshot = await eventsCollection.get();
+                        const currentEventsMap = new Map();
+                        currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, doc.id));
 
-            for (let i = 0; i < extractedEvents.length; i++) {
-                const event = extractedEvents[i];
-                if (!event.eventUrl) continue;
+                        const newEventTitles = new Set();
+                        let batch = db.batch();
+                        let batchCount = 0;
 
-                try {
-                    // 対象サイトへの過剰な負荷（Rate Limit超過）を防ぐためのスロットリング
-                    await sleep(3000);
-                    const detailCleanText = await fetchHtmlWithRetry(event.eventUrl, game.url, traceId);
+                        const commitBatchIfNeeded = async () => {
+                            if (batchCount >= 450) {
+                                await batch.commit();
+                                batch = db.batch();
+                                batchCount = 0;
+                            }
+                        };
 
-                    if (!detailCleanText) continue;
 
-                    await writeDebugLog(traceId, `Stage 2: HTML Fetched for ${event.title}`, { url: event.eventUrl, snippet: detailCleanText.substring(0, 1000) });
+                        for (const event of extractedEvents) {
+                            if (!event.title) continue;
+                            newEventTitles.add(event.title);
 
-                    const detailPrompt = `あなたは情報補完専門のAIです。
-以下のテキストは『${game.gameName}』の特定のイベント詳細ページのメインコンテンツです。
-一覧ページから取得した【仮のイベント情報】を、詳細ページの内容を元に補完・修正し、1つのJSONオブジェクトとして出力してください。配列ではなく単一のオブジェクトです。
-
-【仮のイベント情報】
-- title: ${event.title || 'null'}
-- period: ${event.period || 'null'}
-- endDate: ${event.endDate || 'null'}
-- imageUrl: ${event.imageUrl || 'null'}
-
-【出力要件（JSONプロパティ）】
-- title: 正式なイベントのタイトル（詳細ページの内容を優先して更新）
-- summary: イベントの詳細な概要や報酬内容（文字列）
-- period: 開催期間（詳細ページからより正確な期間を抽出）
-- endDate: イベントの終了日（YYYY-MM-DD形式）
-- imageUrl: イベントの画像URL（詳細ページに適切な画像URLがあれば更新）
-- eventUrl: "${event.eventUrl}"（この値は維持してください）
-
-【極めて重要な禁止事項】
-情報が存在しない、または特定できないプロパティについては、「不明」「なし」などの文字列を値として使用せず、必ず厳密なJSONの \`null\` を指定してください。
-
-テキスト:
-${detailCleanText.substring(0, 20000)}`;
-
-                    const detailResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', detailPrompt, traceId);
-
-                    if (detailResponse.text) {
-                        await writeDebugLog(traceId, `Stage 2: Gemini Raw Response for ${event.title}`, { text: detailResponse.text });
-                        const detailData = sanitizeAndParseJson(detailResponse.text, traceId);
-
-                        if (detailData && typeof detailData === 'object') {
-                            await writeDebugLog(traceId, `Stage 2: JSON Parsed Object for ${event.title}`, { data: JSON.stringify(detailData) });
-                            // 【防御的マージ処理の実行】有効なデータのみをStage 1のオブジェクトに適用する
-                            event.title   = getValidString(detailData.title, event.title);
-                            event.period  = getValidString(detailData.period, event.period);
-                            event.summary = getValidString(detailData.summary, event.summary || '');
-                            event.endDate = getValidString(detailData.endDate, event.endDate);
-                            event.imageUrl= getValidString(detailData.imageUrl, event.imageUrl);
-
-                            extractedEvents[i] = event;
-                            await writeDebugLog(traceId, `Stage 2: Merged Event Data for ${event.title}`, { data: JSON.stringify(event) });
-                            functions.logger.info(`[${traceId}] Successfully enriched details for: ${event.title}`);
+                            if (currentEventsMap.has(event.title)) {
+                                const docRef = eventsCollection.doc(currentEventsMap.get(event.title));
+                                batch.set(docRef, { ...event, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                            } else {
+                                const docRef = eventsCollection.doc();
+                                batch.set(docRef, { ...event, gameName: game.gameName, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+                            }
+                            batchCount++;
+                            await commitBatchIfNeeded();
                         }
-                    }
-                } catch (err) {
-                    functions.logger.error(`[${traceId}] Stage 2 enrichment failed for event ${event.title}`, { error: err });
-                    // Stage 2が失敗しても、Stage 1のデータは維持されるためループを継続し、FirestoreへはStage 1のデータを保存する
-                }
-            }
 
-            // Firestoreへの同期処理 (バッチサイズの上限を考慮したチャンク処理)
-            try {
-                const eventsCollection = db.collection(`games/${game.gameName}/events`);
-                const currentEventsSnapshot = await eventsCollection.get();
-                const currentEventsMap = new Map();
-
-                currentEventsSnapshot.forEach(doc => {
-                    currentEventsMap.set(doc.data().title, doc.id);
-                });
-
-                const newEventTitles = new Set();
-                let batch = db.batch();
-                let batchCount = 0;
-
-                // ユーティリティ: Firestoreのバッチ書き込み上限（500件）を安全に回避するためのコミット処理
-                const commitBatchIfNeeded = async () => {
-                    if (batchCount >= 450) {
-                        await batch.commit();
-                        batch = db.batch();
-                        batchCount = 0;
-                    }
-                };
-
-                // 抽出されたイベントの新規追加または更新
-                for (const event of extractedEvents) {
-                    if (!event.title) continue; // タイトル欠落は不正データとして除外
-
-                    newEventTitles.add(event.title);
-
-                    if (currentEventsMap.has(event.title)) {
-                        const docRef = eventsCollection.doc(currentEventsMap.get(event.title));
-                        batch.set(docRef, { ...event, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                        // 不要になった過去のイベントを削除
+                        for (const [title, docId] of currentEventsMap.entries()) {
+                            if (!newEventTitles.has(title)) {
+                                batch.delete(eventsCollection.doc(docId));
+                                batchCount++;
+                                await commitBatchIfNeeded();
+                            }
+                        }
+                        if (batchCount > 0) {
+                             await batch.commit();
+                        }
+                        functions.logger.info(`[${traceId}] Successfully synced ${extractedEvents.length} events for ${game.gameName}`);
+                        await writeDebugLog(traceId, `Successfully synced ${extractedEvents.length} events for ${game.gameName}`);
                     } else {
-                        const docRef = eventsCollection.doc();
-                        batch.set(docRef, { ...event, gameName: game.gameName, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-                    }
-                    batchCount++;
-                    await commitBatchIfNeeded();
-                }
-
-                // 終了した不要なイベントドキュメントのクリーンアップ
-                for (const [title, docId] of currentEventsMap.entries()) {
-                    if (!newEventTitles.has(title)) {
-                        const docRef = eventsCollection.doc(docId);
-                        batch.delete(docRef);
-                        batchCount++;
-                        await commitBatchIfNeeded();
+                         functions.logger.info(`[${traceId}] No valid events extracted for ${game.gameName}`);
+                         await writeDebugLog(traceId, `No valid events extracted for ${game.gameName}`);
                     }
                 }
-
-                if (batchCount > 0) {
-                    await batch.commit();
-                }
-                functions.logger.info(`[${traceId}] Successfully synchronized Firestore events for ${game.gameName}`);
-                await writeDebugLog(traceId, `Successfully synchronized Firestore events for ${game.gameName}`);
-
-            } catch (err) {
-                functions.logger.error(`[${traceId}] Firestore synchronization failed for ${game.gameName}`, { error: err });
-                await writeDebugLog(traceId, `Firestore synchronization failed for ${game.gameName}`, { error: String(err) });
+            } catch (err: any) {
+                functions.logger.error(`[${traceId}] Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
+                debugInfo.push({ stage: 'Error', game: game.gameName, error: err instanceof Error ? err.stack : String(err) });
+                await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
         }
-
-        functions.logger.info(`[${traceId}] syncEvents process completed successfully.`);
         await writeDebugLog(traceId, 'syncEvents process completed successfully.');
-        return { success: true, message: 'Sync completed.' };
-
+        return { success: true, message: 'Sync completed via Grounded Gemini.', debugInfo };
     } catch (error) {
         functions.logger.error(`[${traceId}] Unhandled catastrophic error: ${error instanceof Error ? error.stack : String(error)}`);
-        await writeDebugLog(traceId, 'Unhandled catastrophic error', { error: error instanceof Error ? error.stack : String(error) });
-        throw new functions.https.HttpsError('internal', 'Internal error occurred during the sync process.');
+        throw new functions.https.HttpsError('internal', 'Internal error occurred.');
     }
 });
 

@@ -58,7 +58,13 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 }
 
 
-export const processSyncRequest = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 540 }).firestore.document('sync_requests/{requestId}').onCreate(async (snapshot, context) => {
+export const processSyncRequest = functions
+    .region('asia-northeast1')
+    .runWith({ memory: '512MB', timeoutSeconds: 540 })
+    .firestore
+    .database('projects/game-tracker-444b2/databases/default')
+    .document('sync_requests/{requestId}')
+    .onCreate(async (snapshot, context) => {
     const data = snapshot.data();
     const traceId = data.traceId || `trace-${context.params.requestId}`;
     functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });

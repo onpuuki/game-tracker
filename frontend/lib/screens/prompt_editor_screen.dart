@@ -12,15 +12,16 @@ class PromptEditorScreen extends StatefulWidget {
 
 class _PromptEditorScreenState extends State<PromptEditorScreen> {
   final _controller = TextEditingController();
+  final List<TextEditingController> _targetControllers = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPrompt();
+    _loadData();
   }
 
-  Future<void> _loadPrompt() async {
+  Future<void> _loadData() async {
     try {
       final doc = await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
           .collection('settings')
@@ -29,14 +30,24 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
 
       if (doc.exists) {
         final data = doc.data();
-        if (data != null && data.containsKey('promptTemplate')) {
-          _controller.text = data['promptTemplate'] as String;
+        if (data != null) {
+          if (data.containsKey('promptTemplate')) {
+            _controller.text = data['promptTemplate'] as String;
+          }
+          if (data.containsKey('targets')) {
+            final targets = data['targets'] as List<dynamic>;
+            for (var target in targets) {
+              if (target is Map<String, dynamic> && target.containsKey('gameName')) {
+                _targetControllers.add(TextEditingController(text: target['gameName'] as String));
+              }
+            }
+          }
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load prompt: $e')),
+          SnackBar(content: Text('Failed to load data: $e')),
         );
       }
     } finally {
@@ -48,12 +59,20 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     }
   }
 
-  Future<void> _savePrompt() async {
+  Future<void> _saveData() async {
     try {
+      final targets = _targetControllers
+          .where((c) => c.text.trim().isNotEmpty)
+          .map((c) => {'gameName': c.text.trim()})
+          .toList();
+
       await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
           .collection('settings')
           .doc('config')
-          .set({'promptTemplate': _controller.text}, SetOptions(merge: true));
+          .set({
+            'promptTemplate': _controller.text,
+            'targets': targets,
+          }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,10 +82,23 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save prompt: $e')),
+          SnackBar(content: Text('Failed to save data: $e')),
         );
       }
     }
+  }
+
+  void _addTarget() {
+    setState(() {
+      _targetControllers.add(TextEditingController());
+    });
+  }
+
+  void _removeTarget(int index) {
+    setState(() {
+      _targetControllers[index].dispose();
+      _targetControllers.removeAt(index);
+    });
   }
 
   Future<void> _clearPrompt() async {
@@ -90,13 +122,16 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
 
     if (confirm == true) {
       _controller.text = '';
-      await _savePrompt();
+      await _saveData();
     }
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    for (var controller in _targetControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -130,19 +165,77 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _controller,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter your prompt template here...',
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _controller,
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your prompt template here...',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Target Games',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: _addTarget,
+                        tooltip: 'Add Target Game',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    flex: 1,
+                    child: _targetControllers.isEmpty
+                        ? const Center(child: Text('No target games added.'))
+                        : ListView.builder(
+                            itemCount: _targetControllers.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _targetControllers[index],
+                                        decoration: const InputDecoration(
+                                          border: OutlineInputBorder(),
+                                          hintText: 'Enter game name...',
+                                          isDense: true,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline),
+                                      color: Colors.red,
+                                      onPressed: () => _removeTarget(index),
+                                      tooltip: 'Remove Target',
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _savePrompt,
+        onPressed: _saveData,
         tooltip: 'Save',
         child: const Icon(Icons.save),
       ),

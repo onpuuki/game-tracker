@@ -58,10 +58,10 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 }
 
 
-export const syncEvents = functions.runWith({ memory: '512MB', timeoutSeconds: 540 }).firestore.document('sync_requests/{requestId}').onCreate(async (snapshot, context) => {
+export const processSyncRequest = functions.runWith({ memory: '512MB', timeoutSeconds: 540 }).firestore.document('sync_requests/{requestId}').onCreate(async (snapshot, context) => {
     const data = snapshot.data();
     const traceId = data.traceId || `trace-${context.params.requestId}`;
-    functions.logger.info(`[${traceId}] Starting syncEvents with Grounded Gemini via background trigger`, { traceId });
+    functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });
 
     try {
         await snapshot.ref.update({ status: 'processing', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -190,7 +190,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
             }
         }
         await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo });
-        await writeDebugLog(traceId, 'syncEvents process completed successfully.');
+        await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');
         return { success: true, message: 'Sync completed via Grounded Gemini.', debugInfo };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

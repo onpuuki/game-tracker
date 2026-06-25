@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final traceId = const Uuid().v4();
     final logManager = DebugLogManager();
 
-    await logManager.addLog('Starting syncEvents request via Firestore', traceId: traceId);
+    await logManager.addLog('Starting sync request via Firestore', traceId: traceId);
 
     try {
       await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await logManager.addLog('syncEvents request added successfully.', traceId: traceId);
+      await logManager.addLog('sync request added successfully.', traceId: traceId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      await logManager.addLog('syncEvents request failed (Exception): $e', traceId: traceId);
+      await logManager.addLog('sync request failed (Exception): $e', traceId: traceId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to create sync request: $e')),
@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: const Icon(Icons.sync),
                   title: isLoading
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Run syncEvents'),
+                      : const Text('Run Sync'),
                   onTap: isLoading
                       ? null
                       : () {

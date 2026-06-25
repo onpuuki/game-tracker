@@ -17,49 +17,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isLoading = false;
   bool _isClearingEvents = false;
 
   Future<void> _triggerSync() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     final traceId = const Uuid().v4();
     final logManager = DebugLogManager();
 
-    await logManager.addLog('Starting syncEvents call', traceId: traceId);
+    await logManager.addLog('Starting syncEvents request via Firestore', traceId: traceId);
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('syncEvents', options: HttpsCallableOptions(timeout: const Duration(minutes: 5)));
-      await callable.call({'traceId': traceId});
+      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+          .collection('sync_requests')
+          .add({
+        'status': 'pending',
+        'traceId': traceId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-      await logManager.addLog('syncEvents call successful.', traceId: traceId);
+      await logManager.addLog('syncEvents request added successfully.', traceId: traceId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sync triggered successfully')),
-        );
-      }
-    } on FirebaseFunctionsException catch (e) {
-      await logManager.addLog('syncEvents call failed (FirebaseFunctionsException): [${e.code}] ${e.message}', traceId: traceId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: ${e.message}')),
+          const SnackBar(content: Text('Sync request created successfully')),
         );
       }
     } catch (e) {
-      await logManager.addLog('syncEvents call failed (Exception): $e', traceId: traceId);
+      await logManager.addLog('syncEvents request failed (Exception): $e', traceId: traceId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $e')),
+          SnackBar(content: Text('Failed to create sync request: $e')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
       }
     }
   }
@@ -119,17 +106,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.sync),
-              title: _isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Run syncEvents'),
-              onTap: _isLoading
-                  ? null
-                  : () {
-                      Navigator.pop(context); // Close drawer
-                      _triggerSync();
-                    },
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+                  .collection('sync_requests')
+                  .orderBy('createdAt', descending: true)
+                  .limit(1)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                bool isLoading = false;
+                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                  final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                  final status = data['status'] as String?;
+                  isLoading = status == 'pending' || status == 'processing';
+                }
+
+                return ListTile(
+                  leading: const Icon(Icons.sync),
+                  title: isLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Run syncEvents'),
+                  onTap: isLoading
+                      ? null
+                      : () {
+                          Navigator.pop(context); // Close drawer
+                          _triggerSync();
+                        },
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.delete),

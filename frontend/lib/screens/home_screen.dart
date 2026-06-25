@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../utils/debug_log_manager.dart';
 import 'debug_log_screen.dart';
 import 'url_manager_screen.dart';
+import 'prompt_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -93,6 +94,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const UrlManagerScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_document),
+              title: const Text('Prompt Editor'),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PromptEditorScreen()),
                 );
               },
             ),

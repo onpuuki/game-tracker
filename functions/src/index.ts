@@ -2,7 +2,6 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { GoogleGenAI } from '@google/genai';
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 admin.initializeApp();
@@ -83,20 +82,32 @@ function sanitizeAndParseJson(rawText: string, traceId: string): any {
  */
 async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string, maxRetries = 3): Promise<string> {
     let attempt = 0;
-    const baseDelay = 1500; // 初期待機時間 (1.5秒)
+    const baseDelay = 3000;
 
     while (attempt < maxRetries) {
+        let browser = null;
         try {
-            const response = await axios.get(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-                },
-                timeout: 10000 // 10秒の接続タイムアウト
+            // Puppeteerを起動し、Bot検知をすり抜けるための設定を追加
+            browser = await require('puppeteer').launch({
+                headless: "new",
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-blink-features=AutomationControlled' // WebDriverのフラグを消す
+                ]
             });
+            const page = await browser.newPage();
 
-            const htmlContent = response.data;
+            // リアルなブラウザを偽装
+            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
+
+            // ページ遷移し、ネットワークが落ち着くまで待機
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+            // HTMLの取得
+            const htmlContent = await page.content();
+            await browser.close();
+
             const $ = cheerio.load(htmlContent);
 
             // <a>タグからリンクを抽出し、テキストフローに埋め込む
@@ -129,20 +140,12 @@ async function fetchHtmlWithRetry(url: string, baseUrl: string, traceId: string,
             return mainContentText.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim();
 
         } catch (err: any) {
+            if (browser) await browser.close();
             attempt++;
-            const isLastAttempt = attempt >= maxRetries;
+            functions.logger.warn(`[${traceId}] Puppeteer fetch failed for ${url} (Attempt ${attempt}/${maxRetries}). Error: ${err.message}`);
 
-            functions.logger.warn(`[${traceId}] Axios fetch failed for ${url} (Attempt ${attempt}/${maxRetries}). Error: ${err.message}`);
-
-            if (isLastAttempt) {
-                functions.logger.error(`[${traceId}] Exhausted all retries for ${url}. Aborting extraction.`);
-                return '';
-            }
-
-            // フルジッターを用いた指数的バックオフによる待機時間の算出と適用
-            const exponentialDelay = baseDelay * Math.pow(2, attempt);
-            const jitter = Math.floor(Math.random() * exponentialDelay);
-            await sleep(baseDelay + jitter);
+            if (attempt >= maxRetries) return '';
+            await sleep(baseDelay * Math.pow(2, attempt));
         }
     }
     return '';

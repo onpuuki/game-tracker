@@ -1,6 +1,8 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+
 import { GoogleGenAI } from '@google/genai';
 
 admin.initializeApp();
@@ -58,15 +60,17 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 }
 
 
-export const processSyncRequest = functions
-    .region('asia-northeast1')
-    .runWith({ memory: '512MB', timeoutSeconds: 540 })
-    .firestore
-    .database('projects/game-tracker-444b2/databases/default')
-    .document('sync_requests/{requestId}')
-    .onCreate(async (snapshot, context) => {
+export const processSyncRequest = onDocumentCreated({
+    document: 'sync_requests/{requestId}',
+    database: 'default',
+    region: 'asia-northeast1',
+    memory: '512MiB',
+    timeoutSeconds: 540
+}, async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
     const data = snapshot.data();
-    const traceId = data.traceId || `trace-${context.params.requestId}`;
+    const traceId = data.traceId || `trace-${event.params.requestId}`;
     functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });
 
     try {

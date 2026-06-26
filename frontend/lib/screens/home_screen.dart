@@ -19,6 +19,31 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isClearingEvents = false;
 
+  Widget _buildSiteButton(String siteName, String gameName, String title) {
+    return InkWell(
+      onTap: () async {
+        final query = Uri.encodeComponent('$gameName $title $siteName');
+        final url = Uri.parse('https://duckduckgo.com/?q=!ducky+$query');
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.blueGrey.withAlpha(26),
+          border: Border.all(color: Colors.blueGrey),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          siteName,
+          style: const TextStyle(fontSize: 10, color: Colors.blueGrey, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
   Future<void> _triggerSync() async {
     final traceId = const Uuid().v4();
     final logManager = DebugLogManager();
@@ -306,103 +331,112 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    child: InkWell(
-                      onTap: () async {
-                        String? targetUrl = eventUrl;
-                        if (targetUrl == null || targetUrl.isEmpty) {
-                          // Fallback to settings config url for the game
-                          final targetConfig = targets.firstWhere(
-                            (t) => t['gameName'] == eventGameName,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          targetUrl = targetConfig['url'] as String?;
-                        }
-
-                        if (targetUrl != null && targetUrl.isNotEmpty) {
-                          final uri = Uri.parse(targetUrl);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          } else {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Could not launch URL')),
-                              );
-                            }
-                          }
-                        } else {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('No URL available')),
-                            );
-                          }
-                        }
-                      },
-                      child: ListTile(
-                        leading: imageUrl != null && imageUrl.isNotEmpty
-                            ? SizedBox(
-                                width: 50,
-                                height: 50,
-                                child: Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.image_not_supported),
-                                ),
-                              )
-                            : null,
-                        title: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              eventGameName,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(context).primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 6.0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (tag != null && tag.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
-                                      border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      tag,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                if (imageUrl != null && imageUrl.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: Image.network(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            const Icon(Icons.image_not_supported),
                                       ),
                                     ),
                                   ),
-                                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  eventGameName,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Theme.of(context).primaryColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6.0,
+                                  children: [
+                                    if (tag != null && tag.isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
+                                          border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                          ),
+                                        ),
+                                      ),
+                                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(period, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                                if (summary.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    summary,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
                               ],
                             ),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(period, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                            if (summary.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                summary,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
-                              ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (trailingWidget != null) ...[
+                                trailingWidget,
+                                const SizedBox(height: 8),
+                              ],
+                              if (tag == 'ゲーム内') ...[
+                                _buildSiteButton('GameWith', eventGameName, title),
+                                _buildSiteButton('Game8', eventGameName, title),
+                                _buildSiteButton('神ゲー攻略', eventGameName, title),
+                              ] else if (tag == 'ゲーム外' && eventUrl != null && eventUrl.isNotEmpty) ...[
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    final uri = Uri.parse(eventUrl);
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Could not launch URL')),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('公式ページ', style: TextStyle(fontSize: 10)),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                        trailing: trailingWidget,
+                          ),
+                        ],
                       ),
                     ),
                   );

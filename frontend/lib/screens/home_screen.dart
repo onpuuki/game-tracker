@@ -234,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final eventData = events[index].data() as Map<String, dynamic>;
                   final eventGameName = eventData['gameName'] as String? ?? 'Unknown Game';
                   final title = eventData['title'] as String? ?? 'No Title';
+                  final tag = eventData['tag'] as String?;
 
                   final rawPeriod = eventData['period'] as String? ?? 'Unknown Period';
                   final period = rawPeriod.replaceAll('null', '未定');
@@ -360,7 +361,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6.0,
+                              children: [
+                                if (tag != null && tag.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
+                                      border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      tag,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                      ),
+                                    ),
+                                  ),
+                                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
                           ],
                         ),
                         subtitle: Column(

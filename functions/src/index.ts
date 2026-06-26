@@ -62,6 +62,7 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
 export const processSyncRequest = onDocumentCreated({
     document: 'sync_requests/{requestId}',
+    database: 'default',
     region: 'asia-northeast1',
     memory: '512MiB',
     timeoutSeconds: 540

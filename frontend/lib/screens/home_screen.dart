@@ -234,21 +234,73 @@ class _HomeScreenState extends State<HomeScreen> {
                   final eventData = events[index].data() as Map<String, dynamic>;
                   final eventGameName = eventData['gameName'] as String? ?? 'Unknown Game';
                   final title = eventData['title'] as String? ?? 'No Title';
-                  final period = eventData['period'] as String? ?? 'Unknown Period';
+
+                  final rawPeriod = eventData['period'] as String? ?? 'Unknown Period';
+                  final period = rawPeriod.replaceAll('null', '未定');
+
                   final summary = eventData['summary'] as String? ?? '';
                   final imageUrl = eventData['imageUrl'] as String?;
                   final endDateStr = eventData['endDate'] as String?;
                   final eventUrl = eventData['eventUrl'] as String?;
 
+                  DateTime? startDate;
+                  try {
+                    final parts = rawPeriod.split('~');
+                    if (parts.isNotEmpty) {
+                      final startStr = parts[0].trim().replaceAll('/', '-');
+                      startDate = DateTime.tryParse(startStr);
+                    }
+                  } catch (_) {}
+
+                  bool isUpcoming = false;
+                  int? daysUntilStart;
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+
+                  if (startDate != null) {
+                    final start = DateTime(startDate.year, startDate.month, startDate.day);
+                    if (start.isAfter(today)) {
+                      isUpcoming = true;
+                      daysUntilStart = start.difference(today).inDays;
+                    }
+                  }
+
                   int? remainingDays;
                   if (endDateStr != null) {
                     final endDate = DateTime.tryParse(endDateStr);
                     if (endDate != null) {
-                      final now = DateTime.now();
                       final end = DateTime(endDate.year, endDate.month, endDate.day);
-                      final today = DateTime(now.year, now.month, now.day);
                       remainingDays = end.difference(today).inDays;
                     }
+                  }
+
+                  Widget? trailingWidget;
+                  if (isUpcoming && daysUntilStart != null) {
+                    trailingWidget = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withAlpha(26),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green),
+                      ),
+                      child: Text(
+                        '開催まで$daysUntilStart日',
+                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    );
+                  } else if (remainingDays != null && remainingDays >= 0) {
+                    trailingWidget = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withAlpha(26),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red),
+                      ),
+                      child: Text(
+                        '終了まで$remainingDays日',
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    );
                   }
 
                   return Card(
@@ -326,24 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ],
                         ),
-                        trailing: remainingDays != null && remainingDays >= 0
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withAlpha(26),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.red),
-                                ),
-                                child: Text(
-                                  '残り$remainingDays日',
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              )
-                            : null,
+                        trailing: trailingWidget,
                       ),
                     ),
                   );

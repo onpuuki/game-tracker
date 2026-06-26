@@ -167,38 +167,47 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                             newEventTitles.add(event.title);
 
                             if (event.tag === 'ゲーム内') {
-                                const query = encodeURIComponent(`${game.gameName} ${event.title}`);
+                                const query = encodeURIComponent(`${game.gameName} ${event.title} site:gamewith.jp OR site:game8.jp OR site:kamigame.jp`);
+                                const searchUrl = `https://html.duckduckgo.com/html/?q=${query}`;
 
-                                const searchApiKey = "AIzaSyB5kWIy7hCGfZEWzLkhwPo1LnY2Fkhys80";
-                                if (!searchApiKey) {
-                                    functions.logger.error(`[${traceId}] Custom Search API key is missing. Ensure GOOGLE_SEARCH_API_KEY is set.`);
-                                    event.urls = { GameWith: null, Game8: null, Kamigame: null };
-                                } else {
-                                const searchUrl = `https://customsearch.googleapis.com/customsearch/v1?key=${searchApiKey}&cx=d23f1d477add54a43&q=${query}`;
                                 try {
-                                    const searchRes = await fetch(searchUrl);
+                                    const searchRes = await fetch(searchUrl, {
+                                        headers: {
+                                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                        }
+                                    });
+
                                     if (searchRes.ok) {
-                                        const searchData = await searchRes.json();
+                                        const html = await searchRes.text();
                                         const urls: { GameWith: string | null, Game8: string | null, Kamigame: string | null } = { GameWith: null, Game8: null, Kamigame: null };
-                                        if (searchData.items && Array.isArray(searchData.items)) {
-                                            for (const item of searchData.items) {
-                                                const link = item.link;
-                                                if (link && typeof link === 'string') {
-                                                    if (!urls.GameWith && link.includes('gamewith.jp')) urls.GameWith = link;
-                                                    if (!urls.Game8 && link.includes('game8.jp')) urls.Game8 = link;
-                                                    if (!urls.Kamigame && link.includes('kamigame.jp')) urls.Kamigame = link;
-                                                }
+
+                                        // href="//duckduckgo.com/l/?uddg=..." を探す
+                                        const regex = /href="\/\/duckduckgo\.com\/l\/\?uddg=([^"]+)"/g;
+                                        let match;
+                                        while ((match = regex.exec(html)) !== null) {
+                                            try {
+                                                const rawUrl = match[1];
+                                                // DuckDuckGoのパラメータを含むかもしれないため、純粋なURLまでデコード
+                                                // 最初のdecodeURIComponentで https://... の形になる
+                                                let decodedUrl = decodeURIComponent(rawUrl);
+
+                                                const link = decodedUrl;
+
+                                                if (!urls.GameWith && link.includes('gamewith.jp')) urls.GameWith = link;
+                                                if (!urls.Game8 && link.includes('game8.jp')) urls.Game8 = link;
+                                                if (!urls.Kamigame && link.includes('kamigame.jp')) urls.Kamigame = link;
+                                            } catch (decodeErr) {
+                                                functions.logger.warn(`[${traceId}] URL Decode failed for ${match[1]}:`, decodeErr);
                                             }
                                         }
                                         event.urls = urls;
                                     } else {
-                                        functions.logger.warn(`[${traceId}] Custom Search API returned ${searchRes.status} for ${event.title}`);
+                                        functions.logger.warn(`[${traceId}] DuckDuckGo scraping returned ${searchRes.status} for ${event.title}`);
                                         event.urls = { GameWith: null, Game8: null, Kamigame: null };
                                     }
                                 } catch (e) {
-                                    functions.logger.warn(`[${traceId}] Custom Search API failed for ${event.title}:`, e);
+                                    functions.logger.warn(`[${traceId}] DuckDuckGo scraping failed for ${event.title}:`, e);
                                     event.urls = { GameWith: null, Game8: null, Kamigame: null };
-                                }
                                 }
                             }
 

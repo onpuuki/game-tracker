@@ -166,6 +166,42 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                             if (!event.title) continue;
                             newEventTitles.add(event.title);
 
+                            if (event.tag === 'ゲーム内') {
+                                const query = encodeURIComponent(`${game.gameName} ${event.title}`);
+
+                                const searchApiKey = process.env.GOOGLE_SEARCH_API_KEY;
+                                if (!searchApiKey) {
+                                    functions.logger.error(`[${traceId}] Custom Search API key is missing. Ensure GOOGLE_SEARCH_API_KEY is set.`);
+                                    event.urls = { GameWith: null, Game8: null, Kamigame: null };
+                                } else {
+                                const searchUrl = `https://customsearch.googleapis.com/customsearch/v1?key=${searchApiKey}&cx=d23f1d477add54a43&q=${query}`;
+                                try {
+                                    const searchRes = await fetch(searchUrl);
+                                    if (searchRes.ok) {
+                                        const searchData = await searchRes.json();
+                                        const urls: { GameWith: string | null, Game8: string | null, Kamigame: string | null } = { GameWith: null, Game8: null, Kamigame: null };
+                                        if (searchData.items && Array.isArray(searchData.items)) {
+                                            for (const item of searchData.items) {
+                                                const link = item.link;
+                                                if (link && typeof link === 'string') {
+                                                    if (!urls.GameWith && link.includes('gamewith.jp')) urls.GameWith = link;
+                                                    if (!urls.Game8 && link.includes('game8.jp')) urls.Game8 = link;
+                                                    if (!urls.Kamigame && link.includes('kamigame.jp')) urls.Kamigame = link;
+                                                }
+                                            }
+                                        }
+                                        event.urls = urls;
+                                    } else {
+                                        functions.logger.warn(`[${traceId}] Custom Search API returned ${searchRes.status} for ${event.title}`);
+                                        event.urls = { GameWith: null, Game8: null, Kamigame: null };
+                                    }
+                                } catch (e) {
+                                    functions.logger.warn(`[${traceId}] Custom Search API failed for ${event.title}:`, e);
+                                    event.urls = { GameWith: null, Game8: null, Kamigame: null };
+                                }
+                                }
+                            }
+
                             if (currentEventsMap.has(event.title)) {
                                 const docRef = eventsCollection.doc(currentEventsMap.get(event.title));
                                 batch.set(docRef, { ...event, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });

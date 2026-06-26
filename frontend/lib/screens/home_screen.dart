@@ -19,29 +19,29 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isClearingEvents = false;
 
-  Widget _buildSiteButton(String siteName, String? url) {
-    final bool isActive = url != null && url.isNotEmpty;
-
+  Widget _buildSiteButton(String siteName, String eventGameName, String title) {
     return InkWell(
-      onTap: isActive ? () async {
-        final uri = Uri.parse(url!);
+      onTap: () async {
+        final query = '!ducky $eventGameName $title $siteName 日本語';
+        final encodedQuery = Uri.encodeComponent(query);
+        final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
-      } : null,
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isActive ? Colors.blueGrey.withAlpha(26) : Colors.grey.withAlpha(26),
-          border: Border.all(color: isActive ? Colors.blueGrey : Colors.grey),
+          color: Colors.blueGrey.withAlpha(26),
+          border: Border.all(color: Colors.blueGrey),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           siteName,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 10,
-            color: isActive ? Colors.blueGrey : Colors.grey,
+            color: Colors.blueGrey,
             fontWeight: FontWeight.bold
           ),
         ),
@@ -273,7 +273,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   final imageUrl = eventData['imageUrl'] as String?;
                   final endDateStr = eventData['endDate'] as String?;
                   final eventUrl = eventData['eventUrl'] as String?;
-                  final urls = eventData['urls'] as Map<String, dynamic>? ?? {};
 
                   DateTime? startDate;
                   try {
@@ -415,9 +414,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: 8),
                               ],
                               if (tag == 'ゲーム内') ...[
-                                _buildSiteButton('GameWith', urls['GameWith'] as String?),
-                                _buildSiteButton('Game8', urls['Game8'] as String?),
-                                _buildSiteButton('神ゲー攻略', urls['Kamigame'] as String?),
+                                _buildSiteButton('GameWith', eventGameName, title),
+                                _buildSiteButton('Game8', eventGameName, title),
+                                _buildSiteButton('神ゲー攻略', eventGameName, title),
                               ] else if (tag == 'ゲーム外' && eventUrl != null && eventUrl.isNotEmpty) ...[
                                 ElevatedButton(
                                   onPressed: () async {

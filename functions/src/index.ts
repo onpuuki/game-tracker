@@ -1,7 +1,6 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 import { GoogleGenAI } from '@google/genai';
 
@@ -60,18 +59,18 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 }
 
 
-export const processSyncRequest = onDocumentCreated({
-    document: 'sync_requests/{requestId}',
-    database: 'default',
-    region: 'asia-northeast1',
-    memory: '512MiB',
-    timeoutSeconds: 540
-}, async (event) => {
-    const snapshot = event.data;
-    if (!snapshot) return;
-    const data = snapshot.data();
-    const traceId = data.traceId || `trace-${event.params.requestId}`;
-    functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });
+export const processSyncRequest = functions
+    .region('asia-northeast1') // データベースと同じ東京リージョンを指定
+    .runWith({ memory: '512MB', timeoutSeconds: 540 })
+    .firestore
+    // .database() メソッドは絶対に使用せず、documentの引数にデータベース名を含んだフルパスを指定する
+    .document('projects/game-tracker-444b2/databases/default/documents/sync_requests/{requestId}')
+    .onCreate(async (snapshot, context) => {
+        const data = snapshot.data();
+        // V1の仕様に戻すため、context.params.requestId からIDを取得します
+        const traceId = data.traceId || `trace-${context.params.requestId}`;
+
+        functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });
 
     try {
         await snapshot.ref.update({ status: 'processing', updatedAt: admin.firestore.FieldValue.serverTimestamp() });

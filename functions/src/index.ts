@@ -169,7 +169,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                             if (event.tag === 'ゲーム内') {
                                 const query = encodeURIComponent(`${game.gameName} ${event.title}`);
 
-                                const searchApiKey = process.env.GOOGLE_SEARCH_API_KEY;
+                                const searchApiKey = "AIzaSyB5kWIy7hCGfZEWzLkhwPo1LnY2Fkhys80";
                                 if (!searchApiKey) {
                                     functions.logger.error(`[${traceId}] Custom Search API key is missing. Ensure GOOGLE_SEARCH_API_KEY is set.`);
                                     event.urls = { GameWith: null, Game8: null, Kamigame: null };

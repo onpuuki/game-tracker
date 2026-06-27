@@ -51,10 +51,29 @@ class _HomeScreenState extends State<HomeScreen> {
   String _secondarySortField = 'startDate';
   String _secondarySortOrder = 'asc';
 
+  late Stream<DocumentSnapshot> _configStream;
+  late Stream<QuerySnapshot> _eventsStream;
+  late Stream<QuerySnapshot> _syncStream;
+
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+
+    _configStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        .collection('settings')
+        .doc('config')
+        .snapshots();
+
+    _eventsStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        .collectionGroup('events')
+        .snapshots();
+
+    _syncStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        .collection('sync_requests')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots();
   }
 
   Future<void> _loadPreferences() async {
@@ -619,11 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-                  .collection('sync_requests')
-                  .orderBy('createdAt', descending: true)
-                  .limit(1)
-                  .snapshots(),
+              stream: _syncStream,
               builder: (context, snapshot) {
                 bool isLoading = false;
                 if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
@@ -703,10 +718,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-            .collection('settings')
-            .doc('config')
-            .snapshots(),
+        stream: _configStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
@@ -723,9 +735,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-                .collectionGroup('events')
-                .snapshots(),
+            stream: _eventsStream,
             builder: (context, eventSnapshot) {
               if (eventSnapshot.hasError) {
                 return Center(child: Text('Error loading events: ${eventSnapshot.error}'));
@@ -969,8 +979,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           Padding(
                             padding: const EdgeInsets.all(12.0),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
@@ -999,67 +1011,68 @@ class _HomeScreenState extends State<HomeScreen> {
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
-                                          Wrap(
-                                            crossAxisAlignment: WrapCrossAlignment.center,
-                                            spacing: 6.0,
-                                            children: [
-                                              if (tag != null && tag.isNotEmpty)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
-                                                    border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    tag,
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
-                                                    ),
-                                                  ),
-                                                ),
-                                              Text(
-                                                title,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  decoration: isChecked ? TextDecoration.lineThrough : null,
-                                                  color: isChecked ? Colors.grey : null,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            period,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: isChecked ? Colors.grey : Colors.blueGrey,
-                                            ),
-                                          ),
-                                          if (summary.isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              summary,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isChecked ? Colors.grey : null,
-                                              ),
-                                            ),
-                                          ],
                                         ],
                                       ),
                                     ),
                                     if (trailingWidget != null) ...[
                                       const SizedBox(width: 8),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          isChecked ? Opacity(opacity: 0.5, child: trailingWidget) : trailingWidget,
-                                        ],
+                                      isChecked ? Opacity(opacity: 0.5, child: trailingWidget) : trailingWidget,
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 6.0,
+                                      children: [
+                                        if (tag != null && tag.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
+                                              border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          title,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            decoration: isChecked ? TextDecoration.lineThrough : null,
+                                            color: isChecked ? Colors.grey : null,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      period,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: isChecked ? Colors.grey : Colors.blueGrey,
+                                      ),
+                                    ),
+                                    if (summary.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        summary,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isChecked ? Colors.grey : null,
+                                        ),
                                       ),
                                     ],
                                   ],

@@ -853,7 +853,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   final summary = eventData['summary'] as String? ?? '';
                   final imageUrl = eventData['imageUrl'] as String?;
-                  final eventUrl = eventData['eventUrl'] as String?;
 
                   final startDate = parsedEvent.startDate;
                   final endDate = parsedEvent.endDate;
@@ -1032,11 +1031,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _buildSiteButton('GameWith', eventGameName, title, isChecked: isChecked),
                                       _buildSiteButton('Game8', eventGameName, title, isChecked: isChecked),
                                       _buildSiteButton('神ゲー攻略', eventGameName, title, isChecked: isChecked),
-                                    ] else if (tag == 'ゲーム外' && eventUrl != null && eventUrl.isNotEmpty) ...[
+                                    ] else if (tag == 'ゲーム外') ...[
                                       Expanded(
                                         child: ElevatedButton(
                                           onPressed: isChecked ? null : () async {
-                                            final uri = Uri.parse(eventUrl);
+                                            final query = '!ducky $eventGameName $title';
+                                            final encodedQuery = Uri.encodeComponent(query);
+                                            final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
                                             if (await canLaunchUrl(uri)) {
                                               await launchUrl(uri, mode: LaunchMode.externalApplication);
                                             } else {
@@ -1052,7 +1053,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             backgroundColor: isChecked ? Colors.grey.withAlpha(50) : null,
                                           ),
                                           child: Text(
-                                            '公式ページ',
+                                            'イベントページ',
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: isChecked ? Colors.grey : null,

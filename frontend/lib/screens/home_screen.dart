@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/debug_log_manager.dart';
 import 'debug_log_screen.dart';
 import 'url_manager_screen.dart';
 import 'prompt_editor_screen.dart';
+import 'sync_status_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late Stream<DocumentSnapshot> _configStream;
   late Stream<QuerySnapshot> _eventsStream;
-  late Stream<QuerySnapshot> _syncStream;
 
   @override
   void initState() {
@@ -69,11 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
         .collectionGroup('events')
         .snapshots();
 
-    _syncStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-        .collection('sync_requests')
-        .orderBy('createdAt', descending: true)
-        .limit(1)
-        .snapshots();
   }
 
   Future<void> _loadPreferences() async {
@@ -518,38 +511,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _triggerSync() async {
-    final traceId = const Uuid().v4();
-    final logManager = DebugLogManager();
-
-    await logManager.addLog('Starting sync request via Firestore', traceId: traceId);
-
-    try {
-      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-          .collection('sync_requests')
-          .add({
-        'status': 'pending',
-        'traceId': traceId,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await logManager.addLog('sync request added successfully.', traceId: traceId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sync request created successfully')),
-        );
-      }
-    } catch (e) {
-      await logManager.addLog('sync request failed (Exception): $e', traceId: traceId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create sync request: $e')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -637,27 +598,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            StreamBuilder<QuerySnapshot>(
-              stream: _syncStream,
-              builder: (context, snapshot) {
-                bool isLoading = false;
-                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                  final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
-                  final status = data['status'] as String?;
-                  isLoading = status == 'pending' || status == 'processing';
-                }
-
-                return ListTile(
-                  leading: const Icon(Icons.sync),
-                  title: isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Run Sync'),
-                  onTap: isLoading
-                      ? null
-                      : () {
-                          Navigator.pop(context); // Close drawer
-                          _triggerSync();
-                        },
+            ListTile(
+              leading: const Icon(Icons.sync),
+              title: const Text('Run Sync'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SyncStatusScreen()),
                 );
               },
             ),

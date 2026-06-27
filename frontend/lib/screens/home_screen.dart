@@ -50,6 +50,46 @@ class _HomeScreenState extends State<HomeScreen> {
   String _secondarySortField = 'startDate';
   String _secondarySortOrder = 'asc';
 
+  DateTime? _parseEventDate(String? dateStr) {
+    if (dateStr == null) return null;
+    try {
+      String formatted = dateStr.replaceAll('/', '-').trim();
+      if (formatted.contains(' ')) {
+        formatted = formatted.replaceAll(' ', 'T');
+      }
+      final parts = formatted.split('T');
+      if (parts.length == 2 && parts[1].split(':').length == 2) {
+        formatted = '$formatted:00';
+      }
+      return DateTime.tryParse(formatted);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  String _formatDateString(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '未定';
+    try {
+      String formatted = dateStr.replaceAll('/', '-').trim();
+      if (formatted.contains(' ')) {
+        formatted = formatted.replaceAll(' ', 'T');
+      }
+
+      final parts = formatted.split('T');
+      if (parts.length == 2 && parts[1].split(':').length == 2) {
+        formatted = '$formatted:00';
+      }
+
+      final dt = DateTime.parse(formatted);
+      if (dt.hour == 0 && dt.minute == 0 && dt.second == 0 && !dateStr.contains(':')) {
+         return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      }
+      return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   late Stream<DocumentSnapshot> _configStream;
   late Stream<QuerySnapshot> _eventsStream;
 
@@ -669,15 +709,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final startDateStr = data['startDate'] as String?;
                 final endDateStr = data['endDate'] as String?;
 
-                DateTime? startDate;
-                if (startDateStr != null) {
-                  startDate = DateTime.tryParse(startDateStr.replaceAll('/', '-'));
-                }
-
-                DateTime? endDate;
-                if (endDateStr != null) {
-                  endDate = DateTime.tryParse(endDateStr.replaceAll('/', '-'));
-                }
+                DateTime? startDate = _parseEventDate(startDateStr);
+                DateTime? endDate = _parseEventDate(endDateStr);
 
                 return _ParsedEvent(
                   doc: doc,
@@ -812,8 +845,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   final startDateStr = eventData['startDate'] as String?;
                   final endDateStr = eventData['endDate'] as String?;
-                  final startDisplay = startDateStr ?? '未定';
-                  final endDisplay = endDateStr ?? '未定';
+                  final startDisplay = _formatDateString(startDateStr);
+                  final endDisplay = _formatDateString(endDateStr);
                   final period = '$startDisplay ~ $endDisplay';
 
                   final summary = eventData['summary'] as String? ?? '';

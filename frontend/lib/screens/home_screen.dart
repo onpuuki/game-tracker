@@ -465,10 +465,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSiteButton(String siteName, String eventGameName, String title, {bool isChecked = false}) {
+  Widget _buildSiteButton(String siteName, String eventGameName, String title, {bool isChecked = false, bool isEnabled = true}) {
+    final bool visuallyDisabled = isChecked || !isEnabled;
+
     return Expanded(
       child: InkWell(
-        onTap: isChecked ? null : () async {
+        onTap: visuallyDisabled ? null : () async {
           String domain = '';
           switch (siteName) {
             case 'GameWith':
@@ -494,15 +496,15 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isChecked ? Colors.grey.withAlpha(50) : Colors.blueGrey.withAlpha(26),
-            border: Border.all(color: isChecked ? Colors.grey : Colors.blueGrey),
+            color: visuallyDisabled ? Colors.grey.withAlpha(76) : Colors.blueGrey.withAlpha(26),
+            border: Border.all(color: visuallyDisabled ? Colors.grey : Colors.blueGrey),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             siteName,
             style: TextStyle(
               fontSize: 12,
-              color: isChecked ? Colors.grey : Colors.blueGrey,
+              color: visuallyDisabled ? Colors.grey : Colors.blueGrey,
               fontWeight: FontWeight.bold
             ),
           ),
@@ -677,6 +679,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final data = snapshot.data?.data() as Map<String, dynamic>?;
           final targets = (data?['targets'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+
+          final siteConfig = <String, Map<String, bool>>{};
+          for (var target in targets) {
+            final gameName = target['gameName'] as String?;
+            if (gameName != null) {
+              siteConfig[gameName] = {
+                'GameWith': target['useGameWith'] as bool? ?? true,
+                'Game8': target['useGame8'] as bool? ?? true,
+                '神ゲー攻略': target['useKamigame'] as bool? ?? true,
+              };
+            }
+          }
 
           if (targets.isEmpty) {
             return const Center(child: Text('No targets found. Add targets in URL Manager.'));
@@ -1028,9 +1042,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Row(
                                   children: [
                                     if (tag == 'ゲーム内') ...[
-                                      _buildSiteButton('GameWith', eventGameName, title, isChecked: isChecked),
-                                      _buildSiteButton('Game8', eventGameName, title, isChecked: isChecked),
-                                      _buildSiteButton('神ゲー攻略', eventGameName, title, isChecked: isChecked),
+                                      _buildSiteButton('GameWith', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['GameWith'] ?? true),
+                                      _buildSiteButton('Game8', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['Game8'] ?? true),
+                                      _buildSiteButton('神ゲー攻略', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['神ゲー攻略'] ?? true),
                                     ] else if (tag == 'ゲーム外') ...[
                                       Expanded(
                                         child: ElevatedButton(

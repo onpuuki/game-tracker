@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'debug_log_screen.dart';
@@ -842,6 +843,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final eventGameName = parsedEvent.gameName;
                   final title = eventData['title'] as String? ?? 'No Title';
                   final tag = eventData['tag'] as String?;
+                  final redeemCode = eventData['redeemCode'] as String?;
 
                   final startDateStr = eventData['startDate'] as String?;
                   final endDateStr = eventData['endDate'] as String?;
@@ -905,21 +907,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   final eventId = parsedEvent.doc.id;
                   final isChecked = _checkedEventIds.contains(eventId);
+                  Color tagColor = Colors.orange;
+                  if (tag == 'ゲーム内') {
+                    tagColor = Colors.blue;
+                  } else if (tag == 'コード') {
+                    tagColor = Colors.purple;
+                  }
+
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     color: isChecked ? Colors.grey.shade300 : null,
                     child: InkWell(
                       onTap: isChecked ? null : () async {
-                        final query = '$eventGameName $title';
-                        final encodedQuery = Uri.encodeComponent(query);
-                        final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        } else {
+                        if (tag == 'コード') {
+                          final codeToCopy = (redeemCode != null && redeemCode.isNotEmpty) ? redeemCode : title;
+                          await Clipboard.setData(ClipboardData(text: codeToCopy));
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Could not launch URL')),
+                              const SnackBar(content: Text('コードをコピーしました')),
                             );
+                          }
+                        } else {
+                          final query = '$eventGameName $title';
+                          final encodedQuery = Uri.encodeComponent(query);
+                          final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Could not launch URL')),
+                              );
+                            }
                           }
                         }
                       },
@@ -991,8 +1010,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
-                                              border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
+                                              color: tagColor.withAlpha(26),
+                                              border: Border.all(color: tagColor),
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                             child: Text(
@@ -1000,7 +1019,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               style: TextStyle(
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.bold,
-                                                color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                                color: tagColor,
                                               ),
                                             ),
                                           ),

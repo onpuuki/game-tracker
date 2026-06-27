@@ -453,43 +453,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSiteButton(String siteName, String eventGameName, String title) {
-    return InkWell(
-      onTap: () async {
-        String domain = '';
-        switch (siteName) {
-          case 'GameWith':
-            domain = 'gamewith.jp';
-            break;
-          case 'Game8':
-            domain = 'game8.jp';
-            break;
-          case '神ゲー攻略':
-            domain = 'kamigame.jp';
-            break;
-        }
+  Widget _buildSiteButton(String siteName, String eventGameName, String title, {bool isChecked = false}) {
+    return Expanded(
+      child: InkWell(
+        onTap: isChecked ? null : () async {
+          String domain = '';
+          switch (siteName) {
+            case 'GameWith':
+              domain = 'gamewith.jp';
+              break;
+            case 'Game8':
+              domain = 'game8.jp';
+              break;
+            case '神ゲー攻略':
+              domain = 'kamigame.jp';
+              break;
+          }
 
-        final query = '!ducky $eventGameName $title site:$domain';
-        final encodedQuery = Uri.encodeComponent(query);
-        final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.blueGrey.withAlpha(26),
-          border: Border.all(color: Colors.blueGrey),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          siteName,
-          style: const TextStyle(
-            fontSize: 10,
-            color: Colors.blueGrey,
-            fontWeight: FontWeight.bold
+          final query = '!ducky $eventGameName $title site:$domain';
+          final encodedQuery = Uri.encodeComponent(query);
+          final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isChecked ? Colors.grey.withAlpha(50) : Colors.blueGrey.withAlpha(26),
+            border: Border.all(color: isChecked ? Colors.grey : Colors.blueGrey),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            siteName,
+            style: TextStyle(
+              fontSize: 12,
+              color: isChecked ? Colors.grey : Colors.blueGrey,
+              fontWeight: FontWeight.bold
+            ),
           ),
         ),
       ),
@@ -536,30 +539,30 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
-            child: OutlinedButton.icon(
+            child: ElevatedButton.icon(
               onPressed: () {
                 _showFilterBottomSheet(_latestAllGameNames);
               },
               icon: const Icon(Icons.filter_list, size: 18),
               label: const Text('絞り込み'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Theme.of(context).primaryColor,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
-            child: OutlinedButton.icon(
+            child: ElevatedButton.icon(
               onPressed: () {
                 _showSortDialog();
               },
               icon: const Icon(Icons.sort, size: 18),
               label: const Text('並び替え'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Theme.of(context).primaryColor,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
             ),
@@ -946,126 +949,178 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   final eventId = parsedEvent.doc.id;
+                  final isChecked = _checkedEventIds.contains(eventId);
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    color: isChecked ? Colors.grey.shade300 : null,
+                    child: InkWell(
+                      onLongPress: () {
+                        setState(() {
+                          if (isChecked) {
+                            _checkedEventIds.remove(eventId);
+                          } else {
+                            _checkedEventIds.add(eventId);
+                          }
+                        });
+                        _savePreferences();
+                      },
+                      child: Stack(
                         children: [
-                          Checkbox(
-                            value: _checkedEventIds.contains(eventId),
-                            onChanged: (bool? value) {
-                              setState(() {
-                                if (value == true) {
-                                  _checkedEventIds.add(eventId);
-                                } else {
-                                  _checkedEventIds.remove(eventId);
-                                }
-                              });
-                              _savePreferences();
-                            },
-                          ),
-                          Expanded(
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (imageUrl != null && imageUrl.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8.0),
-                                    child: SizedBox(
-                                      width: 50,
-                                      height: 50,
-                                      child: Image.network(
-                                        imageUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) =>
-                                            const Icon(Icons.image_not_supported),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (imageUrl != null && imageUrl.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(bottom: 8.0),
+                                              child: SizedBox(
+                                                width: 50,
+                                                height: 50,
+                                                child: Image.network(
+                                                  imageUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) =>
+                                                      const Icon(Icons.image_not_supported),
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            eventGameName,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Theme.of(context).primaryColor,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            spacing: 6.0,
+                                            children: [
+                                              if (tag != null && tag.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
+                                                    border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    tag,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                                    ),
+                                                  ),
+                                                ),
+                                              Text(
+                                                title,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  decoration: isChecked ? TextDecoration.lineThrough : null,
+                                                  color: isChecked ? Colors.grey : null,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            period,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: isChecked ? Colors.grey : Colors.blueGrey,
+                                            ),
+                                          ),
+                                          if (summary.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              summary,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isChecked ? Colors.grey : null,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                Text(
-                                  eventGameName,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Theme.of(context).primaryColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                    if (trailingWidget != null) ...[
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          isChecked ? Opacity(opacity: 0.5, child: trailingWidget) : trailingWidget,
+                                        ],
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 6.0,
+                                const SizedBox(height: 12),
+                                Row(
                                   children: [
-                                    if (tag != null && tag.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: tag == 'ゲーム内' ? Colors.blue.withAlpha(26) : Colors.orange.withAlpha(26),
-                                          border: Border.all(color: tag == 'ゲーム内' ? Colors.blue : Colors.orange),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          tag,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: tag == 'ゲーム内' ? Colors.blue : Colors.orange,
+                                    if (tag == 'ゲーム内') ...[
+                                      _buildSiteButton('GameWith', eventGameName, title, isChecked: isChecked),
+                                      _buildSiteButton('Game8', eventGameName, title, isChecked: isChecked),
+                                      _buildSiteButton('神ゲー攻略', eventGameName, title, isChecked: isChecked),
+                                    ] else if (tag == 'ゲーム外' && eventUrl != null && eventUrl.isNotEmpty) ...[
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: isChecked ? null : () async {
+                                            final uri = Uri.parse(eventUrl);
+                                            if (await canLaunchUrl(uri)) {
+                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                            } else {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Could not launch URL')),
+                                                );
+                                              }
+                                            }
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            backgroundColor: isChecked ? Colors.grey.withAlpha(50) : null,
+                                          ),
+                                          child: Text(
+                                            '公式ページ',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isChecked ? Colors.grey : null,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    ],
                                   ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(period, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                                if (summary.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    summary,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (trailingWidget != null) ...[
-                                trailingWidget,
-                                const SizedBox(height: 8),
-                              ],
-                              if (tag == 'ゲーム内') ...[
-                                _buildSiteButton('GameWith', eventGameName, title),
-                                _buildSiteButton('Game8', eventGameName, title),
-                                _buildSiteButton('神ゲー攻略', eventGameName, title),
-                              ] else if (tag == 'ゲーム外' && eventUrl != null && eventUrl.isNotEmpty) ...[
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    final uri = Uri.parse(eventUrl);
-                                    if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Could not launch URL')),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          if (isChecked)
+                            Positioned.fill(
+                              child: Center(
+                                child: Transform.rotate(
+                                  angle: -0.3,
+                                  child: Text(
+                                    '済',
+                                    style: TextStyle(
+                                      fontSize: 60,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red.withAlpha(128),
+                                    ),
                                   ),
-                                  child: const Text('公式ページ', style: TextStyle(fontSize: 10)),
                                 ),
-                              ],
-                            ],
-                          ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

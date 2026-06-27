@@ -208,15 +208,35 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                         ),
                                         const SizedBox(width: 4),
                                         Expanded(
-                                          child: Text(
-                                            isError
-                                              ? 'Error parsing $game: ${info['error']}'
-                                              : 'Processed $game',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isError ? Colors.red : Colors.black87,
-                                            ),
-                                          ),
+                                          child: isError
+                                            ? Text(
+                                                'Error parsing $game: ${info['error']}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.red,
+                                                ),
+                                              )
+                                            : RichText(
+                                                text: TextSpan(
+                                                  children: [
+                                                    TextSpan(
+                                                      text: 'Processed $game',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                    if (info.containsKey('added') && info.containsKey('updated') && info.containsKey('deleted'))
+                                                      TextSpan(
+                                                        text: ' [新規: ${info['added']}, 更新: ${info['updated']}, 削除: ${info['deleted']}]',
+                                                        style: const TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
                                         ),
                                       ],
                                     ),

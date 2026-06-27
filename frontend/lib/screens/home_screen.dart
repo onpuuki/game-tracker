@@ -666,21 +666,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
               List<_ParsedEvent> parsedEvents = docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                final rawPeriod = data['period'] as String? ?? '';
+                final startDateStr = data['startDate'] as String?;
                 final endDateStr = data['endDate'] as String?;
 
                 DateTime? startDate;
-                try {
-                  final parts = rawPeriod.split('~');
-                  if (parts.isNotEmpty) {
-                    final startStr = parts[0].trim().replaceAll('/', '-');
-                    startDate = DateTime.tryParse(startStr);
-                  }
-                } catch (_) {}
+                if (startDateStr != null) {
+                  startDate = DateTime.tryParse(startDateStr.replaceAll('/', '-'));
+                }
 
                 DateTime? endDate;
                 if (endDateStr != null) {
-                  endDate = DateTime.tryParse(endDateStr);
+                  endDate = DateTime.tryParse(endDateStr.replaceAll('/', '-'));
                 }
 
                 return _ParsedEvent(
@@ -814,8 +810,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   final title = eventData['title'] as String? ?? 'No Title';
                   final tag = eventData['tag'] as String?;
 
-                  final rawPeriod = eventData['period'] as String? ?? 'Unknown Period';
-                  final period = rawPeriod.replaceAll('null', '未定');
+                  final startDateStr = eventData['startDate'] as String?;
+                  final endDateStr = eventData['endDate'] as String?;
+                  final startDisplay = startDateStr ?? '未定';
+                  final endDisplay = endDateStr ?? '未定';
+                  final period = '$startDisplay ~ $endDisplay';
 
                   final summary = eventData['summary'] as String? ?? '';
                   final imageUrl = eventData['imageUrl'] as String?;

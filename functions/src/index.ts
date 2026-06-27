@@ -29,6 +29,9 @@ interface ConfigItem {
     gameName: string;
     url?: string; // スクレイピングはしないが互換性のため残す
     keywords?: string;
+    useGameWith?: boolean;
+    useGame8?: boolean;
+    useKamigame?: boolean;
 }
 
 async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
@@ -123,6 +126,15 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
             let prompt = promptTemplate.replace(/{{gameName}}/g, game.gameName);
             if (game.keywords && game.keywords.trim() !== '') {
                 prompt += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
+            }
+
+            const disabledSites: string[] = [];
+            if (game.useGameWith === false) disabledSites.push('GameWith');
+            if (game.useGame8 === false) disabledSites.push('Game8');
+            if (game.useKamigame === false) disabledSites.push('神ゲー攻略');
+
+            if (disabledSites.length > 0) {
+                prompt += `\n\n【除外対象サイト】\n以下のサイトは該当ゲームの攻略情報を取り扱っていないため、検索・調査対象から完全に除外してください：${disabledSites.join(', ')}`;
             }
 
             try {

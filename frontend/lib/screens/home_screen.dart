@@ -22,7 +22,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSiteButton(String siteName, String eventGameName, String title) {
     return InkWell(
       onTap: () async {
-        final query = '!ducky $eventGameName $title $siteName 日本語';
+        String domain = '';
+        switch (siteName) {
+          case 'GameWith':
+            domain = 'gamewith.jp';
+            break;
+          case 'Game8':
+            domain = 'game8.jp';
+            break;
+          case '神ゲー攻略':
+            domain = 'kamigame.jp';
+            break;
+        }
+
+        final query = '!ducky $eventGameName $title site:$domain';
         final encodedQuery = Uri.encodeComponent(query);
         final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
         if (await canLaunchUrl(uri)) {

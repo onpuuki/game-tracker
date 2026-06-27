@@ -10,9 +10,23 @@ class PromptEditorScreen extends StatefulWidget {
   State<PromptEditorScreen> createState() => _PromptEditorScreenState();
 }
 
+class _TargetItem {
+  final TextEditingController gameNameController;
+  final TextEditingController keywordsController;
+
+  _TargetItem({String gameName = "", String keywords = ""})
+    : gameNameController = TextEditingController(text: gameName),
+      keywordsController = TextEditingController(text: keywords);
+
+  void dispose() {
+    gameNameController.dispose();
+    keywordsController.dispose();
+  }
+}
+
 class _PromptEditorScreenState extends State<PromptEditorScreen> {
   final _controller = TextEditingController();
-  final List<TextEditingController> _targetControllers = [];
+  final List<_TargetItem> _targetItems = [];
   bool _isLoading = true;
 
   @override
@@ -23,10 +37,10 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
 
   Future<void> _loadData() async {
     try {
-      final doc = await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-          .collection('settings')
-          .doc('config')
-          .get();
+      final doc = await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('settings').doc('config').get();
 
       if (doc.exists) {
         final data = doc.data();
@@ -37,8 +51,14 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
           if (data.containsKey('targets')) {
             final targets = data['targets'] as List<dynamic>;
             for (var target in targets) {
-              if (target is Map<String, dynamic> && target.containsKey('gameName')) {
-                _targetControllers.add(TextEditingController(text: target['gameName'] as String));
+              if (target is Map<String, dynamic> &&
+                  target.containsKey('gameName')) {
+                _targetItems.add(
+                  _TargetItem(
+                    gameName: target['gameName'] as String,
+                    keywords: (target['keywords'] as String?) ?? '',
+                  ),
+                );
               }
             }
           }
@@ -46,9 +66,9 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load data: $e')));
       }
     } finally {
       if (mounted) {
@@ -61,43 +81,48 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
 
   Future<void> _saveData() async {
     try {
-      final targets = _targetControllers
-          .where((c) => c.text.trim().isNotEmpty)
-          .map((c) => {'gameName': c.text.trim()})
+      final targets = _targetItems
+          .where((item) => item.gameNameController.text.trim().isNotEmpty)
+          .map(
+            (item) => {
+              'gameName': item.gameNameController.text.trim(),
+              'keywords': item.keywordsController.text.trim(),
+            },
+          )
           .toList();
 
-      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-          .collection('settings')
-          .doc('config')
-          .set({
-            'promptTemplate': _controller.text,
-            'targets': targets,
-          }, SetOptions(merge: true));
+      await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('settings').doc('config').set({
+        'promptTemplate': _controller.text,
+        'targets': targets,
+      }, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Saved')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save data: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save data: $e')));
       }
     }
   }
 
   void _addTarget() {
     setState(() {
-      _targetControllers.add(TextEditingController());
+      _targetItems.add(_TargetItem());
     });
   }
 
   void _removeTarget(int index) {
     setState(() {
-      _targetControllers[index].dispose();
-      _targetControllers.removeAt(index);
+      _targetItems[index].dispose();
+      _targetItems.removeAt(index);
     });
   }
 
@@ -106,7 +131,9 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmation'),
-        content: const Text('Are you sure you want to delete the prompt completely?'),
+        content: const Text(
+          'Are you sure you want to delete the prompt completely?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -129,8 +156,8 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
   @override
   void dispose() {
     _controller.dispose();
-    for (var controller in _targetControllers) {
-      controller.dispose();
+    for (var item in _targetItems) {
+      item.dispose();
     }
     super.dispose();
   }
@@ -163,64 +190,83 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
                       controller: _controller,
+                      minLines: 10,
                       maxLines: null,
-                      expands: true,
                       textAlignVertical: TextAlignVertical.top,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: 'Enter your prompt template here...',
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Target Games',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: _addTarget,
-                        tooltip: 'Add Target Game',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    flex: 1,
-                    child: _targetControllers.isEmpty
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Target Games',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: _addTarget,
+                          tooltip: 'Add Target Game',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _targetItems.isEmpty
                         ? const Center(child: Text('No target games added.'))
                         : ListView.builder(
-                            itemCount: _targetControllers.length,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _targetItems.length,
                             itemBuilder: (context, index) {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 8.0),
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      child: TextField(
-                                        controller: _targetControllers[index],
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                          hintText: 'Enter game name...',
-                                          isDense: true,
-                                        ),
+                                      child: Column(
+                                        children: [
+                                          TextField(
+                                            controller: _targetItems[index]
+                                                .gameNameController,
+                                            decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              hintText: 'Enter game name...',
+                                              isDense: true,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller: _targetItems[index]
+                                                .keywordsController,
+                                            decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              hintText:
+                                                  'Enter keywords (comma separated)...',
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline),
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                      ),
                                       color: Colors.red,
                                       onPressed: () => _removeTarget(index),
                                       tooltip: 'Remove Target',
@@ -230,8 +276,8 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                               );
                             },
                           ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
       floatingActionButton: FloatingActionButton(

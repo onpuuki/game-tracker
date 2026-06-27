@@ -28,6 +28,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 interface ConfigItem {
     gameName: string;
     url?: string; // スクレイピングはしないが互換性のため残す
+    keywords?: string;
 }
 
 async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
@@ -119,7 +120,10 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
             await writeDebugLog(traceId, `Requesting Gemini with Search for: ${game.gameName}`);
 
             // テンプレートのプレースホルダーを実際のゲーム名に置換
-            const prompt = promptTemplate.replace(/{{gameName}}/g, game.gameName);
+            let prompt = promptTemplate.replace(/{{gameName}}/g, game.gameName);
+            if (game.keywords && game.keywords.trim() !== '') {
+                prompt += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
+            }
 
             try {
                 // Google Search Groundingを有効化して呼び出し

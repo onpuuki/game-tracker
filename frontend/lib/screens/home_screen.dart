@@ -465,54 +465,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSiteButton(String siteName, String eventGameName, String title, {bool isChecked = false, bool isEnabled = true}) {
-    final bool visuallyDisabled = isChecked || !isEnabled;
-
-    return Expanded(
-      child: InkWell(
-        onTap: visuallyDisabled ? null : () async {
-          String domain = '';
-          switch (siteName) {
-            case 'GameWith':
-              domain = 'gamewith.jp';
-              break;
-            case 'Game8':
-              domain = 'game8.jp';
-              break;
-            case '神ゲー攻略':
-              domain = 'kamigame.jp';
-              break;
-          }
-
-          final query = '!ducky $eventGameName $title site:$domain';
-          final encodedQuery = Uri.encodeComponent(query);
-          final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        },
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: visuallyDisabled ? Colors.grey.withAlpha(76) : Colors.blueGrey.withAlpha(26),
-            border: Border.all(color: visuallyDisabled ? Colors.grey : Colors.blueGrey),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            siteName,
-            style: TextStyle(
-              fontSize: 12,
-              color: visuallyDisabled ? Colors.grey : Colors.blueGrey,
-              fontWeight: FontWeight.bold
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -925,6 +877,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     color: isChecked ? Colors.grey.shade300 : null,
                     child: InkWell(
+                      onTap: isChecked ? null : () async {
+                        final query = '$eventGameName $title';
+                        final encodedQuery = Uri.encodeComponent(query);
+                        final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not launch URL')),
+                            );
+                          }
+                        }
+                      },
                       onLongPress: () {
                         setState(() {
                           if (isChecked) {
@@ -1033,46 +999,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: isChecked ? Colors.grey : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    if (tag == 'ゲーム内') ...[
-                                      _buildSiteButton('GameWith', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['GameWith'] ?? true),
-                                      _buildSiteButton('Game8', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['Game8'] ?? true),
-                                      _buildSiteButton('神ゲー攻略', eventGameName, title, isChecked: isChecked, isEnabled: siteConfig[eventGameName]?['神ゲー攻略'] ?? true),
-                                    ] else if (tag == 'ゲーム外') ...[
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: isChecked ? null : () async {
-                                            final query = '!ducky $eventGameName $title';
-                                            final encodedQuery = Uri.encodeComponent(query);
-                                            final uri = Uri.parse('https://duckduckgo.com/?q=$encodedQuery');
-                                            if (await canLaunchUrl(uri)) {
-                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                            } else {
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Could not launch URL')),
-                                                );
-                                              }
-                                            }
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
-                                            backgroundColor: isChecked ? Colors.grey.withAlpha(50) : null,
-                                          ),
-                                          child: Text(
-                                            'イベントページ',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isChecked ? Colors.grey : null,
-                                            ),
-                                          ),
                                         ),
                                       ),
                                     ],

@@ -13,16 +13,10 @@ class PromptEditorScreen extends StatefulWidget {
 class _TargetItem {
   final TextEditingController gameNameController;
   final TextEditingController keywordsController;
-  bool useGameWith;
-  bool useGame8;
-  bool useKamigame;
 
   _TargetItem({
     String gameName = "",
     String keywords = "",
-    this.useGameWith = true,
-    this.useGame8 = true,
-    this.useKamigame = true,
   }) : gameNameController = TextEditingController(text: gameName),
        keywordsController = TextEditingController(text: keywords);
 
@@ -65,9 +59,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                   _TargetItem(
                     gameName: target['gameName'] as String,
                     keywords: (target['keywords'] as String?) ?? '',
-                    useGameWith: target['useGameWith'] as bool? ?? true,
-                    useGame8: target['useGame8'] as bool? ?? true,
-                    useKamigame: target['useKamigame'] as bool? ?? true,
                   ),
                 );
               }
@@ -98,9 +89,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
             (item) => {
               'gameName': item.gameNameController.text.trim(),
               'keywords': item.keywordsController.text.trim(),
-              'useGameWith': item.useGameWith,
-              'useGame8': item.useGame8,
-              'useKamigame': item.useKamigame,
             },
           )
           .toList();
@@ -272,40 +260,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                                   'Enter keywords (comma separated)...',
                                               isDense: true,
                                             ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              FilterChip(
-                                                label: const Text('GameWith'),
-                                                selected: _targetItems[index].useGameWith,
-                                                onSelected: (bool selected) {
-                                                  setState(() {
-                                                    _targetItems[index].useGameWith = selected;
-                                                  });
-                                                },
-                                              ),
-                                              const SizedBox(width: 8),
-                                              FilterChip(
-                                                label: const Text('Game8'),
-                                                selected: _targetItems[index].useGame8,
-                                                onSelected: (bool selected) {
-                                                  setState(() {
-                                                    _targetItems[index].useGame8 = selected;
-                                                  });
-                                                },
-                                              ),
-                                              const SizedBox(width: 8),
-                                              FilterChip(
-                                                label: const Text('神ゲー攻略'),
-                                                selected: _targetItems[index].useKamigame,
-                                                onSelected: (bool selected) {
-                                                  setState(() {
-                                                    _targetItems[index].useKamigame = selected;
-                                                  });
-                                                },
-                                              ),
-                                            ],
                                           ),
                                         ],
                                       ),

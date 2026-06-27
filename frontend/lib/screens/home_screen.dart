@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/debug_log_manager.dart';
 import 'debug_log_screen.dart';
 import 'url_manager_screen.dart';
@@ -16,8 +17,441 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+class _ParsedEvent {
+  final QueryDocumentSnapshot doc;
+  final Map<String, dynamic> data;
+  final String gameName;
+  final DateTime? startDate;
+  final DateTime? endDate;
+
+  _ParsedEvent({
+    required this.doc,
+    required this.data,
+    required this.gameName,
+    this.startDate,
+    this.endDate,
+  });
+}
+
 class _HomeScreenState extends State<HomeScreen> {
   bool _isClearingEvents = false;
+  List<String> _latestAllGameNames = [];
+
+  // Filter State
+  List<String> _selectedGames = [];
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  bool _excludeChecked = false;
+  bool _ongoingOnly = false;
+  List<String> _checkedEventIds = [];
+
+  // Sort State
+  String _primarySortField = 'gameName';
+  String _primarySortOrder = 'asc';
+  String _secondarySortField = 'startDate';
+  String _secondarySortOrder = 'asc';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedGames = prefs.getStringList('selectedGames') ?? [];
+
+      final startDateStr = prefs.getString('filterStartDate');
+      _filterStartDate = startDateStr != null ? DateTime.tryParse(startDateStr) : null;
+
+      final endDateStr = prefs.getString('filterEndDate');
+      _filterEndDate = endDateStr != null ? DateTime.tryParse(endDateStr) : null;
+
+      _excludeChecked = prefs.getBool('excludeChecked') ?? false;
+      _ongoingOnly = prefs.getBool('ongoingOnly') ?? false;
+      _checkedEventIds = prefs.getStringList('checkedEventIds') ?? [];
+
+      _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
+      _primarySortOrder = prefs.getString('primarySortOrder') ?? 'asc';
+      _secondarySortField = prefs.getString('secondarySortField') ?? 'startDate';
+      _secondarySortOrder = prefs.getString('secondarySortOrder') ?? 'asc';
+    });
+  }
+
+  Future<void> _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('selectedGames', _selectedGames);
+
+    if (_filterStartDate != null) {
+      await prefs.setString('filterStartDate', _filterStartDate!.toIso8601String());
+    } else {
+      await prefs.remove('filterStartDate');
+    }
+
+    if (_filterEndDate != null) {
+      await prefs.setString('filterEndDate', _filterEndDate!.toIso8601String());
+    } else {
+      await prefs.remove('filterEndDate');
+    }
+
+    await prefs.setBool('excludeChecked', _excludeChecked);
+    await prefs.setBool('ongoingOnly', _ongoingOnly);
+    await prefs.setStringList('checkedEventIds', _checkedEventIds);
+
+    await prefs.setString('primarySortField', _primarySortField);
+    await prefs.setString('primarySortOrder', _primarySortOrder);
+    await prefs.setString('secondarySortField', _secondarySortField);
+    await prefs.setString('secondarySortOrder', _secondarySortOrder);
+  }
+
+  void _showFilterBottomSheet(List<String> allGameNames) {
+    // Temporary state variables for the bottom sheet
+    List<String> tempSelectedGames = List.from(_selectedGames);
+    DateTime? tempFilterStartDate = _filterStartDate;
+    DateTime? tempFilterEndDate = _filterEndDate;
+    bool tempExcludeChecked = _excludeChecked;
+    bool tempOngoingOnly = _ongoingOnly;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '絞り込み',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Game Selection
+                    ListTile(
+                      title: const Text('ゲーム名'),
+                      subtitle: Text(
+                        tempSelectedGames.isEmpty
+                            ? 'すべて表示'
+                            : tempSelectedGames.join(', '),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () async {
+                        List<String> dialogTempSelected = List.from(tempSelectedGames);
+                        final result = await showDialog<List<String>>(
+                          context: context,
+                          builder: (context) {
+                            return StatefulBuilder(
+                              builder: (context, setDialogState) {
+                                return AlertDialog(
+                                  title: const Text('ゲームを選択'),
+                                  content: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: allGameNames.map((game) {
+                                        return CheckboxListTile(
+                                          title: Text(game),
+                                          value: dialogTempSelected.contains(game),
+                                          onChanged: (bool? checked) {
+                                            setDialogState(() {
+                                              if (checked == true) {
+                                                dialogTempSelected.add(game);
+                                              } else {
+                                                dialogTempSelected.remove(game);
+                                              }
+                                            });
+                                          },
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('キャンセル'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, dialogTempSelected),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        );
+                        if (result != null) {
+                          setModalState(() {
+                            tempSelectedGames = result;
+                          });
+                        }
+                      },
+                    ),
+                    const Divider(),
+
+                    // Date Range
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Text('期間指定', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Row(
+                      children: [
+                        const SizedBox(width: 16),
+                        const Text('開始: '),
+                        Expanded(
+                          child: Text(
+                            tempFilterStartDate != null
+                              ? "${tempFilterStartDate!.year}/${tempFilterStartDate!.month.toString().padLeft(2, '0')}/${tempFilterStartDate!.day.toString().padLeft(2, '0')}"
+                              : "未指定",
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.calendar_today),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: tempFilterStartDate ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2101),
+                            );
+                            if (picked != null) {
+                              setModalState(() {
+                                tempFilterStartDate = picked;
+                              });
+                            }
+                          },
+                        ),
+                        if (tempFilterStartDate != null)
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setModalState(() {
+                                tempFilterStartDate = null;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const SizedBox(width: 16),
+                        const Text('終了: '),
+                        Expanded(
+                          child: Text(
+                            tempFilterEndDate != null
+                              ? "${tempFilterEndDate!.year}/${tempFilterEndDate!.month.toString().padLeft(2, '0')}/${tempFilterEndDate!.day.toString().padLeft(2, '0')}"
+                              : "未指定",
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.calendar_today),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: tempFilterEndDate ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2101),
+                            );
+                            if (picked != null) {
+                              setModalState(() {
+                                tempFilterEndDate = picked;
+                              });
+                            }
+                          },
+                        ),
+                        if (tempFilterEndDate != null)
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setModalState(() {
+                                tempFilterEndDate = null;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const Divider(),
+
+                    // Toggles
+                    SwitchListTile(
+                      title: const Text('チェック済みを除外'),
+                      value: tempExcludeChecked,
+                      onChanged: (bool value) {
+                        setModalState(() {
+                          tempExcludeChecked = value;
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('開催中のみ'),
+                      value: tempOngoingOnly,
+                      onChanged: (bool value) {
+                        setModalState(() {
+                          tempOngoingOnly = value;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedGames = tempSelectedGames;
+                          _filterStartDate = tempFilterStartDate;
+                          _filterEndDate = tempFilterEndDate;
+                          _excludeChecked = tempExcludeChecked;
+                          _ongoingOnly = tempOngoingOnly;
+                        });
+                        _savePreferences();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('適用する'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSortDialog() {
+    String tempPrimaryField = _primarySortField;
+    String tempPrimaryOrder = _primarySortOrder;
+    String tempSecondaryField = _secondarySortField;
+    String tempSecondaryOrder = _secondarySortOrder;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('並び替え'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('第一優先', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: tempPrimaryField,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
+                              DropdownMenuItem(value: 'startDate', child: Text('開始日')),
+                              DropdownMenuItem(value: 'endDate', child: Text('終了日')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() => tempPrimaryField = value);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: tempPrimaryOrder,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'asc', child: Text('昇順')),
+                              DropdownMenuItem(value: 'desc', child: Text('降順')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() => tempPrimaryOrder = value);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('第二優先', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: tempSecondaryField,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
+                              DropdownMenuItem(value: 'startDate', child: Text('開始日')),
+                              DropdownMenuItem(value: 'endDate', child: Text('終了日')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() => tempSecondaryField = value);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: tempSecondaryOrder,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'asc', child: Text('昇順')),
+                              DropdownMenuItem(value: 'desc', child: Text('降順')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() => tempSecondaryOrder = value);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('キャンセル'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _primarySortField = tempPrimaryField;
+                      _primarySortOrder = tempPrimaryOrder;
+                      _secondarySortField = tempSecondaryField;
+                      _secondarySortOrder = tempSecondaryOrder;
+                    });
+                    _savePreferences();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('適用する'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   Widget _buildSiteButton(String siteName, String eventGameName, String title) {
     return InkWell(
@@ -99,6 +533,38 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Game Tracker'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _showFilterBottomSheet(_latestAllGameNames);
+              },
+              icon: const Icon(Icons.filter_list, size: 18),
+              label: const Text('絞り込み'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _showSortDialog();
+              },
+              icon: const Icon(Icons.sort, size: 18),
+              label: const Text('並び替え'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+          ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(
@@ -265,17 +731,159 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final events = eventSnapshot.data?.docs ?? [];
+              final docs = eventSnapshot.data?.docs ?? [];
+
+              if (docs.isEmpty) {
+                return const Center(child: Text('No events found.'));
+              }
+
+              List<_ParsedEvent> parsedEvents = docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final rawPeriod = data['period'] as String? ?? '';
+                final endDateStr = data['endDate'] as String?;
+
+                DateTime? startDate;
+                try {
+                  final parts = rawPeriod.split('~');
+                  if (parts.isNotEmpty) {
+                    final startStr = parts[0].trim().replaceAll('/', '-');
+                    startDate = DateTime.tryParse(startStr);
+                  }
+                } catch (_) {}
+
+                DateTime? endDate;
+                if (endDateStr != null) {
+                  endDate = DateTime.tryParse(endDateStr);
+                }
+
+                return _ParsedEvent(
+                  doc: doc,
+                  data: data,
+                  gameName: data['gameName'] as String? ?? 'Unknown Game',
+                  startDate: startDate,
+                  endDate: endDate,
+                );
+              }).toList();
+
+              final Set<String> uniqueGamesSet = {};
+              for (var event in parsedEvents) {
+                uniqueGamesSet.add(event.gameName);
+              }
+              final List<String> allGameNames = uniqueGamesSet.toList()..sort();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _latestAllGameNames.length != allGameNames.length) {
+                  setState(() {
+                    _latestAllGameNames = allGameNames;
+                  });
+                }
+              });
+
+              List<_ParsedEvent> events = parsedEvents.where((event) {
+                // Game Filter
+                if (_selectedGames.isNotEmpty && !_selectedGames.contains(event.gameName)) {
+                  return false;
+                }
+
+                // Checked Filter
+                if (_excludeChecked && _checkedEventIds.contains(event.doc.id)) {
+                  return false;
+                }
+
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+
+                // Ongoing Filter
+                if (_ongoingOnly) {
+                  if (event.startDate == null) return false;
+                  final start = DateTime(event.startDate!.year, event.startDate!.month, event.startDate!.day);
+                  if (start.isAfter(today)) return false; // Not yet started
+
+                  if (event.endDate != null) {
+                    final end = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+                    if (end.isBefore(today)) return false; // Already ended
+                  }
+                  // If endDate is null, we assume it's ongoing once started
+                }
+
+                // Date Range Filter
+                if (_filterStartDate != null || _filterEndDate != null) {
+                  final startTarget = _filterStartDate != null
+                      ? DateTime(_filterStartDate!.year, _filterStartDate!.month, _filterStartDate!.day)
+                      : null;
+                  final endTarget = _filterEndDate != null
+                      ? DateTime(_filterEndDate!.year, _filterEndDate!.month, _filterEndDate!.day)
+                      : null;
+
+                  final eventStart = event.startDate != null
+                      ? DateTime(event.startDate!.year, event.startDate!.month, event.startDate!.day)
+                      : null;
+                  final eventEnd = event.endDate != null
+                      ? DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day)
+                      : null;
+
+                  // For the event to be visible, its active period must overlap with the target period.
+                  // Active period: [eventStart, eventEnd]
+                  // Target period: [startTarget, endTarget]
+                  // Overlap condition: eventEnd >= startTarget AND eventStart <= endTarget
+                  // Treat missing start/end as +/- infinity for overlap logic.
+
+                  if (startTarget != null && eventEnd != null && eventEnd.isBefore(startTarget)) {
+                    return false;
+                  }
+                  if (endTarget != null && eventStart != null && eventStart.isAfter(endTarget)) {
+                    return false;
+                  }
+                }
+
+                return true;
+              }).toList();
+
+              // Sort Logic
+              events.sort((a, b) {
+                final distantFuture = DateTime(9999, 12, 31);
+
+                dynamic getFieldValue(_ParsedEvent event, String field) {
+                  switch (field) {
+                    case 'gameName': return event.gameName;
+                    case 'startDate': return event.startDate ?? distantFuture;
+                    case 'endDate': return event.endDate ?? distantFuture;
+                    default: return '';
+                  }
+                }
+
+                int compare(dynamic valA, dynamic valB, String order) {
+                  int result = 0;
+                  if (valA is DateTime && valB is DateTime) {
+                    result = valA.compareTo(valB);
+                  } else if (valA is String && valB is String) {
+                    result = valA.compareTo(valB);
+                  }
+                  return order == 'asc' ? result : -result;
+                }
+
+                final primaryA = getFieldValue(a, _primarySortField);
+                final primaryB = getFieldValue(b, _primarySortField);
+                int result = compare(primaryA, primaryB, _primarySortOrder);
+
+                if (result == 0) {
+                  final secondaryA = getFieldValue(a, _secondarySortField);
+                  final secondaryB = getFieldValue(b, _secondarySortField);
+                  result = compare(secondaryA, secondaryB, _secondarySortOrder);
+                }
+
+                return result;
+              });
 
               if (events.isEmpty) {
-                return const Center(child: Text('No events found.'));
+                return const Center(child: Text('No events matching filters.'));
               }
 
               return ListView.builder(
                 itemCount: events.length,
                 itemBuilder: (context, index) {
-                  final eventData = events[index].data() as Map<String, dynamic>;
-                  final eventGameName = eventData['gameName'] as String? ?? 'Unknown Game';
+                  final parsedEvent = events[index];
+                  final eventData = parsedEvent.data;
+                  final eventGameName = parsedEvent.gameName;
                   final title = eventData['title'] as String? ?? 'No Title';
                   final tag = eventData['tag'] as String?;
 
@@ -284,17 +892,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   final summary = eventData['summary'] as String? ?? '';
                   final imageUrl = eventData['imageUrl'] as String?;
-                  final endDateStr = eventData['endDate'] as String?;
                   final eventUrl = eventData['eventUrl'] as String?;
 
-                  DateTime? startDate;
-                  try {
-                    final parts = rawPeriod.split('~');
-                    if (parts.isNotEmpty) {
-                      final startStr = parts[0].trim().replaceAll('/', '-');
-                      startDate = DateTime.tryParse(startStr);
-                    }
-                  } catch (_) {}
+                  final startDate = parsedEvent.startDate;
+                  final endDate = parsedEvent.endDate;
 
                   bool isUpcoming = false;
                   int? daysUntilStart;
@@ -310,12 +911,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   int? remainingDays;
-                  if (endDateStr != null) {
-                    final endDate = DateTime.tryParse(endDateStr);
-                    if (endDate != null) {
-                      final end = DateTime(endDate.year, endDate.month, endDate.day);
-                      remainingDays = end.difference(today).inDays;
-                    }
+                  if (endDate != null) {
+                    final end = DateTime(endDate.year, endDate.month, endDate.day);
+                    remainingDays = end.difference(today).inDays;
                   }
 
                   Widget? trailingWidget;
@@ -347,6 +945,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   }
 
+                  final eventId = parsedEvent.doc.id;
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: Padding(
@@ -354,6 +953,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Checkbox(
+                            value: _checkedEventIds.contains(eventId),
+                            onChanged: (bool? value) {
+                              setState(() {
+                                if (value == true) {
+                                  _checkedEventIds.add(eventId);
+                                } else {
+                                  _checkedEventIds.remove(eventId);
+                                }
+                              });
+                              _savePreferences();
+                            },
+                          ),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

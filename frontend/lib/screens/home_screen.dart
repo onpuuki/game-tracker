@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Filter State
   List<String> _selectedGames = [];
+  List<String> _selectedTags = [];
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
   bool _excludeChecked = false;
@@ -114,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _selectedGames = prefs.getStringList('selectedGames') ?? [];
+      _selectedTags = prefs.getStringList('selectedTags') ?? [];
 
       final startDateStr = prefs.getString('filterStartDate');
       _filterStartDate = startDateStr != null ? DateTime.tryParse(startDateStr) : null;
@@ -135,6 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('selectedGames', _selectedGames);
+    await prefs.setStringList('selectedTags', _selectedTags);
 
     if (_filterStartDate != null) {
       await prefs.setString('filterStartDate', _filterStartDate!.toIso8601String());
@@ -159,13 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showFilterBottomSheet(List<String> allGameNames) {
-    // Temporary state variables for the bottom sheet
-    List<String> tempSelectedGames = List.from(_selectedGames);
-    DateTime? tempFilterStartDate = _filterStartDate;
-    DateTime? tempFilterEndDate = _filterEndDate;
-    bool tempExcludeChecked = _excludeChecked;
-    bool tempOngoingOnly = _ongoingOnly;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -189,17 +185,47 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Tags
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Text('タグ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        children: ['ゲーム内', 'ゲーム外', 'コード'].map((tag) {
+                          return FilterChip(
+                            label: Text(tag),
+                            selected: _selectedTags.contains(tag),
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                if (selected) {
+                                  _selectedTags.add(tag);
+                                } else {
+                                  _selectedTags.remove(tag);
+                                }
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const Divider(),
+
                     // Game Selection
                     ListTile(
                       title: const Text('ゲーム名'),
                       subtitle: Text(
-                        tempSelectedGames.isEmpty
+                        _selectedGames.isEmpty
                             ? 'すべて表示'
-                            : tempSelectedGames.join(', '),
+                            : _selectedGames.join(', '),
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       onTap: () async {
-                        List<String> dialogTempSelected = List.from(tempSelectedGames);
+                        List<String> dialogTempSelected = List.from(_selectedGames);
                         final result = await showDialog<List<String>>(
                           context: context,
                           builder: (context) {
@@ -244,8 +270,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                         if (result != null) {
                           setModalState(() {
-                            tempSelectedGames = result;
+                            _selectedGames = result;
                           });
+                          setState(() {});
+                          _savePreferences();
                         }
                       },
                     ),
@@ -262,8 +290,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Text('開始: '),
                         Expanded(
                           child: Text(
-                            tempFilterStartDate != null
-                              ? "${tempFilterStartDate!.year}/${tempFilterStartDate!.month.toString().padLeft(2, '0')}/${tempFilterStartDate!.day.toString().padLeft(2, '0')}"
+                            _filterStartDate != null
+                              ? "${_filterStartDate!.year}/${_filterStartDate!.month.toString().padLeft(2, '0')}/${_filterStartDate!.day.toString().padLeft(2, '0')}"
                               : "未指定",
                           ),
                         ),
@@ -272,24 +300,28 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: tempFilterStartDate ?? DateTime.now(),
+                              initialDate: _filterStartDate ?? DateTime.now(),
                               firstDate: DateTime(2000),
                               lastDate: DateTime(2101),
                             );
                             if (picked != null) {
                               setModalState(() {
-                                tempFilterStartDate = picked;
+                                _filterStartDate = picked;
                               });
+                              setState(() {});
+                              _savePreferences();
                             }
                           },
                         ),
-                        if (tempFilterStartDate != null)
+                        if (_filterStartDate != null)
                           IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               setModalState(() {
-                                tempFilterStartDate = null;
+                                _filterStartDate = null;
                               });
+                              setState(() {});
+                              _savePreferences();
                             },
                           ),
                       ],
@@ -300,8 +332,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Text('終了: '),
                         Expanded(
                           child: Text(
-                            tempFilterEndDate != null
-                              ? "${tempFilterEndDate!.year}/${tempFilterEndDate!.month.toString().padLeft(2, '0')}/${tempFilterEndDate!.day.toString().padLeft(2, '0')}"
+                            _filterEndDate != null
+                              ? "${_filterEndDate!.year}/${_filterEndDate!.month.toString().padLeft(2, '0')}/${_filterEndDate!.day.toString().padLeft(2, '0')}"
                               : "未指定",
                           ),
                         ),
@@ -310,24 +342,28 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: tempFilterEndDate ?? DateTime.now(),
+                              initialDate: _filterEndDate ?? DateTime.now(),
                               firstDate: DateTime(2000),
                               lastDate: DateTime(2101),
                             );
                             if (picked != null) {
                               setModalState(() {
-                                tempFilterEndDate = picked;
+                                _filterEndDate = picked;
                               });
+                              setState(() {});
+                              _savePreferences();
                             }
                           },
                         ),
-                        if (tempFilterEndDate != null)
+                        if (_filterEndDate != null)
                           IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               setModalState(() {
-                                tempFilterEndDate = null;
+                                _filterEndDate = null;
                               });
+                              setState(() {});
+                              _savePreferences();
                             },
                           ),
                       ],
@@ -337,37 +373,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Toggles
                     SwitchListTile(
                       title: const Text('チェック済みを除外'),
-                      value: tempExcludeChecked,
+                      value: _excludeChecked,
                       onChanged: (bool value) {
                         setModalState(() {
-                          tempExcludeChecked = value;
+                          _excludeChecked = value;
                         });
+                        setState(() {});
+                        _savePreferences();
                       },
                     ),
                     SwitchListTile(
                       title: const Text('開催中のみ'),
-                      value: tempOngoingOnly,
+                      value: _ongoingOnly,
                       onChanged: (bool value) {
                         setModalState(() {
-                          tempOngoingOnly = value;
+                          _ongoingOnly = value;
                         });
+                        setState(() {});
+                        _savePreferences();
                       },
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () {
-                        setState(() {
-                          _selectedGames = tempSelectedGames;
-                          _filterStartDate = tempFilterStartDate;
-                          _filterEndDate = tempFilterEndDate;
-                          _excludeChecked = tempExcludeChecked;
-                          _ongoingOnly = tempOngoingOnly;
-                        });
-                        _savePreferences();
                         Navigator.pop(context);
                       },
-                      child: const Text('適用する'),
+                      child: const Text('閉じる'),
                     ),
                   ],
                 ),
@@ -380,11 +412,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showSortDialog() {
-    String tempPrimaryField = _primarySortField;
-    String tempPrimaryOrder = _primarySortOrder;
-    String tempSecondaryField = _secondarySortField;
-    String tempSecondaryOrder = _secondarySortOrder;
-
     showDialog(
       context: context,
       builder: (context) {
@@ -404,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Expanded(
                           child: DropdownButton<String>(
-                            value: tempPrimaryField,
+                            value: _primarySortField,
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
@@ -413,7 +440,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => tempPrimaryField = value);
+                                setDialogState(() => _primarySortField = value);
+                                setState(() {});
+                                _savePreferences();
                               }
                             },
                           ),
@@ -421,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButton<String>(
-                            value: tempPrimaryOrder,
+                            value: _primarySortOrder,
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'asc', child: Text('昇順')),
@@ -429,7 +458,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => tempPrimaryOrder = value);
+                                setDialogState(() => _primarySortOrder = value);
+                                setState(() {});
+                                _savePreferences();
                               }
                             },
                           ),
@@ -445,7 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Expanded(
                           child: DropdownButton<String>(
-                            value: tempSecondaryField,
+                            value: _secondarySortField,
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
@@ -454,7 +485,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => tempSecondaryField = value);
+                                setDialogState(() => _secondarySortField = value);
+                                setState(() {});
+                                _savePreferences();
                               }
                             },
                           ),
@@ -462,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButton<String>(
-                            value: tempSecondaryOrder,
+                            value: _secondarySortOrder,
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'asc', child: Text('昇順')),
@@ -470,7 +503,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => tempSecondaryOrder = value);
+                                setDialogState(() => _secondarySortOrder = value);
+                                setState(() {});
+                                _savePreferences();
                               }
                             },
                           ),
@@ -483,20 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('キャンセル'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _primarySortField = tempPrimaryField;
-                      _primarySortOrder = tempPrimaryOrder;
-                      _secondarySortField = tempSecondaryField;
-                      _secondarySortOrder = tempSecondaryOrder;
-                    });
-                    _savePreferences();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('適用する'),
+                  child: const Text('閉じる'),
                 ),
               ],
             );
@@ -736,6 +758,11 @@ class _HomeScreenState extends State<HomeScreen> {
               });
 
               List<_ParsedEvent> events = parsedEvents.where((event) {
+                // Tag Filter
+                if (_selectedTags.isNotEmpty && !_selectedTags.contains(event.data['tag'])) {
+                  return false;
+                }
+
                 // Game Filter
                 if (_selectedGames.isNotEmpty && !_selectedGames.contains(event.gameName)) {
                   return false;

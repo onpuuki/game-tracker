@@ -246,6 +246,11 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
             tooltip: 'Delete/Clear',
             onPressed: _clearPrompt,
           ),
+          IconButton(
+            icon: const Icon(Icons.save),
+            tooltip: 'Save',
+            onPressed: _saveData,
+          ),
         ],
       ),
       body: _isLoading
@@ -410,11 +415,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                 ),
               ),
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _saveData,
-        tooltip: 'Save',
-        child: const Icon(Icons.save),
-      ),
     );
   }
 }

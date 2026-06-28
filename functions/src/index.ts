@@ -261,14 +261,9 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                                 const existingData = bestMatch.data;
 
                                 // Compare specific fields to detect changes
-                                const hasChanges = existingData.startDate !== event.startDate ||
-                                                   existingData.endDate !== event.endDate ||
-                                                   existingData.summary !== event.summary ||
-                                                   existingData.eventUrl !== event.eventUrl ||
-                                                   existingData.imageUrl !== event.imageUrl ||
-                                                   existingData.tag !== event.tag ||
-                                                   existingData.redeemCode !== event.redeemCode ||
-                                                   existingData.title !== event.title;
+                                // Ignore text fluctuations in title, summary, etc.
+                                const hasChanges = existingData.endDate !== event.endDate ||
+                                                   existingData.redeemCode !== event.redeemCode;
 
                                 if (hasChanges) {
                                     const docRef = eventsCollection.doc(bestMatch.docId);
@@ -280,7 +275,12 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                                     unchangedCount++;
                                 }
                             } else {
-                                const docRef = eventsCollection.doc();
+                                let docId;
+                                if (event.tag === 'コード' && event.redeemCode) {
+                                    const normalizedCode = event.redeemCode.replace(/\s+/g, '').toUpperCase();
+                                    docId = `code_${normalizedCode}`;
+                                }
+                                const docRef = docId ? eventsCollection.doc(docId) : eventsCollection.doc();
                                 batch.set(docRef, { ...event, gameName: game.gameName, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
                                 batchCount++;
                                 addedCount++;
@@ -288,9 +288,21 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                             }
                         }
 
-                        // 不要になった過去のイベントを削除
+                        // 不要になった過去のイベントを削除（期限切れのもののみ削除）
+                        const now = new Date();
                         for (const existing of currentEventsList) {
-                            if (!matchedDocIds.has(existing.docId)) {
+                            let isExpired = false;
+                            if (existing.data.endDate && existing.data.endDate !== 'TBD') {
+                                const endDateStr = existing.data.endDate.includes(' ')
+                                    ? existing.data.endDate.replace(' ', 'T') + '+09:00'
+                                    : existing.data.endDate + 'T23:59:59+09:00';
+                                const endDate = new Date(endDateStr);
+                                if (!isNaN(endDate.getTime()) && endDate < now) {
+                                    isExpired = true;
+                                }
+                            }
+
+                            if (isExpired) {
                                 batch.delete(eventsCollection.doc(existing.docId));
                                 batchCount++;
                                 deletedCount++;

@@ -104,7 +104,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('自動同期設定'),
+        title: const Text('自動スキャン時刻'),
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _configStream,
@@ -130,7 +130,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '毎日以下の時刻にバックグラウンドで自動同期を実行します。',
+                  '毎日以下の時刻にバックグラウンドで自動スキャンを実行します。',
                   style: TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 24),

@@ -871,6 +871,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final title = eventData['title'] as String? ?? 'No Title';
                   final tag = eventData['tag'] as String?;
                   final redeemCode = eventData['redeemCode'] as String?;
+                  final eventUrl = eventData['eventUrl'] as String?;
 
                   final startDateStr = eventData['startDate'] as String?;
                   final endDateStr = eventData['endDate'] as String?;

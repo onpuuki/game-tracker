@@ -1,7 +1,8 @@
 import * as functions from 'firebase-functions';
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
 import { GoogleGenAI } from '@google/genai';
 
@@ -270,6 +271,107 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
         await snapshot.ref.update({ status: 'error', error: errorMessage, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         functions.logger.error(`[${traceId}] Unhandled catastrophic error: ${error instanceof Error ? error.stack : String(error)}`);
         throw error;
+    }
+});
+
+export const triggerScheduledSync = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+    // Generate traceId here if we cannot use uuidv4 easily or we can just use a simple random string for now if uuidv4 isn't at the top level
+    const traceId = 'sched-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    functions.logger.info(`[${traceId}] triggerScheduledSync triggered by Cloud Scheduler`, { traceId });
+
+    try {
+        await db.collection('sync_requests').add({
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            debugInfo: [
+                {
+                    timestamp: new Date().toISOString(),
+                    message: 'Sync requested via scheduled background job'
+                }
+            ]
+        });
+        await writeDebugLog(traceId, 'Scheduled sync request added successfully.');
+        res.status(200).send('Scheduled sync triggered');
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Failed to trigger scheduled sync`, { error: error.message, stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Failed to trigger scheduled sync', error instanceof Error ? error.stack : String(error));
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_config', database: 'default', region: 'asia-northeast1' }, async (event) => {
+    const traceId = 'sched-upd-' + Date.now();
+    functions.logger.info(`[${traceId}] updateSyncSchedule triggered`, { traceId });
+
+    const afterData = event.data?.after?.data();
+    const beforeData = event.data?.before?.data();
+
+    const newSchedule = afterData?.cron_schedule;
+    const oldSchedule = beforeData?.cron_schedule;
+
+    if (newSchedule === oldSchedule) {
+        functions.logger.info(`[${traceId}] Schedule unchanged. Exiting.`);
+        return;
+    }
+
+    const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'game-tracker-444b2'; // Fallback to project ID
+
+    const locationId = 'asia-northeast1';
+    const jobId = 'sync-job';
+    const client = new CloudSchedulerClient();
+    const parent = client.locationPath(projectId, locationId);
+    const name = client.jobPath(projectId, locationId, jobId);
+
+    // Get the Cloud Function URL dynamically or construct it
+    const functionUrl = `https://${locationId}-${projectId}.cloudfunctions.net/triggerScheduledSync`;
+
+    try {
+        if (!newSchedule) {
+            // Delete the job if schedule is removed
+            await client.deleteJob({ name });
+            functions.logger.info(`[${traceId}] Cloud Scheduler job deleted because schedule was removed.`);
+            await writeDebugLog(traceId, 'Cloud Scheduler job deleted.');
+            return;
+        }
+
+        const job = {
+            name,
+            schedule: newSchedule,
+            timeZone: 'Asia/Tokyo',
+            httpTarget: {
+                uri: functionUrl,
+                httpMethod: 'POST' as const,
+            },
+        };
+
+        let jobExists = false;
+        try {
+            await client.getJob({ name });
+            jobExists = true;
+        } catch (e: any) {
+            if (e.code !== 5) { // 5 is NOT_FOUND
+                throw e;
+            }
+        }
+
+        if (jobExists) {
+            await client.updateJob({
+                job,
+                updateMask: { paths: ['schedule', 'http_target.uri'] }
+            });
+            functions.logger.info(`[${traceId}] Cloud Scheduler job updated with schedule: ${newSchedule}`);
+            await writeDebugLog(traceId, `Cloud Scheduler job updated: ${newSchedule}`);
+        } else {
+            await client.createJob({
+                parent,
+                job
+            });
+            functions.logger.info(`[${traceId}] Cloud Scheduler job created with schedule: ${newSchedule}`);
+            await writeDebugLog(traceId, `Cloud Scheduler job created: ${newSchedule}`);
+        }
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Error updating Cloud Scheduler job: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Error updating Cloud Scheduler job', error instanceof Error ? error.stack : String(error));
     }
 });
 

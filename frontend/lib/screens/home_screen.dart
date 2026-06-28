@@ -6,10 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'debug_log_screen.dart';
-import 'url_manager_screen.dart';
 import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
 import 'settings_screen.dart';
+import 'timer_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -613,7 +613,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: const Icon(Icons.admin_panel_settings, size: 18),
               label: const Text('管理者メニュー'),
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
@@ -672,19 +672,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('URL Manager'),
-              onTap: () {
-                Navigator.pop(context); // Close drawer
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const UrlManagerScreen(),
-                  ),
-                );
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.edit_document),
               title: const Text('Prompt Editor'),
               onTap: () {
@@ -706,6 +693,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const DebugLogScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.access_time),
+              title: const Text('自動同期設定'),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TimerSettingsScreen(),
                   ),
                 );
               },
@@ -1127,7 +1127,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       horizontal: 16.0,
                       vertical: 8.0,
                     ),
-                    color: isChecked ? (isDarkMode ? Colors.grey[800] : Colors.grey.shade300) : null,
+                    color: isChecked
+                        ? (isDarkMode ? Colors.grey[800] : Colors.grey.shade300)
+                        : null,
                     child: IntrinsicHeight(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

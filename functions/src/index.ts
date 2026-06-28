@@ -26,6 +26,44 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
 // ユーティリティ: 待機処理（バックオフ用）
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+export function calculateSimilarity(s1: string, s2: string): number {
+    let longer = s1;
+    let shorter = s2;
+    if (s1.length < s2.length) {
+        longer = s2;
+        shorter = s1;
+    }
+    const longerLength = longer.length;
+    if (longerLength === 0) {
+        return 1.0;
+    }
+
+    // Calculate Levenshtein distance
+    const costs: number[] = [];
+    for (let i = 0; i <= shorter.length; i++) {
+        costs[i] = i;
+    }
+
+    for (let i = 1; i <= longer.length; i++) {
+        let lastValue = i;
+        for (let j = 1; j <= shorter.length; j++) {
+            const newValue = costs[j - 1];
+            if (longer.charAt(i - 1) === shorter.charAt(j - 1)) {
+                costs[j - 1] = lastValue;
+                lastValue = newValue;
+            } else {
+                let min = Math.min(Math.min(newValue, lastValue), costs[j]);
+                costs[j - 1] = lastValue;
+                lastValue = min + 1;
+            }
+        }
+        costs[shorter.length] = lastValue;
+    }
+
+    const distance = costs[shorter.length];
+    return (longerLength - distance) / longerLength;
+}
+
 interface ConfigItem {
     gameName: string;
     url?: string; // スクレイピングはしないが互換性のため残す
@@ -165,8 +203,9 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                         const currentEventsSnapshot = await eventsCollection.get();
                         const currentEventsMap = new Map();
                         currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
+                        const currentEventsList = Array.from(currentEventsMap.values());
+                        const matchedDocIds = new Set<string>();
 
-                        const newEventTitles = new Set();
                         let batch = db.batch();
                         let batchCount = 0;
 
@@ -185,7 +224,6 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
 
                         for (const event of extractedEvents) {
                             if (!event.title) continue;
-                            newEventTitles.add(event.title);
 
                             if (event.tag === 'コード' && event.redeemCode) {
                                 const matchingConfig = codeUrls.find(c => c.gameName === game.gameName);
@@ -194,9 +232,33 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                                 }
                             }
 
-                            if (currentEventsMap.has(event.title)) {
-                                const existing = currentEventsMap.get(event.title);
-                                const existingData = existing.data;
+                            let bestMatch = null;
+                            if (event.tag === 'コード' && event.redeemCode) {
+                                const normalizedCode = event.redeemCode.replace(/\s+/g, '').toUpperCase();
+                                bestMatch = currentEventsList.find(e =>
+                                    e.data.tag === 'コード' &&
+                                    e.data.redeemCode &&
+                                    e.data.redeemCode.replace(/\s+/g, '').toUpperCase() === normalizedCode
+                                );
+                            } else {
+                                let maxSimilarity = -1;
+                                for (const existing of currentEventsList) {
+                                    if (existing.data.title) {
+                                        const sim = calculateSimilarity(event.title, existing.data.title);
+                                        if (sim > maxSimilarity) {
+                                            maxSimilarity = sim;
+                                            bestMatch = existing;
+                                        }
+                                    }
+                                }
+                                if (maxSimilarity < 0.8) {
+                                    bestMatch = null;
+                                }
+                            }
+
+                            if (bestMatch) {
+                                matchedDocIds.add(bestMatch.docId);
+                                const existingData = bestMatch.data;
 
                                 // Compare specific fields to detect changes
                                 const hasChanges = existingData.startDate !== event.startDate ||
@@ -205,10 +267,11 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                                                    existingData.eventUrl !== event.eventUrl ||
                                                    existingData.imageUrl !== event.imageUrl ||
                                                    existingData.tag !== event.tag ||
-                                                   existingData.redeemCode !== event.redeemCode;
+                                                   existingData.redeemCode !== event.redeemCode ||
+                                                   existingData.title !== event.title;
 
                                 if (hasChanges) {
-                                    const docRef = eventsCollection.doc(existing.docId);
+                                    const docRef = eventsCollection.doc(bestMatch.docId);
                                     batch.set(docRef, { ...event, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
                                     batchCount++;
                                     updatedCount++;
@@ -226,8 +289,8 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                         }
 
                         // 不要になった過去のイベントを削除
-                        for (const [title, existing] of currentEventsMap.entries()) {
-                            if (!newEventTitles.has(title)) {
+                        for (const existing of currentEventsList) {
+                            if (!matchedDocIds.has(existing.docId)) {
                                 batch.delete(eventsCollection.doc(existing.docId));
                                 batchCount++;
                                 deletedCount++;

@@ -18,10 +18,14 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
   @override
   void initState() {
     super.initState();
-    _syncRequestsStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-        .collection('sync_requests')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    _syncRequestsStream =
+        FirebaseFirestore.instanceFor(
+              app: Firebase.app(),
+              databaseId: 'default',
+            )
+            .collection('sync_requests')
+            .orderBy('createdAt', descending: true)
+            .snapshots();
   }
 
   Future<void> _triggerSync() async {
@@ -29,18 +33,25 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
     final logManager = DebugLogManager();
     final messenger = ScaffoldMessenger.of(context);
 
-    await logManager.addLog('Starting sync request via Firestore', traceId: traceId);
+    await logManager.addLog(
+      'Starting sync request via Firestore',
+      traceId: traceId,
+    );
 
     try {
-      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-          .collection('sync_requests')
-          .add({
+      await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('sync_requests').add({
         'status': 'pending',
         'traceId': traceId,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await logManager.addLog('sync request added successfully.', traceId: traceId);
+      await logManager.addLog(
+        'sync request added successfully.',
+        traceId: traceId,
+      );
 
       if (mounted) {
         messenger.showSnackBar(
@@ -48,7 +59,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
         );
       }
     } catch (e) {
-      await logManager.addLog('sync request failed (Exception): $e', traceId: traceId);
+      await logManager.addLog(
+        'sync request failed (Exception): $e',
+        traceId: traceId,
+      );
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(content: Text('Failed to create sync request: $e')),
@@ -66,9 +80,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Run Sync Status'),
-      ),
+      appBar: AppBar(title: const Text('Run Sync Status')),
       body: StreamBuilder<QuerySnapshot>(
         stream: _syncRequestsStream,
         builder: (context, snapshot) {
@@ -137,7 +149,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     }
 
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(12.0),
                         child: Column(
@@ -157,7 +172,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 const Spacer(),
                                 Text(
                                   'Start: ${_formatTimestamp(createdAt)}',
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ],
                             ),
@@ -167,7 +185,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 alignment: Alignment.centerRight,
                                 child: Text(
                                   'End: ${_formatTimestamp(updatedAt)}',
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
                             ],
@@ -175,7 +196,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 'Error: ${data['error']}',
-                                style: const TextStyle(color: Colors.red, fontSize: 12),
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                             if (status == 'processing') ...[
@@ -184,59 +208,81 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                             ],
                             if (debugInfo != null && debugInfo.isNotEmpty) ...[
                               const SizedBox(height: 12),
-                              const Text('Details:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              const Text(
+                                'Details:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                               const SizedBox(height: 4),
                               ListView.builder(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: debugInfo.length,
                                 itemBuilder: (context, idx) {
-                                  final info = debugInfo[idx] as Map<String, dynamic>;
-                                  final game = info['game'] as String? ?? 'Unknown Game';
+                                  final info =
+                                      debugInfo[idx] as Map<String, dynamic>;
+                                  final game =
+                                      info['game'] as String? ?? 'Unknown Game';
                                   final stage = info['stage'];
                                   final isError = stage == 'Error';
 
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 2.0),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Icon(
                                           isError ? Icons.close : Icons.check,
                                           size: 14,
-                                          color: isError ? Colors.red : Colors.green,
+                                          color: isError
+                                              ? Colors.red
+                                              : Colors.green,
                                         ),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: isError
-                                            ? Text(
-                                                'Error parsing $game: ${info['error']}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.red,
-                                                ),
-                                              )
-                                            : RichText(
-                                                text: TextSpan(
-                                                  children: [
-                                                    TextSpan(
-                                                      text: 'Processed $game',
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.black87,
-                                                      ),
-                                                    ),
-                                                    if (info.containsKey('added') && info.containsKey('updated') && info.containsKey('deleted'))
+                                              ? Text(
+                                                  'Error parsing $game: ${info['error']}',
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.red,
+                                                  ),
+                                                )
+                                              : RichText(
+                                                  text: TextSpan(
+                                                    children: [
                                                       TextSpan(
-                                                        text: ' [新規: ${info['added']}, 更新: ${info['updated']}, 削除: ${info['deleted']}]',
+                                                        text: 'Processed $game',
                                                         style: const TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors.grey,
+                                                          fontSize: 12,
+                                                          color: Colors.black87,
                                                         ),
                                                       ),
-                                                  ],
+                                                      if (info.containsKey(
+                                                            'added',
+                                                          ) &&
+                                                          info.containsKey(
+                                                            'updated',
+                                                          ) &&
+                                                          info.containsKey(
+                                                            'deleted',
+                                                          ))
+                                                        TextSpan(
+                                                          text:
+                                                              ' [新規: ${info['added']}, 更新: ${info['updated']}, 削除: ${info['deleted']}]',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 11,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                        ),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
                                         ),
                                       ],
                                     ),

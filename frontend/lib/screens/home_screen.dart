@@ -613,7 +613,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: const Icon(Icons.admin_panel_settings, size: 18),
               label: const Text('管理者メニュー'),
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
@@ -1120,12 +1120,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     tagColor = Colors.purple;
                   }
 
+                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 16.0,
                       vertical: 8.0,
                     ),
-                    color: isChecked ? Colors.grey.shade300 : null,
+                    color: isChecked ? (isDarkMode ? Colors.grey[800] : Colors.grey.shade300) : null,
                     child: IntrinsicHeight(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

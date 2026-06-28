@@ -84,6 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           SegmentedButton<String>(
+            showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: 'system', label: Text('システム設定')),
               ButtonSegment(value: 'light', label: Text('ライト')),

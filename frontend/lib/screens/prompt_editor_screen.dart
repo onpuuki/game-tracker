@@ -14,11 +14,9 @@ class _TargetItem {
   final TextEditingController gameNameController;
   final TextEditingController keywordsController;
 
-  _TargetItem({
-    String gameName = "",
-    String keywords = "",
-  }) : gameNameController = TextEditingController(text: gameName),
-       keywordsController = TextEditingController(text: keywords);
+  _TargetItem({String gameName = "", String keywords = ""})
+    : gameNameController = TextEditingController(text: gameName),
+      keywordsController = TextEditingController(text: keywords);
 
   void dispose() {
     gameNameController.dispose();
@@ -30,11 +28,9 @@ class _CodeUrlItem {
   final TextEditingController gameNameController;
   final TextEditingController urlController;
 
-  _CodeUrlItem({
-    String gameName = "",
-    String url = "",
-  }) : gameNameController = TextEditingController(text: gameName),
-       urlController = TextEditingController(text: url);
+  _CodeUrlItem({String gameName = "", String url = ""})
+    : gameNameController = TextEditingController(text: gameName),
+      urlController = TextEditingController(text: url);
 
   void dispose() {
     gameNameController.dispose();

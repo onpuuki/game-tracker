@@ -11,7 +11,8 @@ class DebugLogManager {
 
   DebugLogManager._internal();
 
-  FirebaseFirestore get _db => FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+  FirebaseFirestore get _db =>
+      FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
   Future<void> addLog(String message, {String? traceId, String? detail}) async {
     try {

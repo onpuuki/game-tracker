@@ -17,16 +17,21 @@ class DebugLogScreen extends StatelessWidget {
             icon: const Icon(Icons.copy),
             onPressed: () async {
               try {
-                final snapshot = await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-                    .collection('debug_logs')
-                    .orderBy('timestamp', descending: true)
-                    .get();
+                final snapshot =
+                    await FirebaseFirestore.instanceFor(
+                          app: Firebase.app(),
+                          databaseId: 'default',
+                        )
+                        .collection('debug_logs')
+                        .orderBy('timestamp', descending: true)
+                        .get();
 
                 final StringBuffer buffer = StringBuffer();
                 for (var doc in snapshot.docs) {
                   final data = doc.data();
                   final timestamp = data['timestamp'] as Timestamp?;
-                  final timeStr = timestamp?.toDate().toIso8601String() ?? 'Unknown Time';
+                  final timeStr =
+                      timestamp?.toDate().toIso8601String() ?? 'Unknown Time';
                   final traceId = data['traceId'] as String?;
                   final traceStr = traceId != null ? ' [$traceId]' : '';
                   final message = data['message'] as String? ?? 'No Message';
@@ -77,9 +82,9 @@ class DebugLogScreen extends StatelessWidget {
               if (confirm == true) {
                 await DebugLogManager().clearLogs();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logs cleared')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Logs cleared')));
                 }
               }
             },
@@ -87,10 +92,14 @@ class DebugLogScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-            .collection('debug_logs')
-            .orderBy('timestamp', descending: true)
-            .snapshots(),
+        stream:
+            FirebaseFirestore.instanceFor(
+                  app: Firebase.app(),
+                  databaseId: 'default',
+                )
+                .collection('debug_logs')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
@@ -110,14 +119,18 @@ class DebugLogScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final logData = logs[index].data() as Map<String, dynamic>;
               final timestamp = logData['timestamp'] as Timestamp?;
-              final timeStr = timestamp?.toDate().toLocal().toString() ?? 'Pending...';
+              final timeStr =
+                  timestamp?.toDate().toLocal().toString() ?? 'Pending...';
               final traceId = logData['traceId'] as String?;
               final traceStr = traceId != null ? '[$traceId]' : '';
               final message = logData['message'] as String? ?? 'No Message';
               final detail = logData['detail'] as String?;
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 4.0,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Column(
@@ -125,7 +138,10 @@ class DebugLogScreen extends StatelessWidget {
                     children: [
                       Text(
                         '[$timeStr] $traceStr',
-                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -142,7 +158,10 @@ class DebugLogScreen extends StatelessWidget {
                           ),
                           child: Text(
                             detail,
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                       ],

@@ -85,8 +85,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final dt = DateTime.parse(formatted);
-      if (dt.hour == 0 && dt.minute == 0 && dt.second == 0 && !dateStr.contains(':')) {
-         return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      if (dt.hour == 0 &&
+          dt.minute == 0 &&
+          dt.second == 0 &&
+          !dateStr.contains(':')) {
+        return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
       }
       return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) {
@@ -102,15 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPreferences();
 
-    _configStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-        .collection('settings')
-        .doc('config')
-        .snapshots();
+    _configStream = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'default',
+    ).collection('settings').doc('config').snapshots();
 
-    _eventsStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-        .collectionGroup('events')
-        .snapshots();
-
+    _eventsStream = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'default',
+    ).collectionGroup('events').snapshots();
   }
 
   Future<void> _loadPreferences() async {
@@ -120,10 +123,14 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedTags = prefs.getStringList('selectedTags') ?? [];
 
       final startDateStr = prefs.getString('filterStartDate');
-      _filterStartDate = startDateStr != null ? DateTime.tryParse(startDateStr) : null;
+      _filterStartDate = startDateStr != null
+          ? DateTime.tryParse(startDateStr)
+          : null;
 
       final endDateStr = prefs.getString('filterEndDate');
-      _filterEndDate = endDateStr != null ? DateTime.tryParse(endDateStr) : null;
+      _filterEndDate = endDateStr != null
+          ? DateTime.tryParse(endDateStr)
+          : null;
 
       _excludeChecked = prefs.getBool('excludeChecked') ?? false;
       _ongoingOnly = prefs.getBool('ongoingOnly') ?? false;
@@ -131,7 +138,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
       _primarySortOrder = prefs.getString('primarySortOrder') ?? 'asc';
-      _secondarySortField = prefs.getString('secondarySortField') ?? 'startDate';
+      _secondarySortField =
+          prefs.getString('secondarySortField') ?? 'startDate';
       _secondarySortOrder = prefs.getString('secondarySortOrder') ?? 'asc';
     });
   }
@@ -142,7 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setStringList('selectedTags', _selectedTags);
 
     if (_filterStartDate != null) {
-      await prefs.setString('filterStartDate', _filterStartDate!.toIso8601String());
+      await prefs.setString(
+        'filterStartDate',
+        _filterStartDate!.toIso8601String(),
+      );
     } else {
       await prefs.remove('filterStartDate');
     }
@@ -182,15 +193,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const Text(
                       '絞り込み',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
 
                     // Tags
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Text('タグ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      child: Text(
+                        'タグ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -227,7 +247,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       onTap: () async {
-                        List<String> dialogTempSelected = List.from(_selectedGames);
+                        List<String> dialogTempSelected = List.from(
+                          _selectedGames,
+                        );
                         final result = await showDialog<List<String>>(
                           context: context,
                           builder: (context) {
@@ -241,7 +263,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       children: allGameNames.map((game) {
                                         return CheckboxListTile(
                                           title: Text(game),
-                                          value: dialogTempSelected.contains(game),
+                                          value: dialogTempSelected.contains(
+                                            game,
+                                          ),
                                           onChanged: (bool? checked) {
                                             setDialogState(() {
                                               if (checked == true) {
@@ -261,7 +285,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: const Text('キャンセル'),
                                     ),
                                     TextButton(
-                                      onPressed: () => Navigator.pop(context, dialogTempSelected),
+                                      onPressed: () => Navigator.pop(
+                                        context,
+                                        dialogTempSelected,
+                                      ),
                                       child: const Text('OK'),
                                     ),
                                   ],
@@ -283,8 +310,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // Date Range
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Text('期間指定', style: TextStyle(fontWeight: FontWeight.bold)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      child: Text(
+                        '期間指定',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     Row(
                       children: [
@@ -293,8 +326,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: Text(
                             _filterStartDate != null
-                              ? "${_filterStartDate!.year}/${_filterStartDate!.month.toString().padLeft(2, '0')}/${_filterStartDate!.day.toString().padLeft(2, '0')}"
-                              : "未指定",
+                                ? "${_filterStartDate!.year}/${_filterStartDate!.month.toString().padLeft(2, '0')}/${_filterStartDate!.day.toString().padLeft(2, '0')}"
+                                : "未指定",
                           ),
                         ),
                         IconButton(
@@ -335,8 +368,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: Text(
                             _filterEndDate != null
-                              ? "${_filterEndDate!.year}/${_filterEndDate!.month.toString().padLeft(2, '0')}/${_filterEndDate!.day.toString().padLeft(2, '0')}"
-                              : "未指定",
+                                ? "${_filterEndDate!.year}/${_filterEndDate!.month.toString().padLeft(2, '0')}/${_filterEndDate!.day.toString().padLeft(2, '0')}"
+                                : "未指定",
                           ),
                         ),
                         IconButton(
@@ -427,7 +460,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('第一優先', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(
+                        '第一優先',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     Row(
                       children: [
@@ -436,9 +472,18 @@ class _HomeScreenState extends State<HomeScreen> {
                             value: _primarySortField,
                             isExpanded: true,
                             items: const [
-                              DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
-                              DropdownMenuItem(value: 'startDate', child: Text('開始日')),
-                              DropdownMenuItem(value: 'endDate', child: Text('終了日')),
+                              DropdownMenuItem(
+                                value: 'gameName',
+                                child: Text('ゲーム名'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'startDate',
+                                child: Text('開始日'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'endDate',
+                                child: Text('終了日'),
+                              ),
                             ],
                             onChanged: (value) {
                               if (value != null) {
@@ -456,7 +501,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'asc', child: Text('昇順')),
-                              DropdownMenuItem(value: 'desc', child: Text('降順')),
+                              DropdownMenuItem(
+                                value: 'desc',
+                                child: Text('降順'),
+                              ),
                             ],
                             onChanged: (value) {
                               if (value != null) {
@@ -472,7 +520,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
                     const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('第二優先', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(
+                        '第二優先',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     Row(
                       children: [
@@ -481,13 +532,24 @@ class _HomeScreenState extends State<HomeScreen> {
                             value: _secondarySortField,
                             isExpanded: true,
                             items: const [
-                              DropdownMenuItem(value: 'gameName', child: Text('ゲーム名')),
-                              DropdownMenuItem(value: 'startDate', child: Text('開始日')),
-                              DropdownMenuItem(value: 'endDate', child: Text('終了日')),
+                              DropdownMenuItem(
+                                value: 'gameName',
+                                child: Text('ゲーム名'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'startDate',
+                                child: Text('開始日'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'endDate',
+                                child: Text('終了日'),
+                              ),
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => _secondarySortField = value);
+                                setDialogState(
+                                  () => _secondarySortField = value,
+                                );
                                 setState(() {});
                                 _savePreferences();
                               }
@@ -501,11 +563,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'asc', child: Text('昇順')),
-                              DropdownMenuItem(value: 'desc', child: Text('降順')),
+                              DropdownMenuItem(
+                                value: 'desc',
+                                child: Text('降順'),
+                              ),
                             ],
                             onChanged: (value) {
                               if (value != null) {
-                                setDialogState(() => _secondarySortOrder = value);
+                                setDialogState(
+                                  () => _secondarySortOrder = value,
+                                );
                                 setState(() {});
                                 _savePreferences();
                               }
@@ -598,15 +665,10 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.zero,
           children: [
             const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.deepPurple,
-              ),
+              decoration: BoxDecoration(color: Colors.deepPurple),
               child: Text(
                 'Game Tracker Admin',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                ),
+                style: TextStyle(color: Colors.white, fontSize: 24),
               ),
             ),
             ListTile(
@@ -616,7 +678,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const UrlManagerScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const UrlManagerScreen(),
+                  ),
                 );
               },
             ),
@@ -627,7 +691,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const PromptEditorScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const PromptEditorScreen(),
+                  ),
                 );
               },
             ),
@@ -638,7 +704,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const DebugLogScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const DebugLogScreen(),
+                  ),
                 );
               },
             ),
@@ -649,62 +717,80 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SyncStatusScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const SyncStatusScreen(),
+                  ),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.delete),
               title: _isClearingEvents
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Clear All Events'),
-              onTap: _isClearingEvents ? null : () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Confirmation'),
-                    content: const Text('本当に削除しますか？'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('キャンセル'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('はい'),
-                      ),
-                    ],
-                  ),
-                );
+              onTap: _isClearingEvents
+                  ? null
+                  : () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Confirmation'),
+                          content: const Text('本当に削除しますか？'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('キャンセル'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('はい'),
+                            ),
+                          ],
+                        ),
+                      );
 
-                if (confirm == true) {
-                  setState(() {
-                    _isClearingEvents = true;
-                  });
+                      if (confirm == true) {
+                        setState(() {
+                          _isClearingEvents = true;
+                        });
 
-                  try {
-                    final callable = FirebaseFunctions.instance.httpsCallable('clearAllEvents', options: HttpsCallableOptions(timeout: const Duration(minutes: 5)));
-                    await callable.call();
+                        try {
+                          final callable = FirebaseFunctions.instance
+                              .httpsCallable(
+                                'clearAllEvents',
+                                options: HttpsCallableOptions(
+                                  timeout: const Duration(minutes: 5),
+                                ),
+                              );
+                          await callable.call();
 
-                    if (!context.mounted) return;
-                    Navigator.pop(context); // Close drawer
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Events cleared successfully')),
-                    );
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to clear events: $e')),
-                    );
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _isClearingEvents = false;
-                      });
-                    }
-                  }
-                }
-              },
+                          if (!context.mounted) return;
+                          Navigator.pop(context); // Close drawer
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Events cleared successfully'),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to clear events: $e'),
+                            ),
+                          );
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isClearingEvents = false;
+                            });
+                          }
+                        }
+                      }
+                    },
             ),
           ],
         ),
@@ -720,7 +806,10 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final data = snapshot.data?.data() as Map<String, dynamic>?;
-          final targets = (data?['targets'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+          final targets =
+              (data?['targets'] as List<dynamic>?)
+                  ?.cast<Map<String, dynamic>>() ??
+              [];
 
           final siteConfig = <String, Map<String, bool>>{};
           for (var target in targets) {
@@ -735,14 +824,18 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           if (targets.isEmpty) {
-            return const Center(child: Text('No targets found. Add targets in URL Manager.'));
+            return const Center(
+              child: Text('No targets found. Add targets in URL Manager.'),
+            );
           }
 
           return StreamBuilder<QuerySnapshot>(
             stream: _eventsStream,
             builder: (context, eventSnapshot) {
               if (eventSnapshot.hasError) {
-                return Center(child: Text('Error loading events: ${eventSnapshot.error}'));
+                return Center(
+                  child: Text('Error loading events: ${eventSnapshot.error}'),
+                );
               }
               if (eventSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -777,7 +870,8 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               final List<String> allGameNames = uniqueGamesSet.toList()..sort();
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && _latestAllGameNames.length != allGameNames.length) {
+                if (mounted &&
+                    _latestAllGameNames.length != allGameNames.length) {
                   setState(() {
                     _latestAllGameNames = allGameNames;
                   });
@@ -786,17 +880,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
               List<_ParsedEvent> events = parsedEvents.where((event) {
                 // Tag Filter
-                if (_selectedTags.isNotEmpty && !_selectedTags.contains(event.data['tag'])) {
+                if (_selectedTags.isNotEmpty &&
+                    !_selectedTags.contains(event.data['tag'])) {
                   return false;
                 }
 
                 // Game Filter
-                if (_selectedGames.isNotEmpty && !_selectedGames.contains(event.gameName)) {
+                if (_selectedGames.isNotEmpty &&
+                    !_selectedGames.contains(event.gameName)) {
                   return false;
                 }
 
                 // Checked Filter
-                if (_excludeChecked && _checkedEventIds.contains(event.doc.id)) {
+                if (_excludeChecked &&
+                    _checkedEventIds.contains(event.doc.id)) {
                   return false;
                 }
 
@@ -806,11 +903,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Ongoing Filter
                 if (_ongoingOnly) {
                   if (event.startDate == null) return false;
-                  final start = DateTime(event.startDate!.year, event.startDate!.month, event.startDate!.day);
+                  final start = DateTime(
+                    event.startDate!.year,
+                    event.startDate!.month,
+                    event.startDate!.day,
+                  );
                   if (start.isAfter(today)) return false; // Not yet started
 
                   if (event.endDate != null) {
-                    final end = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+                    final end = DateTime(
+                      event.endDate!.year,
+                      event.endDate!.month,
+                      event.endDate!.day,
+                    );
                     if (end.isBefore(today)) return false; // Already ended
                   }
                   // If endDate is null, we assume it's ongoing once started
@@ -819,17 +924,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Date Range Filter
                 if (_filterStartDate != null || _filterEndDate != null) {
                   final startTarget = _filterStartDate != null
-                      ? DateTime(_filterStartDate!.year, _filterStartDate!.month, _filterStartDate!.day)
+                      ? DateTime(
+                          _filterStartDate!.year,
+                          _filterStartDate!.month,
+                          _filterStartDate!.day,
+                        )
                       : null;
                   final endTarget = _filterEndDate != null
-                      ? DateTime(_filterEndDate!.year, _filterEndDate!.month, _filterEndDate!.day)
+                      ? DateTime(
+                          _filterEndDate!.year,
+                          _filterEndDate!.month,
+                          _filterEndDate!.day,
+                        )
                       : null;
 
                   final eventStart = event.startDate != null
-                      ? DateTime(event.startDate!.year, event.startDate!.month, event.startDate!.day)
+                      ? DateTime(
+                          event.startDate!.year,
+                          event.startDate!.month,
+                          event.startDate!.day,
+                        )
                       : null;
                   final eventEnd = event.endDate != null
-                      ? DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day)
+                      ? DateTime(
+                          event.endDate!.year,
+                          event.endDate!.month,
+                          event.endDate!.day,
+                        )
                       : null;
 
                   // For the event to be visible, its active period must overlap with the target period.
@@ -838,10 +959,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Overlap condition: eventEnd >= startTarget AND eventStart <= endTarget
                   // Treat missing start/end as +/- infinity for overlap logic.
 
-                  if (startTarget != null && eventEnd != null && eventEnd.isBefore(startTarget)) {
+                  if (startTarget != null &&
+                      eventEnd != null &&
+                      eventEnd.isBefore(startTarget)) {
                     return false;
                   }
-                  if (endTarget != null && eventStart != null && eventStart.isAfter(endTarget)) {
+                  if (endTarget != null &&
+                      eventStart != null &&
+                      eventStart.isAfter(endTarget)) {
                     return false;
                   }
                 }
@@ -855,10 +980,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 dynamic getFieldValue(_ParsedEvent event, String field) {
                   switch (field) {
-                    case 'gameName': return event.gameName;
-                    case 'startDate': return event.startDate ?? distantFuture;
-                    case 'endDate': return event.endDate ?? distantFuture;
-                    default: return '';
+                    case 'gameName':
+                      return event.gameName;
+                    case 'startDate':
+                      return event.startDate ?? distantFuture;
+                    case 'endDate':
+                      return event.endDate ?? distantFuture;
+                    default:
+                      return '';
                   }
                 }
 
@@ -918,7 +1047,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   final today = DateTime(now.year, now.month, now.day);
 
                   if (startDate != null) {
-                    final start = DateTime(startDate.year, startDate.month, startDate.day);
+                    final start = DateTime(
+                      startDate.year,
+                      startDate.month,
+                      startDate.day,
+                    );
                     if (start.isAfter(today)) {
                       isUpcoming = true;
                       daysUntilStart = start.difference(today).inDays;
@@ -927,14 +1060,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   int? remainingDays;
                   if (endDate != null) {
-                    final end = DateTime(endDate.year, endDate.month, endDate.day);
+                    final end = DateTime(
+                      endDate.year,
+                      endDate.month,
+                      endDate.day,
+                    );
                     remainingDays = end.difference(today).inDays;
                   }
 
                   Widget? trailingWidget;
                   if (isUpcoming && daysUntilStart != null) {
                     trailingWidget = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.green.withAlpha(26),
                         borderRadius: BorderRadius.circular(12),
@@ -942,12 +1082,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Text(
                         '開催まで$daysUntilStart日',
-                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     );
                   } else if (remainingDays != null && remainingDays >= 0) {
                     trailingWidget = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red.withAlpha(26),
                         borderRadius: BorderRadius.circular(12),
@@ -955,7 +1102,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Text(
                         '終了まで$remainingDays日',
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     );
                   }
@@ -970,7 +1121,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
                     color: isChecked ? Colors.grey.shade300 : null,
                     child: IntrinsicHeight(
                       child: Row(
@@ -978,30 +1132,55 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: InkWell(
-                              onTap: isChecked ? null : () async {
-                                if (tag == 'コード') {
-                                  final codeToCopy = (redeemCode != null && redeemCode.isNotEmpty) ? redeemCode : title;
-                                  await Clipboard.setData(ClipboardData(text: codeToCopy));
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('コードをコピーしました')),
-                                    );
-                                  }
-                                } else {
-                                  final query = '$eventGameName $title';
-                                  final encodedQuery = Uri.encodeComponent(query);
-                                  final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
-                                  if (await canLaunchUrl(uri)) {
-                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                  } else {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Could not launch URL')),
-                                      );
-                                    }
-                                  }
-                                }
-                              },
+                              onTap: isChecked
+                                  ? null
+                                  : () async {
+                                      if (tag == 'コード') {
+                                        final codeToCopy =
+                                            (redeemCode != null &&
+                                                redeemCode.isNotEmpty)
+                                            ? redeemCode
+                                            : title;
+                                        await Clipboard.setData(
+                                          ClipboardData(text: codeToCopy),
+                                        );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('コードをコピーしました'),
+                                            ),
+                                          );
+                                        }
+                                      } else {
+                                        final query = '$eventGameName $title';
+                                        final encodedQuery =
+                                            Uri.encodeComponent(query);
+                                        final uri = Uri.parse(
+                                          'https://www.google.com/search?q=$encodedQuery',
+                                        );
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(
+                                            uri,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                        } else {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Could not launch URL',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      }
+                                    },
                               onLongPress: () {
                                 setState(() {
                                   if (isChecked) {
@@ -1017,106 +1196,153 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Padding(
                                     padding: const EdgeInsets.all(12.0),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          if (imageUrl != null && imageUrl.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(bottom: 8.0),
-                                              child: SizedBox(
-                                                width: 50,
-                                                height: 50,
-                                                child: Image.network(
-                                                  imageUrl,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) =>
-                                                      const Icon(Icons.image_not_supported),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  if (imageUrl != null &&
+                                                      imageUrl.isNotEmpty)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: 8.0,
+                                                          ),
+                                                      child: SizedBox(
+                                                        width: 50,
+                                                        height: 50,
+                                                        child: Image.network(
+                                                          imageUrl,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (
+                                                                context,
+                                                                error,
+                                                                stackTrace,
+                                                              ) => const Icon(
+                                                                Icons
+                                                                    .image_not_supported,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  Text(
+                                                    eventGameName,
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).primaryColor,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (trailingWidget != null) ...[
+                                              const SizedBox(width: 8),
+                                              isChecked
+                                                  ? Opacity(
+                                                      opacity: 0.5,
+                                                      child: trailingWidget,
+                                                    )
+                                                  : trailingWidget,
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Wrap(
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
+                                              spacing: 6.0,
+                                              children: [
+                                                if (tag != null &&
+                                                    tag.isNotEmpty)
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: tagColor.withAlpha(
+                                                        26,
+                                                      ),
+                                                      border: Border.all(
+                                                        color: tagColor,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            4,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      tag,
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: tagColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                Text(
+                                                  title,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    decoration: isChecked
+                                                        ? TextDecoration
+                                                              .lineThrough
+                                                        : null,
+                                                    color: isChecked
+                                                        ? Colors.grey
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              period,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: isChecked
+                                                    ? Colors.grey
+                                                    : Colors.blueGrey,
+                                              ),
+                                            ),
+                                            if (summary.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                summary,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: isChecked
+                                                      ? Colors.grey
+                                                      : null,
                                                 ),
                                               ),
-                                            ),
-                                          Text(
-                                            eventGameName,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Theme.of(context).primaryColor,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (trailingWidget != null) ...[
-                                      const SizedBox(width: 8),
-                                      isChecked ? Opacity(opacity: 0.5, child: trailingWidget) : trailingWidget,
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      spacing: 6.0,
-                                      children: [
-                                        if (tag != null && tag.isNotEmpty)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: tagColor.withAlpha(26),
-                                              border: Border.all(color: tagColor),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              tag,
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                                color: tagColor,
-                                              ),
-                                            ),
-                                          ),
-                                        Text(
-                                          title,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            decoration: isChecked ? TextDecoration.lineThrough : null,
-                                            color: isChecked ? Colors.grey : null,
-                                          ),
+                                            ],
+                                          ],
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      period,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isChecked ? Colors.grey : Colors.blueGrey,
-                                      ),
-                                    ),
-                                    if (summary.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        summary,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isChecked ? Colors.grey : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
                                   ),
                                   if (isChecked)
                                     Positioned.fill(
@@ -1138,7 +1364,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          if (tag == 'コード' && eventUrl != null && eventUrl.isNotEmpty)
+                          if (tag == 'コード' &&
+                              eventUrl != null &&
+                              eventUrl.isNotEmpty)
                             Container(
                               width: 70,
                               decoration: BoxDecoration(
@@ -1162,19 +1390,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                       : () async {
                                           final uri = Uri.parse(eventUrl);
                                           if (await canLaunchUrl(uri)) {
-                                            await launchUrl(uri,
-                                                mode: LaunchMode.externalApplication);
+                                            await launchUrl(
+                                              uri,
+                                              mode: LaunchMode
+                                                  .externalApplication,
+                                            );
                                           } else if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
                                               const SnackBar(
-                                                  content: Text('Could not launch URL')),
+                                                content: Text(
+                                                  'Could not launch URL',
+                                                ),
+                                              ),
                                             );
                                           }
                                         },
                                   child: const Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.open_in_browser, color: Colors.white),
+                                      Icon(
+                                        Icons.open_in_browser,
+                                        color: Colors.white,
+                                      ),
                                       SizedBox(height: 4),
                                       Text(
                                         '自動\n入力',

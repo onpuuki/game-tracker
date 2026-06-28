@@ -30,11 +30,14 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config');
+      final docRef = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('settings').doc('config');
       await docRef.set({
         'targets': FieldValue.arrayUnion([
-          {'gameName': gameName, 'url': url}
-        ])
+          {'gameName': gameName, 'url': url},
+        ]),
       }, SetOptions(merge: true));
 
       _gameNameController.clear();
@@ -47,9 +50,9 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding target: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error adding target: $e')));
       }
     } finally {
       if (mounted) {
@@ -66,9 +69,12 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config');
+      final docRef = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('settings').doc('config');
       await docRef.update({
-        'targets': FieldValue.arrayRemove([target])
+        'targets': FieldValue.arrayRemove([target]),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,9 +83,9 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting target: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error deleting target: $e')));
       }
     } finally {
       if (mounted) {
@@ -93,9 +99,7 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('URL Manager'),
-      ),
+      appBar: AppBar(title: const Text('URL Manager')),
       body: Column(
         children: [
           Padding(
@@ -105,7 +109,9 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
               children: [
                 TextField(
                   controller: _gameNameController,
-                  decoration: const InputDecoration(labelText: 'Game Name (e.g., Genshin Impact)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Game Name (e.g., Genshin Impact)',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -130,7 +136,10 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
           const Divider(),
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('settings').doc('config').snapshots(),
+              stream: FirebaseFirestore.instanceFor(
+                app: Firebase.app(),
+                databaseId: 'default',
+              ).collection('settings').doc('config').snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
@@ -140,7 +149,10 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
                 }
 
                 final data = snapshot.data?.data() as Map<String, dynamic>?;
-                final targets = (data?['targets'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+                final targets =
+                    (data?['targets'] as List<dynamic>?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    [];
 
                 if (targets.isEmpty) {
                   return const Center(child: Text('No targets found.'));
@@ -155,7 +167,9 @@ class _UrlManagerScreenState extends State<UrlManagerScreen> {
                       subtitle: Text(target['url'] ?? ''),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: _isLoading ? null : () => _deleteTarget(target),
+                        onPressed: _isLoading
+                            ? null
+                            : () => _deleteTarget(target),
                       ),
                     );
                   },

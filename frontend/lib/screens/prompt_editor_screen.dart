@@ -26,9 +26,26 @@ class _TargetItem {
   }
 }
 
+class _CodeUrlItem {
+  final TextEditingController gameNameController;
+  final TextEditingController urlController;
+
+  _CodeUrlItem({
+    String gameName = "",
+    String url = "",
+  }) : gameNameController = TextEditingController(text: gameName),
+       urlController = TextEditingController(text: url);
+
+  void dispose() {
+    gameNameController.dispose();
+    urlController.dispose();
+  }
+}
+
 class _PromptEditorScreenState extends State<PromptEditorScreen> {
   final _controller = TextEditingController();
   final List<_TargetItem> _targetItems = [];
+  final List<_CodeUrlItem> _codeUrlItems = [];
   bool _isLoading = true;
 
   @override
@@ -64,6 +81,20 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
               }
             }
           }
+          if (data.containsKey('codeUrls')) {
+            final codeUrls = data['codeUrls'] as List<dynamic>;
+            for (var item in codeUrls) {
+              if (item is Map<String, dynamic> &&
+                  item.containsKey('gameName')) {
+                _codeUrlItems.add(
+                  _CodeUrlItem(
+                    gameName: item['gameName'] as String,
+                    url: (item['url'] as String?) ?? '',
+                  ),
+                );
+              }
+            }
+          }
         }
       }
     } catch (e) {
@@ -93,12 +124,23 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
           )
           .toList();
 
+      final codeUrls = _codeUrlItems
+          .where((item) => item.gameNameController.text.trim().isNotEmpty)
+          .map(
+            (item) => {
+              'gameName': item.gameNameController.text.trim(),
+              'url': item.urlController.text.trim(),
+            },
+          )
+          .toList();
+
       await FirebaseFirestore.instanceFor(
         app: Firebase.app(),
         databaseId: 'default',
       ).collection('settings').doc('config').set({
         'promptTemplate': _controller.text,
         'targets': targets,
+        'codeUrls': codeUrls,
       }, SetOptions(merge: true));
 
       if (mounted) {
@@ -125,6 +167,19 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     setState(() {
       _targetItems[index].dispose();
       _targetItems.removeAt(index);
+    });
+  }
+
+  void _addCodeUrl() {
+    setState(() {
+      _codeUrlItems.add(_CodeUrlItem());
+    });
+  }
+
+  void _removeCodeUrl(int index) {
+    setState(() {
+      _codeUrlItems[index].dispose();
+      _codeUrlItems.removeAt(index);
     });
   }
 
@@ -159,6 +214,9 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
   void dispose() {
     _controller.dispose();
     for (var item in _targetItems) {
+      item.dispose();
+    }
+    for (var item in _codeUrlItems) {
       item.dispose();
     }
     super.dispose();
@@ -272,6 +330,76 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                       color: Colors.red,
                                       onPressed: () => _removeTarget(index),
                                       tooltip: 'Remove Target',
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Code Redemption Pages',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: _addCodeUrl,
+                          tooltip: 'Add Code URL',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _codeUrlItems.isEmpty
+                        ? const Center(child: Text('No code URLs added.'))
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _codeUrlItems.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        children: [
+                                          TextField(
+                                            controller: _codeUrlItems[index]
+                                                .gameNameController,
+                                            decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              hintText: 'Enter game name...',
+                                              isDense: true,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller: _codeUrlItems[index]
+                                                .urlController,
+                                            decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              hintText:
+                                                  'Enter URL format (use (コード) as placeholder)...',
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                      ),
+                                      color: Colors.red,
+                                      onPressed: () => _removeCodeUrl(index),
+                                      tooltip: 'Remove Code URL',
                                     ),
                                   ],
                                 ),

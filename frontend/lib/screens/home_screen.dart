@@ -673,7 +673,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.edit_document),
-              title: const Text('Prompt Editor'),
+              title: const Text('プロンプトエディタ'),
               onTap: () {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
@@ -686,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.bug_report),
-              title: const Text('Debug Logs'),
+              title: const Text('デバッグログ'),
               onTap: () {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
@@ -699,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.access_time),
-              title: const Text('自動同期設定'),
+              title: const Text('自動スキャン時刻'),
               onTap: () {
                 Navigator.pop(context); // Close drawer
                 Navigator.push(
@@ -712,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.sync),
-              title: const Text('Run Sync'),
+              title: const Text('手動スキャン実行'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -731,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Clear All Events'),
+                  : const Text('全イベント削除'),
               onTap: _isClearingEvents
                   ? null
                   : () async {

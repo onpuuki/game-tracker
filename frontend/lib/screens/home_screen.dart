@@ -944,48 +944,53 @@ class _HomeScreenState extends State<HomeScreen> {
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     color: isChecked ? Colors.grey.shade300 : null,
-                    child: InkWell(
-                      onTap: isChecked ? null : () async {
-                        if (tag == 'コード') {
-                          final codeToCopy = (redeemCode != null && redeemCode.isNotEmpty) ? redeemCode : title;
-                          await Clipboard.setData(ClipboardData(text: codeToCopy));
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('コードをコピーしました')),
-                            );
-                          }
-                        } else {
-                          final query = '$eventGameName $title';
-                          final encodedQuery = Uri.encodeComponent(query);
-                          final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          } else {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Could not launch URL')),
-                              );
-                            }
-                          }
-                        }
-                      },
-                      onLongPress: () {
-                        setState(() {
-                          if (isChecked) {
-                            _checkedEventIds.remove(eventId);
-                          } else {
-                            _checkedEventIds.add(eventId);
-                          }
-                        });
-                        _savePreferences();
-                      },
-                      child: Stack(
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: isChecked ? null : () async {
+                                if (tag == 'コード') {
+                                  final codeToCopy = (redeemCode != null && redeemCode.isNotEmpty) ? redeemCode : title;
+                                  await Clipboard.setData(ClipboardData(text: codeToCopy));
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('コードをコピーしました')),
+                                    );
+                                  }
+                                } else {
+                                  final query = '$eventGameName $title';
+                                  final encodedQuery = Uri.encodeComponent(query);
+                                  final uri = Uri.parse('https://www.google.com/search?q=$encodedQuery');
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Could not launch URL')),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                              onLongPress: () {
+                                setState(() {
+                                  if (isChecked) {
+                                    _checkedEventIds.remove(eventId);
+                                  } else {
+                                    _checkedEventIds.add(eventId);
+                                  }
+                                });
+                                _savePreferences();
+                              },
+                              child: Stack(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,19 +1089,75 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
-                          ),
-                          if (isChecked)
-                            Positioned.fill(
-                              child: Center(
-                                child: Transform.rotate(
-                                  angle: -0.3,
-                                  child: Text(
-                                    '済',
-                                    style: TextStyle(
-                                      fontSize: 60,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.red.withAlpha(128),
+                                  ),
+                                  if (isChecked)
+                                    Positioned.fill(
+                                      child: Center(
+                                        child: Transform.rotate(
+                                          angle: -0.3,
+                                          child: Text(
+                                            '済',
+                                            style: TextStyle(
+                                              fontSize: 60,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red.withAlpha(128),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (tag == 'コード' && eventUrl != null && eventUrl.isNotEmpty)
+                            Container(
+                              width: 70,
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.only(
+                                  topRight: Radius.circular(12),
+                                  bottomRight: Radius.circular(12),
+                                ),
+                                color: isChecked
+                                    ? Colors.grey.shade400
+                                    : Theme.of(context).primaryColor,
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: const BorderRadius.only(
+                                    topRight: Radius.circular(12),
+                                    bottomRight: Radius.circular(12),
+                                  ),
+                                  onTap: isChecked
+                                      ? null
+                                      : () async {
+                                          final uri = Uri.parse(eventUrl);
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri,
+                                                mode: LaunchMode.externalApplication);
+                                          } else if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                  content: Text('Could not launch URL')),
+                                            );
+                                          }
+                                        },
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.open_in_browser, color: Colors.white),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '自動\n入力',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

@@ -81,6 +81,7 @@ export const processSyncRequest = onDocumentCreated({
         const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
+        const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];
         const geminiApiKey = configData?.geminiApiKey;
 
         // Firestoreからプロンプトテンプレートを取得（なければデフォルトを使用）
@@ -184,6 +185,13 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                         for (const event of extractedEvents) {
                             if (!event.title) continue;
                             newEventTitles.add(event.title);
+
+                            if (event.tag === 'コード' && event.redeemCode) {
+                                const matchingConfig = codeUrls.find(c => c.gameName === game.gameName);
+                                if (matchingConfig && matchingConfig.url) {
+                                    event.eventUrl = matchingConfig.url.replace('(コード)', event.redeemCode);
+                                }
+                            }
 
                             if (currentEventsMap.has(event.title)) {
                                 const existing = currentEventsMap.get(event.title);

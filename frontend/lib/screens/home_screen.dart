@@ -9,6 +9,7 @@ import 'debug_log_screen.dart';
 import 'url_manager_screen.dart';
 import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,7 @@ class _ParsedEvent {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isClearingEvents = false;
   List<String> _latestAllGameNames = [];
 
@@ -531,11 +533,26 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Game Tracker'),
+        automaticallyImplyLeading: false,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8.0),
+            padding: const EdgeInsets.only(right: 4.0),
+            child: TextButton.icon(
+              onPressed: () {
+                _scaffoldKey.currentState?.openDrawer();
+              },
+              icon: const Icon(Icons.admin_panel_settings, size: 18),
+              label: const Text('管理者メニュー'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 4.0),
             child: ElevatedButton.icon(
               onPressed: () {
                 _showFilterBottomSheet(_latestAllGameNames);
@@ -545,12 +562,12 @@ class _HomeScreenState extends State<HomeScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 16.0),
+            padding: const EdgeInsets.only(right: 4.0),
             child: ElevatedButton.icon(
               onPressed: () {
                 _showSortDialog();
@@ -560,10 +577,20 @@ class _HomeScreenState extends State<HomeScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 8.0),
         ],
       ),
       drawer: Drawer(

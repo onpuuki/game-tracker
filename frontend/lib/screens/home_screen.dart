@@ -599,6 +599,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
@@ -613,7 +615,9 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: const Icon(Icons.admin_panel_settings, size: 18),
               label: const Text('管理者メニュー'),
               style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: isDarkMode
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
@@ -1120,7 +1124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     tagColor = Colors.purple;
                   }
 
-                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                  // isDarkMode is now declared at the top of the build method
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -1128,7 +1132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 8.0,
                     ),
                     color: isChecked
-                        ? (isDarkMode ? Colors.grey[800] : Colors.grey.shade300)
+                        ? (isDarkMode ? Colors.grey[850] : Colors.grey.shade200)
                         : null,
                     child: IntrinsicHeight(
                       child: Row(
@@ -1243,9 +1247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     eventGameName,
                                                     style: TextStyle(
                                                       fontSize: 14,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).primaryColor,
+                                                      color: Theme.of(context).colorScheme.onSurface,
                                                       fontWeight:
                                                           FontWeight.bold,
                                                     ),

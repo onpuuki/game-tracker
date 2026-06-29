@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -29,12 +31,23 @@ jobs:
         working-directory: frontend
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build Admin APK
         working-directory: frontend
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release --dart-define=IS_ADMIN=true
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-admin-release.apk
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Build User APK
+        working-directory: frontend
+        run: |
+          flutter build apk --release --dart-define=IS_ADMIN=false
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-user-release.apk
+
+      - name: Upload APKs to GitHub Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: app-release.apk
-          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+          tag_name: "build-${{ github.run_number }}"
+          name: "Build #${{ github.run_number }}"
+          files: |
+            frontend/build/app/outputs/flutter-apk/app-admin-release.apk
+            frontend/build/app/outputs/flutter-apk/app-user-release.apk

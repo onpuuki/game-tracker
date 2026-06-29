@@ -358,74 +358,121 @@ export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_c
     functions.logger.info(`[${traceId}] updateSyncSchedule triggered`, { traceId });
 
     const afterData = event.data?.after?.data();
-    const beforeData = event.data?.before?.data();
-
-    const newSchedule = afterData?.cron_schedule;
-    const oldSchedule = beforeData?.cron_schedule;
-
-    if (newSchedule === oldSchedule) {
-        functions.logger.info(`[${traceId}] Schedule unchanged. Exiting.`);
-        return;
-    }
 
     const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'game-tracker-444b2'; // Fallback to project ID
-
     const locationId = 'asia-northeast1';
-    const jobId = 'sync-job';
     const client = new CloudSchedulerClient();
     const parent = client.locationPath(projectId, locationId);
-    const name = client.jobPath(projectId, locationId, jobId);
 
     // Get the Cloud Function URL dynamically or construct it
     const functionUrl = `https://${locationId}-${projectId}.cloudfunctions.net/triggerScheduledSync`;
 
     try {
-        if (!newSchedule) {
-            // Delete the job if schedule is removed
-            await client.deleteJob({ name });
-            functions.logger.info(`[${traceId}] Cloud Scheduler job deleted because schedule was removed.`);
-            await writeDebugLog(traceId, 'Cloud Scheduler job deleted.');
-            return;
+        // Fetch existing jobs to delete old ones
+        let existingJobs: any[] = [];
+        try {
+            const [jobs] = await client.listJobs({ parent });
+            existingJobs = jobs.filter(job => job.name?.includes('/jobs/sync-job-') || job.name?.endsWith('/jobs/sync-job'));
+        } catch (listError: any) {
+            functions.logger.warn(`[${traceId}] Could not list jobs (might not exist yet): ${listError.message}`);
         }
 
-        const job = {
-            name,
-            schedule: newSchedule,
-            timeZone: 'Asia/Tokyo',
-            httpTarget: {
-                uri: functionUrl,
-                httpMethod: 'POST' as const,
-            },
-        };
+        const isPaused = afterData?.is_paused === true;
 
-        let jobExists = false;
-        try {
-            await client.getJob({ name });
-            jobExists = true;
-        } catch (e: any) {
-            if (e.code !== 5) { // 5 is NOT_FOUND
-                throw e;
+        let scanTimes: string[] = [];
+        if (afterData?.scan_times && Array.isArray(afterData.scan_times)) {
+            scanTimes = afterData.scan_times;
+        } else if (afterData?.cron_schedule) {
+            // Fallback for old single schedule format temporarily
+            const parts = (afterData.cron_schedule as string).split(' ');
+            if (parts.length >= 2) {
+                 const minute = parts[0].padStart(2, '0');
+                 const hour = parts[1].padStart(2, '0');
+                 scanTimes.push(`${hour}:${minute}`);
             }
         }
 
-        if (jobExists) {
-            await client.updateJob({
-                job,
-                updateMask: { paths: ['schedule', 'http_target.uri'] }
-            });
-            functions.logger.info(`[${traceId}] Cloud Scheduler job updated with schedule: ${newSchedule}`);
-            await writeDebugLog(traceId, `Cloud Scheduler job updated: ${newSchedule}`);
-        } else {
-            await client.createJob({
-                parent,
-                job
-            });
-            functions.logger.info(`[${traceId}] Cloud Scheduler job created with schedule: ${newSchedule}`);
-            await writeDebugLog(traceId, `Cloud Scheduler job created: ${newSchedule}`);
+        if (isPaused || scanTimes.length === 0) {
+            // Delete all jobs
+            for (const job of existingJobs) {
+                if (job.name) {
+                    await client.deleteJob({ name: job.name });
+                    functions.logger.info(`[${traceId}] Cloud Scheduler job deleted: ${job.name}`);
+                }
+            }
+            await writeDebugLog(traceId, isPaused ? 'All Cloud Scheduler jobs deleted (Paused).' : 'All Cloud Scheduler jobs deleted (No times set).');
+            return;
         }
+
+        const activeJobNames = new Set<string>();
+
+        // Create or update required jobs
+        for (const timeStr of scanTimes) {
+            const parts = timeStr.split(':');
+            if (parts.length !== 2) continue;
+
+            const hour = parts[0];
+            const minute = parts[1];
+
+            const cronSchedule = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+            const jobId = `sync-job-${hour}-${minute}`;
+            const name = client.jobPath(projectId, locationId, jobId);
+            activeJobNames.add(name);
+
+            const job = {
+                name,
+                schedule: cronSchedule,
+                timeZone: 'Asia/Tokyo',
+                httpTarget: {
+                    uri: functionUrl,
+                    httpMethod: 'POST' as const,
+                },
+            };
+
+            let jobExists = existingJobs.some(existing => existing.name === name);
+
+            if (jobExists) {
+                // Update
+                await client.updateJob({
+                    job,
+                    updateMask: { paths: ['schedule', 'http_target.uri'] }
+                });
+                functions.logger.info(`[${traceId}] Cloud Scheduler job updated: ${name} with schedule: ${cronSchedule}`);
+            } else {
+                // Create
+                try {
+                    await client.createJob({
+                        parent,
+                        job
+                    });
+                    functions.logger.info(`[${traceId}] Cloud Scheduler job created: ${name} with schedule: ${cronSchedule}`);
+                } catch (createErr: any) {
+                    if (createErr.code === 6) { // ALREADY_EXISTS
+                        await client.updateJob({
+                            job,
+                            updateMask: { paths: ['schedule', 'http_target.uri'] }
+                        });
+                        functions.logger.info(`[${traceId}] Cloud Scheduler job already exists, updated: ${name} with schedule: ${cronSchedule}`);
+                    } else {
+                        throw createErr;
+                    }
+                }
+            }
+        }
+
+        // Delete jobs that are no longer needed
+        for (const job of existingJobs) {
+            if (job.name && !activeJobNames.has(job.name)) {
+                await client.deleteJob({ name: job.name });
+                functions.logger.info(`[${traceId}] Cloud Scheduler job deleted (removed from schedule): ${job.name}`);
+            }
+        }
+
+        await writeDebugLog(traceId, `Cloud Scheduler jobs synchronized. Active times: ${scanTimes.join(', ')}`);
+
     } catch (error: any) {
-        functions.logger.error(`[${traceId}] Error updating Cloud Scheduler job: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
-        await writeDebugLog(traceId, 'Error updating Cloud Scheduler job', error instanceof Error ? error.stack : String(error));
+        functions.logger.error(`[${traceId}] Error updating Cloud Scheduler jobs: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Error updating Cloud Scheduler jobs', error instanceof Error ? error.stack : String(error));
     }
 });
 

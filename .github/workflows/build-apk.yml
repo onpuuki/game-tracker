@@ -34,14 +34,12 @@ jobs:
       - name: Build Admin APK
         working-directory: frontend
         run: |
-          flutter build apk --release --dart-define=IS_ADMIN=true
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-admin-release.apk
+          flutter build apk --release --flavor admin --dart-define=IS_ADMIN=true
 
       - name: Build User APK
         working-directory: frontend
         run: |
-          flutter build apk --release --dart-define=IS_ADMIN=false
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-user-release.apk
+          flutter build apk --release --flavor user --dart-define=IS_ADMIN=false
 
       - name: Upload APKs to GitHub Releases
         uses: softprops/action-gh-release@v2

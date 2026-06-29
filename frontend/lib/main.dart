@@ -53,7 +53,7 @@ class MyApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (context, ThemeMode currentMode, child) {
         return MaterialApp(
-          title: 'Game Tracker',
+          title: 'マルチゲームタスク',
           themeMode: currentMode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

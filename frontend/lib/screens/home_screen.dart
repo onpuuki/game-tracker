@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filterKeyword = '';
   List<String> _selectedGames = [];
   List<String> _selectedTags = [];
+  List<String> _selectedSubTags = [];
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
   bool _excludeChecked = false;
@@ -150,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _filterKeyword = prefs.getString('filterKeyword') ?? '';
       _selectedGames = prefs.getStringList('selectedGames') ?? [];
       _selectedTags = prefs.getStringList('selectedTags') ?? [];
+      _selectedSubTags = prefs.getStringList('selectedSubTags') ?? [];
 
       final startDateStr = prefs.getString('filterStartDate');
       _filterStartDate = startDateStr != null
@@ -178,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setString('filterKeyword', _filterKeyword);
     await prefs.setStringList('selectedGames', _selectedGames);
     await prefs.setStringList('selectedTags', _selectedTags);
+    await prefs.setStringList('selectedSubTags', _selectedSubTags);
 
     if (_filterStartDate != null) {
       await prefs.setString(
@@ -293,6 +296,37 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _selectedTags.add(tag);
                                 } else {
                                   _selectedTags.remove(tag);
+                                }
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        '子タグ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        children: ['ガチャ', '期間限定', '常設'].map((subTag) {
+                          return FilterChip(
+                            label: Text(subTag),
+                            selected: _selectedSubTags.contains(subTag),
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                if (selected) {
+                                  _selectedSubTags.add(subTag);
+                                } else {
+                                  _selectedSubTags.remove(subTag);
                                 }
                               });
                               setState(() {});
@@ -961,6 +995,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   return false;
                 }
 
+                // SubTag Filter
+                if (_selectedSubTags.isNotEmpty &&
+                    !_selectedSubTags.contains(event.data['subTag'])) {
+                  return false;
+                }
+
                 // Game Filter
                 if (_selectedGames.isNotEmpty &&
                     !_selectedGames.contains(event.gameName)) {
@@ -1102,6 +1142,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final eventGameName = parsedEvent.gameName;
                   final title = eventData['title'] as String? ?? 'No Title';
                   final tag = eventData['tag'] as String?;
+                  final subTag = eventData['subTag'] as String?;
                   final redeemCode = eventData['redeemCode'] as String?;
                   final eventUrl = eventData['eventUrl'] as String?;
 
@@ -1376,6 +1417,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                                             FontWeight.bold,
                                                         color: tagColor,
                                                       ),
+                                                    ),
+                                                  ),
+                                                if (subTag != null &&
+                                                    subTag.isNotEmpty)
+                                                  Text(
+                                                    subTag,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey,
                                                     ),
                                                   ),
                                                 Text(

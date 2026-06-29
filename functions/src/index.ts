@@ -224,6 +224,11 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                                     matchedDocIds.add(existingEvent.docId);
                                     const existingData = existingEvent.data;
 
+                                    if (existingData.isLocked === true) {
+                                        unchangedCount++;
+                                        continue;
+                                    }
+
                                     const hasChanges = existingData.endDate !== event.endDate ||
                                                        existingData.redeemCode !== event.redeemCode ||
                                                        existingData.summary !== event.summary;

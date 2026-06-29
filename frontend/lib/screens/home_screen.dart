@@ -10,6 +10,7 @@ import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
 import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
+import 'game_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -347,64 +348,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             : _selectedGames.join(', '),
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () async {
-                        List<String> dialogTempSelected = List.from(
-                          _selectedGames,
-                        );
-                        final result = await showDialog<List<String>>(
-                          context: context,
-                          builder: (context) {
-                            return StatefulBuilder(
-                              builder: (context, setDialogState) {
-                                return AlertDialog(
-                                  title: const Text('ゲームを選択'),
-                                  content: SingleChildScrollView(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: allGameNames.map((game) {
-                                        return CheckboxListTile(
-                                          title: Text(game),
-                                          value: dialogTempSelected.contains(
-                                            game,
-                                          ),
-                                          onChanged: (bool? checked) {
-                                            setDialogState(() {
-                                              if (checked == true) {
-                                                dialogTempSelected.add(game);
-                                              } else {
-                                                dialogTempSelected.remove(game);
-                                              }
-                                            });
-                                          },
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('キャンセル'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(
-                                        context,
-                                        dialogTempSelected,
-                                      ),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                );
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => GameSelectionScreen(
+                              allGames: allGameNames,
+                              selectedGames: _selectedGames,
+                              onSelectionChanged: (List<String> newSelection) {
+                                setModalState(() {
+                                  _selectedGames = newSelection;
+                                });
+                                setState(() {});
+                                _savePreferences();
                               },
-                            );
-                          },
+                            ),
+                          ),
                         );
-                        if (result != null) {
-                          setModalState(() {
-                            _selectedGames = result;
-                          });
-                          setState(() {});
-                          _savePreferences();
-                        }
                       },
                     ),
                     const Divider(),

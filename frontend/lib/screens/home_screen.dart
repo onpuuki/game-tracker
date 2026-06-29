@@ -10,6 +10,7 @@ import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
 import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
+import 'event_edit_screen.dart';
 import 'game_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -786,6 +787,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SyncStatusScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('イベント編集'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EventEditScreen(),
                   ),
                 );
               },

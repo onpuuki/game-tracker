@@ -40,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _latestAllGameNames = [];
 
   // Filter State
+  String _filterKeyword = '';
   List<String> _selectedGames = [];
   List<String> _selectedTags = [];
   DateTime? _filterStartDate;
@@ -69,6 +70,33 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       return null;
     }
+  }
+
+  bool _matchesKeyword(String keyword, _ParsedEvent event) {
+    if (keyword.trim().isEmpty) return true;
+
+    final title = event.data['title'] as String? ?? '';
+    final summary = event.data['summary'] as String? ?? '';
+    final gameName = event.gameName;
+    final redeemCode = event.data['redeemCode'] as String? ?? '';
+
+    final targetText = '$title $summary $gameName $redeemCode'.toLowerCase();
+
+    final orTerms = keyword.toLowerCase().split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    if (orTerms.isEmpty) return true;
+
+    for (final orTerm in orTerms) {
+      final andTerms = orTerm.split(RegExp(r'[\s　]+')).where((s) => s.isNotEmpty).toList();
+      bool allAndMatch = true;
+      for (final andTerm in andTerms) {
+        if (!targetText.contains(andTerm)) {
+          allAndMatch = false;
+          break;
+        }
+      }
+      if (allAndMatch) return true; // 1つのOR条件（ANDの集合）を満たした
+    }
+    return false;
   }
 
   String _formatDateString(String? dateStr) {
@@ -119,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      _filterKeyword = prefs.getString('filterKeyword') ?? '';
       _selectedGames = prefs.getStringList('selectedGames') ?? [];
       _selectedTags = prefs.getStringList('selectedTags') ?? [];
 
@@ -146,6 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('filterKeyword', _filterKeyword);
     await prefs.setStringList('selectedGames', _selectedGames);
     await prefs.setStringList('selectedTags', _selectedTags);
 
@@ -175,6 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showFilterBottomSheet(List<String> allGameNames) {
+    final keywordController = TextEditingController(text: _filterKeyword);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -198,6 +230,41 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Keyword
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: TextField(
+                        controller: keywordController,
+                        decoration: InputDecoration(
+                          labelText: 'キーワード',
+                          hintText: 'スペースでAND、| でOR指定可能',
+                          hintStyle: const TextStyle(fontWeight: FontWeight.w300),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: _filterKeyword.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    keywordController.clear();
+                                    setModalState(() {
+                                      _filterKeyword = '';
+                                    });
+                                    setState(() {});
+                                    _savePreferences();
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          setModalState(() {
+                            _filterKeyword = value;
+                          });
+                          setState(() {});
+                          _savePreferences();
+                        },
+                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -883,6 +950,11 @@ class _HomeScreenState extends State<HomeScreen> {
               });
 
               List<_ParsedEvent> events = parsedEvents.where((event) {
+                // Keyword Filter
+                if (!_matchesKeyword(_filterKeyword, event)) {
+                  return false;
+                }
+
                 // Tag Filter
                 if (_selectedTags.isNotEmpty &&
                     !_selectedTags.contains(event.data['tag'])) {

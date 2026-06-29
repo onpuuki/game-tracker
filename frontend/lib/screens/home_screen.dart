@@ -701,28 +701,30 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: true);
 
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4.0),
-            child: TextButton.icon(
-              onPressed: () {
-                _scaffoldKey.currentState?.openDrawer();
-              },
-              icon: const Icon(Icons.admin_panel_settings, size: 18),
-              label: const Text('管理者メニュー'),
-              style: TextButton.styleFrom(
-                foregroundColor: isDarkMode
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+          if (isAdmin)
+            Padding(
+              padding: const EdgeInsets.only(right: 4.0),
+              child: TextButton.icon(
+                onPressed: () {
+                  _scaffoldKey.currentState?.openDrawer();
+                },
+                icon: const Icon(Icons.admin_panel_settings, size: 18),
+                label: const Text('管理者メニュー'),
+                style: TextButton.styleFrom(
+                  foregroundColor: isDarkMode
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
               ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 4.0),
             child: ElevatedButton.icon(
@@ -765,7 +767,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8.0),
         ],
       ),
-      drawer: Drawer(
+      drawer: isAdmin ? Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -899,7 +901,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-      ),
+      ) : null,
       body: StreamBuilder<DocumentSnapshot>(
         stream: _configStream,
         builder: (context, snapshot) {

@@ -27,6 +27,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   }
 
   Future<void> _addTime(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -34,7 +35,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
     if (picked != null) {
       if (_selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に追加されています')),
           );
         }
@@ -51,6 +52,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   }
 
   Future<void> _editTime(BuildContext context, int index) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _selectedTimes[index],
@@ -58,7 +60,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
     if (picked != null) {
       if (_selectedTimes.asMap().entries.any((entry) => entry.key != index && entry.value.hour == picked.hour && entry.value.minute == picked.minute)) {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
+           scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に存在します')),
           );
         }
@@ -187,7 +189,8 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                         });
                       },
                       contentPadding: EdgeInsets.zero,
-                      activeColor: Colors.redAccent,
+                      activeTrackColor: Colors.redAccent.withAlpha(128),
+                      activeThumbColor: Colors.redAccent,
                     ),
                     const Divider(),
                     const SizedBox(height: 8),

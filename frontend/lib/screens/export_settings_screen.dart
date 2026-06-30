@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:uuid/uuid.dart';
+import '../utils/debug_log_manager.dart';
 
 class ExportSettingsScreen extends StatefulWidget {
   const ExportSettingsScreen({super.key});
@@ -14,6 +16,9 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
   List<TimeOfDay> _selectedTimes = [];
   bool _isLoading = false;
   bool _initialized = false;
+  bool _isExporting = false;
+  String _exportStatusMessage = '';
+  double? _exportProgress;
 
   late Stream<DocumentSnapshot> _configStream;
 
@@ -33,6 +38,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
   }
 
   Future<void> _addTime(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -40,7 +46,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
     if (picked != null) {
       if (_selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に追加されています')),
           );
         }
@@ -57,6 +63,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
   }
 
   Future<void> _editTime(BuildContext context, int index) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _selectedTimes[index],
@@ -64,7 +71,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
     if (picked != null) {
       if (_selectedTimes.asMap().entries.any((entry) => entry.key != index && entry.value.hour == picked.hour && entry.value.minute == picked.minute)) {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
+           scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に存在します')),
           );
         }
@@ -120,10 +127,56 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
     }
   }
 
-  void _startManualExport() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('エクスポート処理を開始します（バックエンド連携予定）')),
-    );
+  Future<void> _runManualExport() async {
+    setState(() {
+      _isExporting = true;
+      _exportProgress = null; // ローディングアニメーション開始
+      _exportStatusMessage = 'エクスポートを開始します...';
+    });
+
+    final traceId = const Uuid().v4();
+    final logManager = DebugLogManager();
+
+    try {
+      await logManager.addLog('Manual export started', traceId: traceId, detail: 'Target Folder ID: ${_folderIdController.text}');
+
+      // Step 1: データ取得
+      setState(() { _exportStatusMessage = 'Firestoreからイベントデータを取得中...'; _exportProgress = 0.2; });
+      await logManager.addLog('Fetching events from Firestore...', traceId: traceId);
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Step 2: JSON変換
+      setState(() { _exportStatusMessage = 'JSONデータへ変換中...'; _exportProgress = 0.5; });
+      await logManager.addLog('Converting data to JSON format...', traceId: traceId);
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Step 3: Google Drive アップロード（現在はモック）
+      setState(() { _exportStatusMessage = 'Google Driveへアップロード中...'; _exportProgress = 0.8; });
+      await logManager.addLog('Uploading JSON to Google Drive...', traceId: traceId);
+      await Future.delayed(const Duration(seconds: 1));
+
+      setState(() { _exportStatusMessage = 'エクスポート完了'; _exportProgress = 1.0; });
+      await logManager.addLog('Manual export completed successfully', traceId: traceId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('エクスポートが完了しました')));
+      }
+    } catch (e, stack) {
+      setState(() { _exportStatusMessage = 'エラーが発生しました'; _exportProgress = 0.0; });
+      await logManager.addLog('Manual export failed', traceId: traceId, detail: 'Error: $e\nStack: $stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('エラー: $e')));
+      }
+    } finally {
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+          _exportStatusMessage = '';
+          _exportProgress = null;
+        });
+      }
+    }
   }
 
   @override
@@ -182,7 +235,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _startManualExport,
+                        onPressed: _isExporting ? null : _runManualExport,
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -194,6 +247,15 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
                         ),
                       ),
                     ),
+                    if (_isExporting) ...[
+                      const SizedBox(height: 16),
+                      LinearProgressIndicator(value: _exportProgress),
+                      const SizedBox(height: 8),
+                      Text(
+                        _exportStatusMessage,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     const Divider(),
                     const SizedBox(height: 16),

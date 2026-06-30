@@ -6,6 +6,7 @@ import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
 import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
+import { google } from 'googleapis';
 
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
@@ -508,5 +509,92 @@ export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSecond
     } catch (error) {
         functions.logger.error('Error clearing events from Firestore:', error instanceof Error ? error.stack : String(error));
         throw new functions.https.HttpsError('internal', 'Unable to clear events due to internal error', error);
+    }
+});
+
+// Google Driveへのエクスポート処理
+export const exportToDrive = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    const traceId = 'export-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    const folderId = data.folderId;
+
+    if (!folderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'folderId is required');
+    }
+
+    functions.logger.info(`[${traceId}] Starting exportToDrive to folder: ${folderId}`);
+    await writeDebugLog(traceId, `Starting export to Google Drive. Folder ID: ${folderId}`);
+
+    try {
+        // FirestoreのcollectionGroup('events')から全データを取得
+        const eventsSnapshot = await db.collectionGroup('events').get();
+        const events = eventsSnapshot.docs.map(doc => {
+             const eventData = doc.data();
+             // idも含める
+             return { id: doc.id, ...eventData };
+        });
+
+        const jsonString = JSON.stringify(events, null, 2);
+        const fileName = 'events_export.json';
+
+        // GoogleAuthでデフォルト認証を取得 (ADC)
+        const auth = new google.auth.GoogleAuth({
+            scopes: ['https://www.googleapis.com/auth/drive.file']
+        });
+        const drive = google.drive({ version: 'v3', auth });
+
+        // 指定されたfolderId配下に既存のファイルがあるか検索
+        const query = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
+        const res = await drive.files.list({
+            q: query,
+            spaces: 'drive',
+            fields: 'files(id, name)'
+        });
+
+        const existingFiles = res.data.files || [];
+        const fileMetadata = {
+            name: fileName,
+            parents: [folderId]
+        };
+
+        const media = {
+            mimeType: 'application/json',
+            body: jsonString
+        };
+
+        let driveFile;
+        if (existingFiles.length > 0) {
+            // 上書き更新
+            const fileId = existingFiles[0].id!;
+            functions.logger.info(`[${traceId}] Updating existing file: ${fileId}`);
+            const updateRes = await drive.files.update({
+                fileId: fileId,
+                media: media
+            });
+            driveFile = updateRes.data;
+            await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
+        } else {
+            // 新規作成
+            functions.logger.info(`[${traceId}] Creating new file`);
+            const createRes = await drive.files.create({
+                requestBody: fileMetadata,
+                media: media,
+                fields: 'id'
+            });
+            driveFile = createRes.data;
+            await writeDebugLog(traceId, `Created new file in Drive. File ID: ${driveFile.id}`);
+        }
+
+        functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);
+        return {
+            success: true,
+            message: 'Export successful',
+            fileId: driveFile.id,
+            exportedCount: events.length
+        };
+
+    } catch (error: any) {
+         functions.logger.error(`[${traceId}] Export failed: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+         await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));
+         throw new functions.https.HttpsError('internal', 'Failed to export to Google Drive', error.message);
     }
 });

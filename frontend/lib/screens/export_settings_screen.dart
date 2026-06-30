@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:uuid/uuid.dart';
 import '../utils/debug_log_manager.dart';
 
@@ -140,26 +141,20 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
     try {
       await logManager.addLog('Manual export started', traceId: traceId, detail: 'Target Folder ID: ${_folderIdController.text}');
 
-      // Step 1: データ取得
-      setState(() { _exportStatusMessage = 'Firestoreからイベントデータを取得中...'; _exportProgress = 0.2; });
-      await logManager.addLog('Fetching events from Firestore...', traceId: traceId);
-      await Future.delayed(const Duration(seconds: 1));
+      setState(() { _exportStatusMessage = 'エクスポート処理を実行中...'; _exportProgress = 0.5; });
+      await logManager.addLog('Calling exportToDrive Cloud Function...', traceId: traceId);
 
-      // Step 2: JSON変換
-      setState(() { _exportStatusMessage = 'JSONデータへ変換中...'; _exportProgress = 0.5; });
-      await logManager.addLog('Converting data to JSON format...', traceId: traceId);
-      await Future.delayed(const Duration(seconds: 1));
+      final result = await FirebaseFunctions.instanceFor(region: 'asia-northeast1')
+          .httpsCallable('exportToDrive')
+          .call({'folderId': _folderIdController.text});
 
-      // Step 3: Google Drive アップロード（現在はモック）
-      setState(() { _exportStatusMessage = 'Google Driveへアップロード中...'; _exportProgress = 0.8; });
-      await logManager.addLog('Uploading JSON to Google Drive...', traceId: traceId);
-      await Future.delayed(const Duration(seconds: 1));
+      final data = result.data as Map<String, dynamic>;
 
       setState(() { _exportStatusMessage = 'エクスポート完了'; _exportProgress = 1.0; });
-      await logManager.addLog('Manual export completed successfully', traceId: traceId);
+      await logManager.addLog('Manual export completed successfully', traceId: traceId, detail: 'Result: $data');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('エクスポートが完了しました')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('エクスポートが完了しました (${data['exportedCount']}件)')));
       }
     } catch (e, stack) {
       setState(() { _exportStatusMessage = 'エラーが発生しました'; _exportProgress = 0.0; });

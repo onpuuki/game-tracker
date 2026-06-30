@@ -12,6 +12,7 @@ import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
 import 'event_edit_screen.dart';
 import 'game_selection_screen.dart';
+import 'export_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -872,6 +873,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       }
                     },
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_download),
+              title: const Text('エクスポート'),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ExportSettingsScreen(),
+                  ),
+                );
+              },
             ),
           ],
         ),

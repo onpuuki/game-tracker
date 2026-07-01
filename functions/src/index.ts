@@ -36,7 +36,7 @@ interface ConfigItem {
 
 async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
     let attempt = 0;
-    const baseDelay = 5000; // 初期待機時間 (5秒)
+    const baseDelay = 30000; // APIの長いRetryInfo（約40秒）をカバーするため
 
     while (attempt < maxRetries) {
         try {
@@ -327,6 +327,9 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 debugInfo.push({ stage: 'Error', game: game.gameName, error: err instanceof Error ? err.stack : String(err) });
                 await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
+
+            // レート制限（RPM）回避のため、次のゲーム処理に移る前に15秒待機する
+            await sleep(15000);
         }
         await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
         await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');

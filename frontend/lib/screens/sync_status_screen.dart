@@ -125,6 +125,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     final createdAt = data['createdAt'] as Timestamp?;
                     final updatedAt = data['updatedAt'] as Timestamp?;
                     final debugInfo = data['debugInfo'] as List<dynamic>?;
+                    final totalTokens = data['totalTokens'] as int?;
 
                     IconData statusIcon;
                     Color statusColor;
@@ -185,6 +186,19 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 alignment: Alignment.centerRight,
                                 child: Text(
                                   'End: ${_formatTimestamp(updatedAt)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (totalTokens != null) ...[
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'Token: $totalTokens',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey,

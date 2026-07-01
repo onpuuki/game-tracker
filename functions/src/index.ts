@@ -538,7 +538,7 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
 
         // GoogleAuthでデフォルト認証を取得 (ADC)
         const auth = new google.auth.GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly']
+            scopes: ['https://www.googleapis.com/auth/drive']
         });
         const drive = google.drive({ version: 'v3', auth });
 

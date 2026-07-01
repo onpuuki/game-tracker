@@ -1058,6 +1058,24 @@ class _EventEditScreenState extends State<EventEditScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _buildTextField('Game Name', item.gameNameCtrl),
+                              Builder(
+                                builder: (context) {
+                                  final originalData = item.originalData;
+                                  final targetTimestamp = (originalData['updatedAt'] ?? originalData['createdAt']) as Timestamp?;
+                                  if (targetTimestamp != null) {
+                                    final d = targetTimestamp.toDate();
+                                    final dateStr = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 4.0),
+                                      child: Text(
+                                        '更新日:$dateStr',
+                                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
                               _buildTextField(
                                 'Title',
                                 item.titleCtrl,

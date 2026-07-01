@@ -528,9 +528,22 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
         // FirestoreのcollectionGroup('events')から全データを取得
         const eventsSnapshot = await db.collectionGroup('events').get();
         const events = eventsSnapshot.docs.map(doc => {
-             const eventData = doc.data();
-             // idも含める
-             return { id: doc.id, ...eventData };
+            const data = doc.data();
+            // AIに調査・補完してほしい項目は、欠落していても明示的に null として出力する
+            // トークンを消費する createdAt, updatedAt, imageUrl は含めない
+            return {
+                id: doc.id,
+                gameName: data.gameName ?? null,
+                title: data.title ?? null,
+                summary: data.summary ?? null,
+                tag: data.tag ?? null,
+                subTag: data.subTag ?? null,
+                startDate: data.startDate ?? null,
+                endDate: data.endDate ?? null,
+                eventUrl: data.eventUrl ?? null,
+                redeemCode: data.redeemCode ?? null,
+                isLocked: data.isLocked ?? false
+            };
         });
 
         const jsonString = JSON.stringify(events, null, 2);

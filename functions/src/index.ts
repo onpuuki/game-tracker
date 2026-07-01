@@ -538,23 +538,24 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
 
         // GoogleAuthでデフォルト認証を取得 (ADC)
         const auth = new google.auth.GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/drive.file']
+            scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly']
         });
         const drive = google.drive({ version: 'v3', auth });
 
-        // 指定されたfolderId配下に既存のファイルがあるか検索
-        const query = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
+        // 指定されたfolderId配下のすべてのファイルを取得（名前で絞り込まない）
+        const query = `'${folderId}' in parents and trashed=false`;
         const res = await drive.files.list({
             q: query,
             spaces: 'drive',
-            fields: 'files(id, name)'
+            fields: 'files(id, name, mimeType)',
+            includeItemsFromAllDrives: true,
+            supportsAllDrives: true
         });
 
-        const existingFiles = res.data.files || [];
-        const fileMetadata = {
-            name: fileName,
-            parents: [folderId]
-        };
+        const allFiles = res.data.files || [];
+        await writeDebugLog(traceId, `Drive API recognized files in folder:`, allFiles);
+
+        const existingFile = allFiles.find(f => f.name === fileName);
 
         const media = {
             mimeType: 'application/json',
@@ -562,9 +563,9 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
         };
 
         let driveFile;
-        if (existingFiles.length > 0) {
+        if (existingFile) {
             // 上書き更新
-            const fileId = existingFiles[0].id!;
+            const fileId = existingFile.id!;
             functions.logger.info(`[${traceId}] Updating existing file: ${fileId}`);
             const updateRes = await drive.files.update({
                 fileId: fileId,
@@ -573,15 +574,11 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
             driveFile = updateRes.data;
             await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
         } else {
-            // 新規作成
-            functions.logger.info(`[${traceId}] Creating new file`);
-            const createRes = await drive.files.create({
-                requestBody: fileMetadata,
-                media: media,
-                fields: 'id'
-            });
-            driveFile = createRes.data;
-            await writeDebugLog(traceId, `Created new file in Drive. File ID: ${driveFile.id}`);
+            // Quotaエラーを防ぐため、新規作成せずにエラーで終了する
+            const errorMsg = `Target file '${fileName}' not found. Recognized files: ${JSON.stringify(allFiles)}`;
+            functions.logger.error(`[${traceId}] ${errorMsg}`);
+            await writeDebugLog(traceId, errorMsg);
+            throw new functions.https.HttpsError('not-found', `ダミーファイルが見つかりません。ログを確認してください。認識されたファイル数: ${allFiles.length}`);
         }
 
         functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);

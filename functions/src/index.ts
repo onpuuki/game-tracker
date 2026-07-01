@@ -159,7 +159,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
 
             try {
                 // Google Search Groundingを有効化して呼び出し
-                const response = await generateContentWithRetry(ai, 'gemini-2.5-pro', prompt, {
+                const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, {
                         tools: [{ googleSearch: {} }]
                     }, traceId);
 

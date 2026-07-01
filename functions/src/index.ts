@@ -130,6 +130,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
         const debugInfo: any[] = [];
+        let totalTokens = 0;
 
         for (const game of targetGames) {
             functions.logger.info(`[${traceId}] Requesting Gemini with Search for: ${game.gameName}`);
@@ -162,6 +163,10 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, {
                         tools: [{ googleSearch: {} }]
                     }, traceId);
+
+                if (response.usageMetadata?.totalTokenCount) {
+                    totalTokens += response.usageMetadata.totalTokenCount;
+                }
 
                 if (response.text) {
                     debugInfo.push({ stage: 1, type: 'Grounded Gemini Response', game: game.gameName, text: response.text });
@@ -323,7 +328,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
         }
-        await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo });
+        await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
         await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');
         return { success: true, message: 'Sync completed via Grounded Gemini.', debugInfo };
     } catch (error) {

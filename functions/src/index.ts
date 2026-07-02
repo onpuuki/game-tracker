@@ -328,8 +328,8 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
 
-            // レート制限（RPM）回避のため、次のゲーム処理に移る前に15秒待機する
-            await sleep(15000);
+            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に20秒待機する
+            await sleep(20000);
         }
         await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
         await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');

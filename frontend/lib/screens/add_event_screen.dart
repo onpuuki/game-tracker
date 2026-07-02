@@ -1,44 +1,5 @@
 import 'package:flutter/material.dart';
 
-class DailyTask {
-  TimeOfDay? time;
-  final TextEditingController nameController = TextEditingController();
-
-  void dispose() {
-    nameController.dispose();
-  }
-}
-
-class WeeklyTask {
-  String? dayOfWeek;
-  TimeOfDay? time;
-  final TextEditingController nameController = TextEditingController();
-
-  void dispose() {
-    nameController.dispose();
-  }
-}
-
-class BiweeklyTask {
-  DateTime? startDate;
-  TimeOfDay? time;
-  final TextEditingController nameController = TextEditingController();
-
-  void dispose() {
-    nameController.dispose();
-  }
-}
-
-class MonthlyTask {
-  DateTime? startDate;
-  TimeOfDay? time;
-  final TextEditingController nameController = TextEditingController();
-
-  void dispose() {
-    nameController.dispose();
-  }
-}
-
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
 
@@ -54,10 +15,20 @@ class _AddEventScreenState extends State<AddEventScreen> {
   String _mainTag = 'ゲーム内';
   String _subTag = '常設';
 
-  final List<DailyTask> _dailyTasks = [];
-  final List<WeeklyTask> _weeklyTasks = [];
-  final List<BiweeklyTask> _biweeklyTasks = [];
-  final List<MonthlyTask> _monthlyTasks = [];
+  TimeOfDay? _dailyTime;
+  final List<TextEditingController> _dailyTaskControllers = [];
+
+  String? _weeklyDayOfWeek;
+  TimeOfDay? _weeklyTime;
+  final List<TextEditingController> _weeklyTaskControllers = [];
+
+  DateTime? _biweeklyStartDate;
+  TimeOfDay? _biweeklyTime;
+  final List<TextEditingController> _biweeklyTaskControllers = [];
+
+  DateTime? _monthlyStartDate;
+  TimeOfDay? _monthlyTime;
+  final List<TextEditingController> _monthlyTaskControllers = [];
 
   final List<String> _daysOfWeek = ['月', '火', '水', '木', '金', '土', '日'];
 
@@ -66,10 +37,10 @@ class _AddEventScreenState extends State<AddEventScreen> {
     _gameNameController.dispose();
     _titleController.dispose();
     _codeController.dispose();
-    for (var task in _dailyTasks) { task.dispose(); }
-    for (var task in _weeklyTasks) { task.dispose(); }
-    for (var task in _biweeklyTasks) { task.dispose(); }
-    for (var task in _monthlyTasks) { task.dispose(); }
+    for (var controller in _dailyTaskControllers) { controller.dispose(); }
+    for (var controller in _weeklyTaskControllers) { controller.dispose(); }
+    for (var controller in _biweeklyTaskControllers) { controller.dispose(); }
+    for (var controller in _monthlyTaskControllers) { controller.dispose(); }
     super.dispose();
   }
 
@@ -81,24 +52,32 @@ class _AddEventScreenState extends State<AddEventScreen> {
     debugPrint('Sub Tag: $_subTag');
     debugPrint('Code: ${_codeController.text}');
 
-    debugPrint('--- Daily Tasks ---');
-    for (var task in _dailyTasks) {
-      debugPrint('Time: ${task.time?.format(context)}, Name: ${task.nameController.text}');
+    debugPrint('--- Daily Schedule ---');
+    debugPrint('Time: ${_dailyTime?.format(context)}');
+    debugPrint('Tasks:');
+    for (var controller in _dailyTaskControllers) {
+      debugPrint('  - ${controller.text}');
     }
 
-    debugPrint('--- Weekly Tasks ---');
-    for (var task in _weeklyTasks) {
-      debugPrint('Day: ${task.dayOfWeek}, Time: ${task.time?.format(context)}, Name: ${task.nameController.text}');
+    debugPrint('--- Weekly Schedule ---');
+    debugPrint('Day: $_weeklyDayOfWeek, Time: ${_weeklyTime?.format(context)}');
+    debugPrint('Tasks:');
+    for (var controller in _weeklyTaskControllers) {
+      debugPrint('  - ${controller.text}');
     }
 
-    debugPrint('--- Biweekly Tasks ---');
-    for (var task in _biweeklyTasks) {
-      debugPrint('StartDate: ${task.startDate?.toIso8601String().split('T')[0]}, Time: ${task.time?.format(context)}, Name: ${task.nameController.text}');
+    debugPrint('--- Biweekly Schedule ---');
+    debugPrint('StartDate: ${_biweeklyStartDate?.toIso8601String().split('T')[0]}, Time: ${_biweeklyTime?.format(context)}');
+    debugPrint('Tasks:');
+    for (var controller in _biweeklyTaskControllers) {
+      debugPrint('  - ${controller.text}');
     }
 
-    debugPrint('--- Monthly Tasks ---');
-    for (var task in _monthlyTasks) {
-      debugPrint('StartDate: ${task.startDate?.toIso8601String().split('T')[0]}, Time: ${task.time?.format(context)}, Name: ${task.nameController.text}');
+    debugPrint('--- Monthly Schedule ---');
+    debugPrint('StartDate: ${_monthlyStartDate?.toIso8601String().split('T')[0]}, Time: ${_monthlyTime?.format(context)}');
+    debugPrint('Tasks:');
+    for (var controller in _monthlyTaskControllers) {
+      debugPrint('  - ${controller.text}');
     }
     debugPrint('======================');
 
@@ -187,25 +166,34 @@ class _AddEventScreenState extends State<AddEventScreen> {
   Widget _buildDailyList() {
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Text('実行時刻:', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: () => _selectTime(context, (time) => setState(() => _dailyTime = time), _dailyTime),
+                child: Text(_dailyTime?.format(context) ?? '時間選択'),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
         Expanded(
           child: ListView.builder(
-            itemCount: _dailyTasks.length,
+            itemCount: _dailyTaskControllers.length,
             itemBuilder: (context, index) {
-              final task = _dailyTasks[index];
               return ListTile(
-                leading: TextButton(
-                  onPressed: () => _selectTime(context, (time) => setState(() => task.time = time), task.time),
-                  child: Text(task.time?.format(context) ?? '時間選択'),
-                ),
                 title: TextField(
-                  controller: task.nameController,
+                  controller: _dailyTaskControllers[index],
                   decoration: const InputDecoration(hintText: 'タスク名'),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () => setState(() {
-                    task.dispose();
-                    _dailyTasks.removeAt(index);
+                    _dailyTaskControllers[index].dispose();
+                    _dailyTaskControllers.removeAt(index);
                   }),
                 ),
               );
@@ -214,10 +202,11 @@ class _AddEventScreenState extends State<AddEventScreen> {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: IconButton(
-            icon: const Icon(Icons.add_circle, size: 40),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('タスクを追加'),
             onPressed: () => setState(() {
-              _dailyTasks.add(DailyTask());
+              _dailyTaskControllers.add(TextEditingController());
             }),
           ),
         ),
@@ -228,46 +217,50 @@ class _AddEventScreenState extends State<AddEventScreen> {
   Widget _buildWeeklyList() {
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Text('実行曜日・時刻:', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 16),
+              DropdownButton<String>(
+                value: _weeklyDayOfWeek,
+                hint: const Text('曜日'),
+                items: _daysOfWeek.map((String day) {
+                  return DropdownMenuItem<String>(
+                    value: day,
+                    child: Text(day),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _weeklyDayOfWeek = newValue;
+                  });
+                },
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: () => _selectTime(context, (time) => setState(() => _weeklyTime = time), _weeklyTime),
+                child: Text(_weeklyTime?.format(context) ?? '時間選択'),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
         Expanded(
           child: ListView.builder(
-            itemCount: _weeklyTasks.length,
+            itemCount: _weeklyTaskControllers.length,
             itemBuilder: (context, index) {
-              final task = _weeklyTasks[index];
               return ListTile(
-                leading: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButton<String>(
-                      value: task.dayOfWeek,
-                      hint: const Text('曜日'),
-                      items: _daysOfWeek.map((String day) {
-                        return DropdownMenuItem<String>(
-                          value: day,
-                          child: Text(day),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          task.dayOfWeek = newValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () => _selectTime(context, (time) => setState(() => task.time = time), task.time),
-                      child: Text(task.time?.format(context) ?? '時間選択'),
-                    ),
-                  ],
-                ),
                 title: TextField(
-                  controller: task.nameController,
+                  controller: _weeklyTaskControllers[index],
                   decoration: const InputDecoration(hintText: 'タスク名'),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () => setState(() {
-                    task.dispose();
-                    _weeklyTasks.removeAt(index);
+                    _weeklyTaskControllers[index].dispose();
+                    _weeklyTaskControllers.removeAt(index);
                   }),
                 ),
               );
@@ -276,10 +269,11 @@ class _AddEventScreenState extends State<AddEventScreen> {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: IconButton(
-            icon: const Icon(Icons.add_circle, size: 40),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('タスクを追加'),
             onPressed: () => setState(() {
-              _weeklyTasks.add(WeeklyTask());
+              _weeklyTaskControllers.add(TextEditingController());
             }),
           ),
         ),
@@ -290,33 +284,42 @@ class _AddEventScreenState extends State<AddEventScreen> {
   Widget _buildBiweeklyList() {
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Text('起点日時:', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  await _selectDate(context, (date) => setState(() => _biweeklyStartDate = date), _biweeklyStartDate);
+                  if (!context.mounted) return;
+                  await _selectTime(context, (time) => setState(() => _biweeklyTime = time), _biweeklyTime);
+                },
+                child: Text(
+                  _biweeklyStartDate != null
+                      ? '${_biweeklyStartDate!.month}/${_biweeklyStartDate!.day} ${_biweeklyTime?.format(context) ?? ''}'
+                      : '日時選択',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
         Expanded(
           child: ListView.builder(
-            itemCount: _biweeklyTasks.length,
+            itemCount: _biweeklyTaskControllers.length,
             itemBuilder: (context, index) {
-              final task = _biweeklyTasks[index];
               return ListTile(
-                leading: TextButton(
-                  onPressed: () async {
-                    await _selectDate(context, (date) => setState(() => task.startDate = date), task.startDate);
-                    if (!context.mounted) return;
-                    await _selectTime(context, (time) => setState(() => task.time = time), task.time);
-                  },
-                  child: Text(
-                    task.startDate != null
-                        ? '${task.startDate!.month}/${task.startDate!.day} ${task.time?.format(context) ?? ''}'
-                        : '日時選択',
-                  ),
-                ),
                 title: TextField(
-                  controller: task.nameController,
+                  controller: _biweeklyTaskControllers[index],
                   decoration: const InputDecoration(hintText: 'タスク名'),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () => setState(() {
-                    task.dispose();
-                    _biweeklyTasks.removeAt(index);
+                    _biweeklyTaskControllers[index].dispose();
+                    _biweeklyTaskControllers.removeAt(index);
                   }),
                 ),
               );
@@ -325,10 +328,11 @@ class _AddEventScreenState extends State<AddEventScreen> {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: IconButton(
-            icon: const Icon(Icons.add_circle, size: 40),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('タスクを追加'),
             onPressed: () => setState(() {
-              _biweeklyTasks.add(BiweeklyTask());
+              _biweeklyTaskControllers.add(TextEditingController());
             }),
           ),
         ),
@@ -339,33 +343,42 @@ class _AddEventScreenState extends State<AddEventScreen> {
   Widget _buildMonthlyList() {
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Text('起点日時:', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  await _selectDate(context, (date) => setState(() => _monthlyStartDate = date), _monthlyStartDate);
+                  if (!context.mounted) return;
+                  await _selectTime(context, (time) => setState(() => _monthlyTime = time), _monthlyTime);
+                },
+                child: Text(
+                  _monthlyStartDate != null
+                      ? '${_monthlyStartDate!.month}/${_monthlyStartDate!.day} ${_monthlyTime?.format(context) ?? ''}'
+                      : '日時選択',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
         Expanded(
           child: ListView.builder(
-            itemCount: _monthlyTasks.length,
+            itemCount: _monthlyTaskControllers.length,
             itemBuilder: (context, index) {
-              final task = _monthlyTasks[index];
               return ListTile(
-                leading: TextButton(
-                  onPressed: () async {
-                    await _selectDate(context, (date) => setState(() => task.startDate = date), task.startDate);
-                    if (!context.mounted) return;
-                    await _selectTime(context, (time) => setState(() => task.time = time), task.time);
-                  },
-                  child: Text(
-                    task.startDate != null
-                        ? '${task.startDate!.month}/${task.startDate!.day} ${task.time?.format(context) ?? ''}'
-                        : '日時選択',
-                  ),
-                ),
                 title: TextField(
-                  controller: task.nameController,
+                  controller: _monthlyTaskControllers[index],
                   decoration: const InputDecoration(hintText: 'タスク名'),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () => setState(() {
-                    task.dispose();
-                    _monthlyTasks.removeAt(index);
+                    _monthlyTaskControllers[index].dispose();
+                    _monthlyTaskControllers.removeAt(index);
                   }),
                 ),
               );
@@ -374,10 +387,11 @@ class _AddEventScreenState extends State<AddEventScreen> {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: IconButton(
-            icon: const Icon(Icons.add_circle, size: 40),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('タスクを追加'),
             onPressed: () => setState(() {
-              _monthlyTasks.add(MonthlyTask());
+              _monthlyTaskControllers.add(TextEditingController());
             }),
           ),
         ),

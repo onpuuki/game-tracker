@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
@@ -44,46 +46,113 @@ class _AddEventScreenState extends State<AddEventScreen> {
     super.dispose();
   }
 
-  void _submitData() {
-    debugPrint('=== Submitted Data ===');
-    debugPrint('Game Name: ${_gameNameController.text}');
-    debugPrint('Title: ${_titleController.text}');
-    debugPrint('Main Tag: $_mainTag');
-    debugPrint('Sub Tag: $_subTag');
-    debugPrint('Code: ${_codeController.text}');
+  Future<void> _submitData(String cycleType) async {
+    final gameName = _gameNameController.text.trim();
+    final title = _titleController.text.trim();
 
-    debugPrint('--- Daily Schedule ---');
-    debugPrint('Time: ${_dailyTime?.format(context)}');
-    debugPrint('Tasks:');
-    for (var controller in _dailyTaskControllers) {
-      debugPrint('  - ${controller.text}');
+    if (gameName.isEmpty || title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ゲーム名とタイトルを入力してください')),
+      );
+      return;
     }
 
-    debugPrint('--- Weekly Schedule ---');
-    debugPrint('Day: $_weeklyDayOfWeek, Time: ${_weeklyTime?.format(context)}');
-    debugPrint('Tasks:');
-    for (var controller in _weeklyTaskControllers) {
-      debugPrint('  - ${controller.text}');
+    DateTime now = DateTime.now();
+    DateTime endDate = now;
+    Map<String, dynamic> cycleSettings = {};
+    List<Map<String, dynamic>> tasks = [];
+    String tag = '';
+
+    if (cycleType == 'daily') {
+      if (_dailyTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('時刻を選択してください')));
+        return;
+      }
+      endDate = DateTime(now.year, now.month, now.day, _dailyTime!.hour, _dailyTime!.minute);
+      if (endDate.isBefore(now)) {
+        endDate = endDate.add(const Duration(days: 1));
+      }
+      cycleSettings = {'hour': _dailyTime!.hour, 'minute': _dailyTime!.minute};
+      tasks = _dailyTaskControllers.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      tag = 'デイリー';
+    } else if (cycleType == 'weekly') {
+      if (_weeklyDayOfWeek == null || _weeklyTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('曜日と時刻を選択してください')));
+        return;
+      }
+      final targetWeekday = _daysOfWeek.indexOf(_weeklyDayOfWeek!) + 1; // 1:Mon, ..., 7:Sun
+      endDate = DateTime(now.year, now.month, now.day, _weeklyTime!.hour, _weeklyTime!.minute);
+      while (endDate.weekday != targetWeekday || endDate.isBefore(now)) {
+        endDate = endDate.add(const Duration(days: 1));
+      }
+      cycleSettings = {'dayOfWeek': targetWeekday, 'hour': _weeklyTime!.hour, 'minute': _weeklyTime!.minute};
+      tasks = _weeklyTaskControllers.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      tag = 'ウィークリー';
+    } else if (cycleType == 'biweekly') {
+      if (_biweeklyStartDate == null || _biweeklyTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
+        return;
+      }
+      endDate = DateTime(_biweeklyStartDate!.year, _biweeklyStartDate!.month, _biweeklyStartDate!.day, _biweeklyTime!.hour, _biweeklyTime!.minute);
+      while (endDate.isBefore(now)) {
+        endDate = endDate.add(const Duration(days: 14));
+      }
+      cycleSettings = {'startDate': _biweeklyStartDate!.toIso8601String(), 'hour': _biweeklyTime!.hour, 'minute': _biweeklyTime!.minute};
+      tasks = _biweeklyTaskControllers.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      tag = '隔週';
+    } else if (cycleType == 'monthly') {
+      if (_monthlyStartDate == null || _monthlyTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
+        return;
+      }
+      endDate = DateTime(now.year, now.month, _monthlyStartDate!.day, _monthlyTime!.hour, _monthlyTime!.minute);
+      if (endDate.isBefore(now)) {
+        endDate = DateTime(now.year, now.month + 1, _monthlyStartDate!.day, _monthlyTime!.hour, _monthlyTime!.minute);
+      }
+      cycleSettings = {'dayOfMonth': _monthlyStartDate!.day, 'hour': _monthlyTime!.hour, 'minute': _monthlyTime!.minute};
+      tasks = _monthlyTaskControllers.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      tag = 'マンスリー';
     }
 
-    debugPrint('--- Biweekly Schedule ---');
-    debugPrint('StartDate: ${_biweeklyStartDate?.toIso8601String().split('T')[0]}, Time: ${_biweeklyTime?.format(context)}');
-    debugPrint('Tasks:');
-    for (var controller in _biweeklyTaskControllers) {
-      debugPrint('  - ${controller.text}');
-    }
+    final endDateStr = "${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')} ${endDate.hour.toString().padLeft(2, '0')}:${endDate.minute.toString().padLeft(2, '0')}:00";
 
-    debugPrint('--- Monthly Schedule ---');
-    debugPrint('StartDate: ${_monthlyStartDate?.toIso8601String().split('T')[0]}, Time: ${_monthlyTime?.format(context)}');
-    debugPrint('Tasks:');
-    for (var controller in _monthlyTaskControllers) {
-      debugPrint('  - ${controller.text}');
-    }
-    debugPrint('======================');
+    final data = {
+      'gameName': gameName,
+      'title': title,
+      'tag': tag,
+      'subTag': _subTag,
+      'redeemCode': _codeController.text,
+      'startDate': now.toIso8601String(),
+      'endDate': endDateStr,
+      'isCycleEvent': true,
+      'cycleType': cycleType,
+      'cycleSettings': cycleSettings,
+      'tasks': tasks,
+      'isCompleted': false,
+      'isLocked': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('登録内容をコンソールに出力しました')),
-    );
+    try {
+      await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('games').doc(gameName).collection('events').add(data);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$tag イベントを追加しました')),
+      );
+      _titleController.clear();
+      _codeController.clear();
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('追加に失敗しました: $e')),
+      );
+    }
   }
 
   Future<void> _selectTime(BuildContext context, Function(TimeOfDay?) onSelected, TimeOfDay? initialTime) async {
@@ -293,7 +362,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
               ElevatedButton(
                 onPressed: () async {
                   await _selectDate(context, (date) => setState(() => _biweeklyStartDate = date), _biweeklyStartDate);
-                  if (!context.mounted) return;
+                  if (!mounted) return;
                   await _selectTime(context, (time) => setState(() => _biweeklyTime = time), _biweeklyTime);
                 },
                 child: Text(
@@ -352,7 +421,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
               ElevatedButton(
                 onPressed: () async {
                   await _selectDate(context, (date) => setState(() => _monthlyStartDate = date), _monthlyStartDate);
-                  if (!context.mounted) return;
+                  if (!mounted) return;
                   await _selectTime(context, (time) => setState(() => _monthlyTime = time), _monthlyTime);
                 },
                 child: Text(
@@ -399,46 +468,243 @@ class _AddEventScreenState extends State<AddEventScreen> {
     );
   }
 
+  Widget _buildAddTab() {
+    return DefaultTabController(
+      length: 4,
+      child: Column(
+        children: [
+          _buildTopSection(),
+          const TabBar(
+            tabs: [
+              Tab(text: 'デイリー'),
+              Tab(text: 'ウィークリー'),
+              Tab(text: '隔週'),
+              Tab(text: 'マンスリー'),
+            ],
+          ),
+          Expanded(
+            child: Builder(
+              builder: (context) {
+                return Column(
+                  children: [
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _buildDailyList(),
+                          _buildWeeklyList(),
+                          _buildBiweeklyList(),
+                          _buildMonthlyList(),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16.0),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        ),
+                        onPressed: () {
+                          final index = DefaultTabController.of(context).index;
+                          String cycleType = 'daily';
+                          if (index == 1) cycleType = 'weekly';
+                          if (index == 2) cycleType = 'biweekly';
+                          if (index == 3) cycleType = 'monthly';
+                          _submitData(cycleType);
+                        },
+                        child: const Text('登録', style: TextStyle(fontSize: 18)),
+                      ),
+                    ),
+                  ],
+                );
+              }
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collectionGroup('events').where('isCycleEvent', isEqualTo: true).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) return const Center(child: Text('登録されたサイクルイベントがありません'));
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final doc = docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final title = data['title'] ?? '';
+            final gameName = data['gameName'] ?? '';
+            final tag = data['tag'] ?? '';
+
+            return ListTile(
+              title: Text(title),
+              subtitle: Text('$gameName - $tag'),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('削除確認'),
+                      content: const Text('このサイクルイベントを削除しますか？'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('キャンセル')),
+                        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('削除')),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await doc.reference.delete();
+                  }
+                },
+              ),
+              onTap: () => _showEditDialog(doc, data),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditDialog(DocumentSnapshot doc, Map<String, dynamic> data) async {
+    final titleCtrl = TextEditingController(text: data['title'] ?? '');
+    final codeCtrl = TextEditingController(text: data['redeemCode'] ?? '');
+    final summaryCtrl = TextEditingController(text: data['summary'] ?? '');
+
+    // We clone tasks so we can modify them locally before saving
+    final List<Map<String, dynamic>> tasks = [];
+    if (data['tasks'] != null) {
+      for (var t in data['tasks']) {
+        tasks.add(Map<String, dynamic>.from(t));
+      }
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('サイクルイベントを編集'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: const InputDecoration(labelText: 'タイトル'),
+                    ),
+                    TextField(
+                      controller: codeCtrl,
+                      decoration: const InputDecoration(labelText: 'コード (任意)'),
+                    ),
+                    TextField(
+                      controller: summaryCtrl,
+                      decoration: const InputDecoration(labelText: 'サマリー (任意)'),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('スケジュールの編集は現在のところサポートされていません。必要に応じて削除し、再作成してください。', style: TextStyle(color: Colors.red, fontSize: 12)),
+                    const Divider(),
+                    const Text('タスク', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...tasks.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final task = entry.value;
+                      return Row(
+                        key: ObjectKey(task),
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: task['name'],
+                              decoration: const InputDecoration(hintText: 'タスク名'),
+                              onChanged: (val) {
+                                task['name'] = val;
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () {
+                              setDialogState(() {
+                                tasks.removeAt(index);
+                              });
+                            },
+                          )
+                        ],
+                      );
+                    }),
+                    TextButton.icon(
+                      onPressed: () {
+                        setDialogState(() {
+                          tasks.add({'name': '', 'isCompleted': false});
+                        });
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('タスクを追加'),
+                    )
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('キャンセル'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await doc.reference.update({
+                      'title': titleCtrl.text.trim(),
+                      'redeemCode': codeCtrl.text.trim(),
+                      'summary': summaryCtrl.text.trim(),
+                      'tasks': tasks,
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    });
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('イベントとタスクを更新しました')),
+                      );
+                    }
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('イベント追加'),
+          title: const Text('サイクルイベント管理'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '追加'),
+              Tab(text: '編集・削除'),
+            ],
+          ),
         ),
-        body: Column(
+        body: TabBarView(
           children: [
-            _buildTopSection(),
-            const TabBar(
-              tabs: [
-                Tab(text: 'デイリー'),
-                Tab(text: 'ウィークリー'),
-                Tab(text: '隔週'),
-                Tab(text: 'マンスリー'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _buildDailyList(),
-                  _buildWeeklyList(),
-                  _buildBiweeklyList(),
-                  _buildMonthlyList(),
-                ],
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                ),
-                onPressed: _submitData,
-                child: const Text('登録', style: TextStyle(fontSize: 18)),
-              ),
-            ),
+            _buildAddTab(),
+            _buildEditTab(),
           ],
         ),
       ),

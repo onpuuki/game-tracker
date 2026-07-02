@@ -11,6 +11,7 @@ import 'sync_status_screen.dart';
 import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
 import 'event_edit_screen.dart';
+import 'add_event_screen.dart';
 import 'game_selection_screen.dart';
 import 'export_settings_screen.dart';
 
@@ -788,6 +789,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SyncStatusScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('イベント追加'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddEventScreen(),
                   ),
                 );
               },

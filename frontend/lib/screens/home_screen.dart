@@ -1233,7 +1233,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   final eventId = parsedEvent.doc.id;
-                  final isChecked = _checkedEventIds.contains(eventId);
+                  final isCycleEvent = eventData['isCycleEvent'] == true;
+                  final eventIsCompletedDoc = eventData['isCompleted'] == true;
+                  final isChecked = _checkedEventIds.contains(eventId) || eventIsCompletedDoc;
+
                   Color tagColor = Colors.orange;
                   if (tag == 'ゲーム内') {
                     tagColor = Colors.blue;
@@ -1492,6 +1495,51 @@ class _HomeScreenState extends State<HomeScreen> {
                                                       ? Colors.grey
                                                       : null,
                                                 ),
+                                              ),
+                                            ],
+                                            if (isCycleEvent && eventData['tasks'] != null && (eventData['tasks'] as List).isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8.0,
+                                                runSpacing: -8.0,
+                                                children: (eventData['tasks'] as List).asMap().entries.map((entry) {
+                                                  final taskIndex = entry.key;
+                                                  final task = entry.value as Map<String, dynamic>;
+                                                  final taskName = task['name'] ?? '';
+                                                  final isTaskCompleted = task['isCompleted'] == true;
+
+                                                  return IntrinsicWidth(
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Checkbox(
+                                                          value: isTaskCompleted,
+                                                          onChanged: (bool? value) async {
+                                                            if (value == null) return;
+
+                                                            final updatedTasks = List<Map<String, dynamic>>.from(eventData['tasks']);
+                                                            updatedTasks[taskIndex]['isCompleted'] = value;
+
+                                                            final allCompleted = updatedTasks.every((t) => t['isCompleted'] == true);
+
+                                                            await parsedEvent.doc.reference.update({
+                                                              'tasks': updatedTasks,
+                                                              'isCompleted': allCompleted,
+                                                            });
+                                                          },
+                                                        ),
+                                                        Text(
+                                                          taskName,
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            decoration: isTaskCompleted ? TextDecoration.lineThrough : null,
+                                                            color: isTaskCompleted ? Colors.grey : null,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
                                               ),
                                             ],
                                           ],

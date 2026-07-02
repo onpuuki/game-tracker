@@ -140,20 +140,33 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
             // Fetch existing events from Firestore
             const eventsCollection = db.collection(`games/${game.gameName}/events`);
             const currentEventsSnapshot = await eventsCollection.get();
-            const existingEventsForPrompt = currentEventsSnapshot.docs.map(doc => {
+
+            const existingEventsForPrompt: any[] = [];
+            const cycleEventTitles: string[] = [];
+
+            currentEventsSnapshot.docs.forEach(doc => {
                 const data = doc.data();
-                return {
-                    id: doc.id,
-                    title: data.title,
-                    endDate: data.endDate
-                };
+                if (data.isCycleEvent === true) {
+                    cycleEventTitles.push(data.title);
+                } else {
+                    existingEventsForPrompt.push({
+                        id: doc.id,
+                        title: data.title,
+                        endDate: data.endDate
+                    });
+                }
             });
+
             const existingEventsJsonStr = JSON.stringify(existingEventsForPrompt, null, 2);
 
             // テンプレートのプレースホルダーを実際のゲーム名に置換
             const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
             let prompt = `【現在日時】 ${currentDate}\n\n` + promptTemplate.replace(/{{gameName}}/g, game.gameName);
             prompt += `\n\n【現在のデータベース状況（既存イベント）】\n${existingEventsJsonStr}\n`;
+
+            if (cycleEventTitles.length > 0) {
+                prompt += `\n\n【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：[ ${cycleEventTitles.join(', ')} ]\n`;
+            }
 
             if (game.keywords && game.keywords.trim() !== '') {
                 prompt += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
@@ -616,4 +629,130 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
          await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));
          throw new functions.https.HttpsError('internal', 'Failed to export to Google Drive', error.message);
     }
+});
+
+export const resetCycleEvents = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
+    const traceId = 'cycle-reset-' + Date.now();
+    functions.logger.info(`[${traceId}] Starting resetCycleEvents job`);
+
+    try {
+        const eventsSnapshot = await db.collectionGroup('events').where('isCycleEvent', '==', true).get();
+        if (eventsSnapshot.empty) {
+            functions.logger.info(`[${traceId}] No cycle events found`);
+            return null;
+        }
+
+        const now = new Date(); // Native UTC date
+
+        const batches: Promise<any>[] = [];
+        let currentBatch = db.batch();
+        let updateCount = 0;
+        let totalUpdated = 0;
+
+        for (const doc of eventsSnapshot.docs) {
+            const data = doc.data();
+            const endDateStr = data.endDate;
+            if (!endDateStr) continue;
+
+            // e.g. '2024-07-08 23:59:00' -> '2024-07-08T23:59:00+09:00'
+            const endDateUTC = new Date(endDateStr.replace(' ', 'T') + '+09:00');
+            if (isNaN(endDateUTC.getTime())) continue;
+
+            if (endDateUTC <= now) {
+                // The cycle event has expired, recalculate next deadline based on Tokyo time.
+                const cycleType = data.cycleType;
+                const cycleSettings = data.cycleSettings || {};
+
+                // Get current Tokyo time components directly from 'now'
+                const tokyoFormatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Asia/Tokyo',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                });
+
+                const tokyoParts = tokyoFormatter.formatToParts(now);
+                const getPart = (type: string) => parseInt(tokyoParts.find(p => p.type === type)?.value || '0', 10);
+
+                const tYear = getPart('year');
+                const tMonth = getPart('month') - 1; // 0-indexed
+                const tDay = getPart('day');
+
+                // We construct a mock Date object to easily manipulate days/months in Tokyo context,
+                // but note that new Date(year, month, day) in Cloud Functions creates a UTC/local date.
+                // However, since we just need the string logic, we'll format it back properly.
+                let nextEndDateTokyoObj = new Date(tYear, tMonth, tDay, cycleSettings.hour || 0, cycleSettings.minute || 0);
+                const mockNowTokyoObj = new Date(tYear, tMonth, tDay, getPart('hour'), getPart('minute'), getPart('second'));
+
+                if (cycleType === 'daily') {
+                    if (nextEndDateTokyoObj <= mockNowTokyoObj) {
+                        nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 1);
+                    }
+                } else if (cycleType === 'weekly') {
+                    const targetDay = cycleSettings.dayOfWeek || 1; // 1: Mon .. 7: Sun
+                    while (nextEndDateTokyoObj.getDay() !== (targetDay === 7 ? 0 : targetDay) || nextEndDateTokyoObj <= mockNowTokyoObj) {
+                        nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 1);
+                    }
+                } else if (cycleType === 'biweekly') {
+                    // Biweekly is relative to its original start date.
+                    // Instead of starting from today, jump 14 days from its previous end date until it's > now
+
+                    // Reconstruct the original Tokyo date exactly
+                    const originalTYear = parseInt(endDateStr.substring(0, 4), 10);
+                    const originalTMonth = parseInt(endDateStr.substring(5, 7), 10) - 1;
+                    const originalTDay = parseInt(endDateStr.substring(8, 10), 10);
+                    const originalTHour = parseInt(endDateStr.substring(11, 13), 10);
+                    const originalTMinute = parseInt(endDateStr.substring(14, 16), 10);
+
+                    nextEndDateTokyoObj = new Date(originalTYear, originalTMonth, originalTDay, originalTHour, originalTMinute);
+
+                    while (nextEndDateTokyoObj <= mockNowTokyoObj) {
+                        nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 14);
+                    }
+                } else if (cycleType === 'monthly') {
+                    const dayOfMonth = cycleSettings.dayOfMonth || 1;
+                    nextEndDateTokyoObj = new Date(tYear, tMonth, dayOfMonth, cycleSettings.hour || 0, cycleSettings.minute || 0);
+                    if (nextEndDateTokyoObj <= mockNowTokyoObj) {
+                        nextEndDateTokyoObj = new Date(tYear, tMonth + 1, dayOfMonth, cycleSettings.hour || 0, cycleSettings.minute || 0);
+                    }
+                }
+
+                const nextEndDateStr = `${nextEndDateTokyoObj.getFullYear()}-${(nextEndDateTokyoObj.getMonth() + 1).toString().padStart(2, '0')}-${nextEndDateTokyoObj.getDate().toString().padStart(2, '0')} ${nextEndDateTokyoObj.getHours().toString().padStart(2, '0')}:${nextEndDateTokyoObj.getMinutes().toString().padStart(2, '0')}:00`;
+
+                // Reset tasks
+                const tasks = data.tasks || [];
+                const updatedTasks = tasks.map((task: any) => ({ ...task, isCompleted: false }));
+
+                currentBatch.update(doc.ref, {
+                    endDate: nextEndDateStr,
+                    tasks: updatedTasks,
+                    isCompleted: false,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                updateCount++;
+                totalUpdated++;
+
+                if (updateCount === 450) {
+                    batches.push(currentBatch.commit());
+                    currentBatch = db.batch();
+                    updateCount = 0;
+                }
+            }
+        }
+
+        if (updateCount > 0) {
+            batches.push(currentBatch.commit());
+        }
+
+        await Promise.all(batches);
+        functions.logger.info(`[${traceId}] Successfully reset ${totalUpdated} cycle events.`);
+        if (totalUpdated > 0) {
+            await writeDebugLog(traceId, `Successfully reset ${totalUpdated} cycle events.`);
+        }
+
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Error in resetCycleEvents: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Error in resetCycleEvents', error instanceof Error ? error.stack : String(error));
+    }
+    return null;
 });

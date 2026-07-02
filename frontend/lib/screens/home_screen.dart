@@ -1229,6 +1229,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // isDarkMode is now declared at the top of the build method
 
+                  final timestamp = (eventData['updatedAt'] ??
+                      eventData['createdAt']) as Timestamp?;
+                  String dateStr = '';
+                  if (timestamp != null) {
+                    final d = timestamp.toDate();
+                    dateStr =
+                        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                  }
+
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 16.0,
@@ -1355,6 +1364,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                                           FontWeight.bold,
                                                     ),
                                                   ),
+                                                  if (dateStr.isNotEmpty)
+                                                    Padding(
+                                                      padding: const EdgeInsets.only(
+                                                        top: 2.0,
+                                                        bottom: 4.0,
+                                                      ),
+                                                      child: Text(
+                                                        '更新日:$dateStr',
+                                                        style: const TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                    ),
                                                 ],
                                               ),
                                             ),

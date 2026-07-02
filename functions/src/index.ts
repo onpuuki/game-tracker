@@ -36,7 +36,6 @@ interface ConfigItem {
 
 async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
     let attempt = 0;
-    const baseDelay = 30000; // APIの長いRetryInfo（約40秒）をカバーするため
 
     while (attempt < maxRetries) {
         try {
@@ -49,16 +48,18 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
             attempt++;
             const isLastAttempt = attempt >= maxRetries;
 
-            functions.logger.warn(`[${traceId}] Gemini API failed (Attempt ${attempt}/${maxRetries}). Error: ${err.message}`);
+            // エラーオブジェクト内のどこに429/503が含まれていても検知できるように文字列化して判定
+            const errStr = String(err?.message || '') + JSON.stringify(err);
+            const isRetryable = errStr.includes('429') || errStr.includes('503') || errStr.includes('RESOURCE_EXHAUSTED');
 
-            if (isLastAttempt || (err.status && err.status !== 503 && err.status !== 429)) {
-                // 最終試行、または 503/429 以外（再試行しても無駄なエラー）の場合は諦める
-                throw err;
+            functions.logger.warn(`[${traceId}] Gemini API failed (Attempt ${attempt}/${maxRetries}). isRetryable: ${isRetryable}, Error: ${err.message}`);
+
+            if (isLastAttempt || !isRetryable) {
+                throw err; // 再試行不可、または最終試行の場合はスロー
             }
 
-            // 503 または 429 の場合はバックオフで待機
-            const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
-            await sleep(exponentialDelay);
+            // 429エラー時はAPIから40秒以上の待機を要求されるため、確実に60秒待機する
+            await sleep(60000);
         }
     }
 }
@@ -328,8 +329,8 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
 
-            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に20秒待機する
-            await sleep(20000);
+            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に30秒待機する
+            await sleep(30000);
         }
         await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
         await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');

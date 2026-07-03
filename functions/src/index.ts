@@ -25,6 +25,17 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
     }
 }
 
+function getSafeDateObj(val: any): Date | null {
+    if (!val) return null;
+    if (val.toDate && typeof val.toDate === 'function') return val.toDate();
+    if (typeof val === 'string') {
+        const str = val.includes(' ') ? val.replace(' ', 'T') + '+09:00' : val + 'T23:59:59+09:00';
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+}
+
 // ユーティリティ: 待機処理（バックオフ用）
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -321,7 +332,7 @@ Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開�
                                     docId = `code_${normalizedCode}`;
                                 } else if (event.eventUrl) {
                                     // URLをハッシュ化してIDを固定
-                                    docId = crypto.createHash('md5').update(event.eventUrl).digest('hex');
+                                    docId = crypto.createHash('md5').update(game.gameName + '_' + event.eventUrl).digest('hex');
                                 }
 
                                 if (docId) {
@@ -343,11 +354,8 @@ Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開�
                         for (const existing of currentEventsList) {
                             let isExpired = false;
                             if (existing.data.endDate && existing.data.endDate !== 'TBD') {
-                                const endDateStr = existing.data.endDate.includes(' ')
-                                    ? existing.data.endDate.replace(' ', 'T') + '+09:00'
-                                    : existing.data.endDate + 'T23:59:59+09:00';
-                                const endDate = new Date(endDateStr);
-                                if (!isNaN(endDate.getTime()) && endDate < now) {
+                                const endDate = getSafeDateObj(existing.data.endDate);
+                                if (endDate && endDate < now) {
                                     isExpired = true;
                                 }
                             }
@@ -697,12 +705,8 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
 
         for (const doc of eventsSnapshot.docs) {
             const data = doc.data();
-            const endDateStr = data.endDate;
-            if (!endDateStr) continue;
-
-            // e.g. '2024-07-08 23:59:00' -> '2024-07-08T23:59:00+09:00'
-            const endDateUTC = new Date(endDateStr.replace(' ', 'T') + '+09:00');
-            if (isNaN(endDateUTC.getTime())) continue;
+            const endDateUTC = getSafeDateObj(data.endDate);
+            if (!endDateUTC) continue;
 
             if (endDateUTC <= now) {
                 // The cycle event has expired, recalculate next deadline based on Tokyo time.
@@ -743,11 +747,13 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
                     // Instead of starting from today, jump 14 days from its previous end date until it's > now
 
                     // Reconstruct the original Tokyo date exactly
-                    const originalTYear = parseInt(endDateStr.substring(0, 4), 10);
-                    const originalTMonth = parseInt(endDateStr.substring(5, 7), 10) - 1;
-                    const originalTDay = parseInt(endDateStr.substring(8, 10), 10);
-                    const originalTHour = parseInt(endDateStr.substring(11, 13), 10);
-                    const originalTMinute = parseInt(endDateStr.substring(14, 16), 10);
+                    const originalParts = tokyoFormatter.formatToParts(endDateUTC);
+                    const getOrigPart = (type: string) => parseInt(originalParts.find(p => p.type === type)?.value || '0', 10);
+                    const originalTYear = getOrigPart('year');
+                    const originalTMonth = getOrigPart('month') - 1;
+                    const originalTDay = getOrigPart('day');
+                    const originalTHour = getOrigPart('hour');
+                    const originalTMinute = getOrigPart('minute');
 
                     nextEndDateTokyoObj = new Date(originalTYear, originalTMonth, originalTDay, originalTHour, originalTMinute);
 

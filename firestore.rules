@@ -1,8 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /games/{gameId}/events/{eventId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /settings/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /debug_logs/{logId} {
+      allow create, read: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /sync_requests/{reqId} {
+      allow create, read: if isAuthenticated();
+      allow update, delete: if false;
     }
   }
 }

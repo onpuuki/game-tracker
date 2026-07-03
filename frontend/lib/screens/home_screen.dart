@@ -1422,6 +1422,7 @@ class _EventCardItemState extends State<_EventCardItem> {
   String? _selectedTag;
   String? _selectedSubTag;
   bool _isUpdateLocked = false;
+  bool _isHistoryExpanded = false;
 
   @override
   void initState() {
@@ -1898,6 +1899,91 @@ class _EventCardItemState extends State<_EventCardItem> {
                                   }).toList(),
                                 ),
                               ],
+                              if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false) && !widget.isChecked && !_isEditing)
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _isHistoryExpanded = !_isHistoryExpanded;
+                                            });
+                                          },
+                                          style: TextButton.styleFrom(
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(0, 0),
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                          child: Text(
+                                            _isHistoryExpanded ? '▲ 更新履歴を閉じる' : '▼ 更新履歴',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blueGrey,
+                                            ),
+                                          ),
+                                        ),
+                                        PopupMenuButton<String>(
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                                          onSelected: (String result) {
+                                            if (result == 'edit') {
+                                              setState(() {
+                                                _isEditing = true;
+                                              });
+                                            } else if (result == 'delete') {
+                                              _deleteEvent();
+                                            }
+                                          },
+                                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                            const PopupMenuItem<String>(
+                                              value: 'edit',
+                                              child: Text('イベント編集'),
+                                            ),
+                                            const PopupMenuItem<String>(
+                                              value: 'delete',
+                                              child: Text('イベント削除', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    if (_isHistoryExpanded)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8.0),
+                                        child: Builder(
+                                          builder: (context) {
+                                            final dynamic historyData = widget.eventData['updateHistory']; // User asked for widget.event.originalData but it doesn't exist on widget.
+                                            List<String> historyList = [];
+                                            if (historyData is List) {
+                                              historyList = historyData.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
+                                            }
+
+                                            if (historyList.isEmpty) {
+                                              return const Text(
+                                                '更新履歴はありません',
+                                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                                              );
+                                            }
+
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: historyList.reversed.map((history) => Padding(
+                                                padding: const EdgeInsets.only(bottom: 4.0),
+                                                child: Text(
+                                                  history,
+                                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                ),
+                                              )).toList(),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                  ],
+                                ),
                             ],
                           ),
                         ],
@@ -1917,33 +2003,6 @@ class _EventCardItemState extends State<_EventCardItem> {
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false) && !widget.isChecked && !_isEditing)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                          onSelected: (String result) {
-                            if (result == 'edit') {
-                              setState(() {
-                                _isEditing = true;
-                              });
-                            } else if (result == 'delete') {
-                              _deleteEvent();
-                            }
-                          },
-                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                            const PopupMenuItem<String>(
-                              value: 'edit',
-                              child: Text('イベント編集'),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'delete',
-                              child: Text('イベント削除', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
                         ),
                       ),
                   ],

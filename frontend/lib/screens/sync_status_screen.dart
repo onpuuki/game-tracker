@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import '../utils/debug_log_manager.dart';
@@ -177,6 +179,46 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                     fontSize: 12,
                                     color: Colors.grey,
                                   ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy, size: 16),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () async {
+                                    final buffer = StringBuffer();
+                                    buffer.writeln('Status: $status');
+                                    buffer.writeln(
+                                      'Start: ${_formatTimestamp(createdAt)}',
+                                    );
+                                    buffer.writeln(
+                                      'End: ${_formatTimestamp(updatedAt)}',
+                                    );
+                                    buffer.writeln('Token: $totalTokens');
+                                    if (data['error'] != null) {
+                                      buffer.writeln('Error: ${data['error']}');
+                                    }
+                                    buffer.writeln('Details:');
+                                    if (debugInfo != null) {
+                                      buffer.writeln(
+                                        const JsonEncoder.withIndent(
+                                          '  ',
+                                        ).convert(debugInfo),
+                                      );
+                                    }
+
+                                    await Clipboard.setData(
+                                      ClipboardData(text: buffer.toString()),
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Copied to clipboard'),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
                               ],
                             ),

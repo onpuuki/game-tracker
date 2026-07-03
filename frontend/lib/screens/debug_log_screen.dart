@@ -136,12 +136,43 @@ class DebugLogScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '[$timeStr] $traceStr',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '[$timeStr] $traceStr',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 16),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () async {
+                              final buffer = StringBuffer();
+                              buffer.writeln('Time: $timeStr$traceStr');
+                              buffer.writeln('Message: $message');
+                              buffer.writeln('Detail:');
+                              if (detail != null && detail.isNotEmpty) {
+                                buffer.writeln(detail);
+                              }
+
+                              await Clipboard.setData(
+                                ClipboardData(text: buffer.toString()),
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Copied to clipboard'),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(

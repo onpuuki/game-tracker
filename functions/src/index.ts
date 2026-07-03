@@ -1,10 +1,12 @@
 import * as functions from 'firebase-functions';
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import { getFunctions } from "firebase-admin/functions";
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
 import * as crypto from 'crypto';
 import { google } from 'googleapis';
 
@@ -89,326 +91,474 @@ export const processSyncRequest = onDocumentCreated({
     document: 'sync_requests/{requestId}',
     database: 'default',
     region: 'asia-northeast1',
-    memory: '512MiB',
-    timeoutSeconds: 540
+    memory: '256MiB',
+    timeoutSeconds: 60
 }, async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
     const data = snapshot.data();
-    // V2では event.params からIDを取得します
     const traceId = data.traceId || `trace-${event.params.requestId}`;
+    const requestId = event.params.requestId;
 
-    functions.logger.info(`[${traceId}] Starting processSyncRequest with Grounded Gemini via background trigger`, { traceId });
+    functions.logger.info(`[${traceId}] Starting processSyncRequest dispatcher`, { traceId });
 
     try {
         await snapshot.ref.update({ status: 'processing', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
+
+        if (targetGames.length === 0) {
+            await writeDebugLog(traceId, 'Sync failed: Invalid config or no target games');
+            await snapshot.ref.update({ status: 'error', error: 'No target games', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            return;
+        }
+
+        const queue = getFunctions().taskQueue('syncSingleGameTask');
+
+        const debugInfo: any[] = [];
+
+        for (const game of targetGames) {
+            await queue.enqueue({
+                gameName: game.gameName,
+                keywords: game.keywords,
+                requestId,
+                traceId
+            });
+            debugInfo.push({ stage: 'Dispatch', game: game.gameName, message: 'Task enqueued' });
+            functions.logger.info(`[${traceId}] Enqueued task for ${game.gameName}`);
+        }
+
+        await writeDebugLog(traceId, 'All tasks dispatched successfully.');
+        await snapshot.ref.update({
+            status: 'dispatched',
+            debugInfo,
+            totalTasks: targetGames.length,
+            completedTasks: 0,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { success: true, message: 'Tasks dispatched' };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await snapshot.ref.update({ status: 'error', error: errorMessage, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        functions.logger.error(`[${traceId}] Unhandled dispatcher error: ${error instanceof Error ? error.stack : String(error)}`);
+        throw error;
+    }
+});
+
+
+export const syncSingleGameTask = onTaskDispatched({
+    retryConfig: { maxAttempts: 3, minBackoffSeconds: 60 },
+    rateLimits: { maxConcurrentDispatches: 1, maxDispatchesPerSecond: 0.1 },
+    timeoutSeconds: 300,
+    region: 'asia-northeast1',
+    memory: '512MiB'
+}, async (request) => {
+    const { gameName, keywords, requestId, traceId } = request.data;
+
+    functions.logger.info(`[${traceId}] Starting worker for ${gameName}`, { traceId, gameName });
+
+    try {
+        const configDoc = await db.collection('settings').doc('config').get();
+        const configData = configDoc?.data();
         const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];
         const geminiApiKey = configData?.geminiApiKey;
 
-        // Firestoreからプロンプトテンプレートを取得（なければデフォルトを使用）
-        const defaultScraperPrompt = `あなたはゲームの公式最新情報を正確に調査する専門のスクレイパーAIです。非公式リークや架空のデータは絶対に除外してください。
-Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開催中】および【近日開催予定】の期間限定イベントやガチャ、コラボ情報を最新のウェブ検索結果から広く調査してください。
-既存のイベントタイトル（{{existingEventTitles}}）も参考にし、新しい情報や既存情報の更新がないか確認してください。
-結果は、調査したイベント名、概要、開始・終了日時（わかる範囲で正確に）、関連URL、ギフトコード等をテキストで詳細に箇条書きで出力してください。`;
-
-        const defaultAuditorPrompt = `あなたは提供された調査結果と既存のデータベースを比較・精査し、最終的なJSONデータを構築する厳格なオーディターAIです。
-対象ゲーム: 『{{gameName}}』
-スクレイパーの調査結果:
-{{scraperResult}}
-
-現在のデータベース状況（既存イベント）:
-{{existingEventsDb}}
-
-【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
-[ {{forbiddenEvents}} ]
-
-【出力要件】
-調査結果と既存DBを比較し、最終的に維持・更新・追加すべきイベント情報を以下のJSON配列形式のみで出力してください。Markdown装飾(\`\`\`json等)は不要です。
-[
-  {
-    "existingId": "既存イベントと一致する場合はそのidを文字列で入力。完全に新規の場合はnull",
-    "title": "イベントの正式名称（既存イベントと一致する場合は一言一句同じタイトルを使用）",
-    "summary": "イベントの概要や報酬内容",
-    "tag": "\"ゲーム内\", \"ゲーム外\", または \"コード\"",
-    "redeemCode": "シリアルコードのアルファベット/数字（ない場合はnull）",
-    "startDate": "YYYY-MM-DD (時間がわかる場合は YYYY-MM-DD HH:mm:00。不明な場合はnull)",
-    "endDate": "YYYY-MM-DD (時間がわかる場合は YYYY-MM-DD HH:mm:00。不明な場合はnull)",
-    "eventUrl": "公式ページや大手メディアの詳細URL（完全に新規の場合は必須。不明またはexistingIdがある場合はnull可。内部リダイレクトURLは禁止）",
-    "imageUrl": null
-  }
-]
-
-【重要ルール】
-・期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付（YYYY/MM/DD）に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
-・常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
-・既存DBの内容と比較し、実質的に同じイベントは必ず既存の \`id\` を \`existingId\` に指定して名寄せしてください。
-・ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。`;
-
-        const scraperPromptTemplate = configData?.scraperPrompt || defaultScraperPrompt;
-        const auditorPromptTemplate = configData?.auditorPrompt || defaultAuditorPrompt;
-
-        if (!geminiApiKey || targetGames.length === 0) {
-            await writeDebugLog(traceId, 'Sync failed: Invalid config');
-            return { success: false, message: 'Invalid config' };
+        if (!geminiApiKey) {
+            throw new Error('Gemini API key is missing');
         }
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
-        const debugInfo: any[] = [];
-        let totalTokens = 0;
 
-        for (const game of targetGames) {
-            functions.logger.info(`[${traceId}] Requesting Gemini with Search for: ${game.gameName}`);
-            await writeDebugLog(traceId, `Requesting Gemini with Search for: ${game.gameName}`);
+        const eventsCollection = db.collection(`games/${gameName}/events`);
+        const currentEventsSnapshot = await eventsCollection.get();
 
-            // Fetch existing events from Firestore
-            const eventsCollection = db.collection(`games/${game.gameName}/events`);
-            const currentEventsSnapshot = await eventsCollection.get();
+        const activeExistingEvents: any[] = [];
+        const cycleEventTitles: string[] = [];
+        const existingEventTitles: string[] = [];
 
-            const existingEventsForPrompt: any[] = [];
-            const cycleEventTitles: string[] = [];
-            const existingEventTitles: string[] = [];
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-            currentEventsSnapshot.docs.forEach(doc => {
-                const data = doc.data();
-                if (data.isCycleEvent === true || data.isCreationLocked === true || data.isDeleted === true) {
-                    cycleEventTitles.push(data.title);
+        currentEventsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.isCycleEvent === true || data.isCreationLocked === true || data.isDeleted === true) {
+                cycleEventTitles.push(data.title);
+            }
+
+            if (data.isCycleEvent !== true) {
+                existingEventTitles.push(data.title);
+
+                // アクティブなイベントのフィルタリング（現在開催中 または 終了から30日以内）
+                let isActive = true;
+                if (data.endDate) {
+                    const endDateObj = getSafeDateObj(data.endDate);
+                    if (endDateObj && endDateObj < thirtyDaysAgo) {
+                        isActive = false;
+                    }
                 }
 
-                if (data.isCycleEvent !== true) {
-                    existingEventTitles.push(data.title);
-                    existingEventsForPrompt.push({
+                if (isActive) {
+                    activeExistingEvents.push({
                         id: doc.id,
                         title: data.title,
+                        summary: data.summary,
+                        startDate: data.startDate,
                         endDate: data.endDate
+                    });
+                }
+            }
+        });
+
+        const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+        const existingEventsJsonStr = JSON.stringify(activeExistingEvents, null, 2);
+
+        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、既存のデータベースと比較・精査して最終的なJSONデータを出力する専門AIです。
+【現在日時】 ${currentDate}
+
+【厳格な指示（Strict mandates）】
+1. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、ギフトコードを最新のウェブ検索結果から広く調査してください。
+2. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
+3. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
+4. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
+5. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
+6. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
+
+${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
+
+現在のデータベース状況（アクティブな既存イベント）:
+${existingEventsJsonStr}
+
+【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
+[ ${cycleEventTitles.join(', ')} ]
+
+【出力要件】
+調査結果と既存DBを比較し、最終的に維持・更新・追加すべきイベント情報をJSON配列形式で出力してください。既存DBの内容と比較し、実質的に同じイベントは必ず既存の \`id\` を \`existingId\` に指定して名寄せしてください。完全に新規の場合は \`existingId\` に null を指定してください。`;
+
+        const responseSchema: Schema = {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    existingId: { type: Type.STRING, nullable: true },
+                    title: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    tag: { type: Type.STRING, enum: ["ゲーム内", "ゲーム外", "コード"] },
+                    redeemCode: { type: Type.STRING, nullable: true },
+                    startDate: { type: Type.STRING, nullable: true },
+                    endDate: { type: Type.STRING, nullable: true },
+                    eventUrl: { type: Type.STRING, nullable: true }
+                },
+                required: ["title", "summary", "tag"]
+            }
+        };
+
+        const generationConfig = {
+            temperature: 0.0,
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+            tools: [{ googleSearch: {} }]
+        };
+
+        functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
+
+        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash-lite', promptText, generationConfig, traceId);
+
+        let extractedEvents: any[] = [];
+        if (response.text) {
+            extractedEvents = JSON.parse(response.text);
+            await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
+        } else {
+            throw new Error("Gemini response text was empty.");
+        }
+
+        let totalTokens = response.usageMetadata?.totalTokenCount || 0;
+
+        if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
+            const currentEventsMap = new Map();
+            currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
+            const currentEventsList = Array.from(currentEventsMap.values());
+            const matchedDocIds = new Set<string>();
+
+            let batch = db.batch();
+            let batchCount = 0;
+
+            let addedCount = 0;
+            let updatedCount = 0;
+            let deletedCount = 0;
+            let unchangedCount = 0;
+
+            const commitBatchIfNeeded = async () => {
+                if (batchCount >= 450) {
+                    await batch.commit();
+                    batch = db.batch();
+                    batchCount = 0;
+                }
+            };
+
+            for (const event of extractedEvents) {
+                if (!event.title) continue;
+
+                if (event.tag === 'コード' && event.redeemCode) {
+                    if (!/^[a-zA-Z0-9_-]+$/.test(event.redeemCode)) {
+                        functions.logger.warn(`[${traceId}] Invalid redeemCode detected and skipped: ${event.redeemCode}`);
+                        continue;
+                    }
+                    const matchingConfig = codeUrls.find(c => c.gameName === gameName);
+                    if (matchingConfig && matchingConfig.url) {
+                        event.eventUrl = matchingConfig.url.replace('（コード）', event.redeemCode);
+                    }
+                }
+
+                if (event.existingId) {
+                    const existingEvent = currentEventsList.find(e => e.docId === event.existingId);
+                    if (existingEvent) {
+                        matchedDocIds.add(existingEvent.docId);
+
+                        const eData = existingEvent.data;
+                        if (eData.isLocked === true || eData.isUpdateLocked === true) {
+                            unchangedCount++;
+                            continue;
+                        }
+
+                        let isModified = false;
+                        const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
+                        const diffLog: string[] = [];
+
+                        for (const field of fieldsToCompare) {
+                            let newVal = event[field] ?? null;
+                            let oldVal = eData[field] ?? null;
+                            if (newVal !== oldVal) {
+                                isModified = true;
+                                diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
+                            }
+                        }
+
+                        if (isModified) {
+                            batch.update(eventsCollection.doc(existingEvent.docId), {
+                                title: event.title ?? null,
+                                summary: event.summary ?? null,
+                                startDate: event.startDate ?? null,
+                                endDate: event.endDate ?? null,
+                                redeemCode: event.redeemCode ?? null,
+                                tag: event.tag ?? null,
+                                eventUrl: event.eventUrl ?? null,
+                                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                                updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
+                            });
+                            batchCount++;
+                            updatedCount++;
+                            await commitBatchIfNeeded();
+                        } else {
+                            unchangedCount++;
+                        }
+                    } else {
+                        // fallback to create
+                        const docRef = eventsCollection.doc();
+                        batch.set(docRef, {
+                            ...event,
+                            gameName: gameName,
+                            subTag: null,
+                            imageUrl: null,
+                            isLocked: false,
+                            isUpdateLocked: false,
+                            isCreationLocked: false,
+                            isDeleted: false,
+                            tasks: [],
+                            isCycleEvent: false,
+                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updateHistory: [`[${currentDate}] Created by AI Sync`]
+                        });
+                        batchCount++;
+                        addedCount++;
+                        await commitBatchIfNeeded();
+                    }
+                } else {
+                    const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
+                    const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
+
+                    const docRef = eventsCollection.doc(docId);
+
+                    const existingDoc = await docRef.get();
+                    if (existingDoc.exists) {
+                         const eData = existingDoc.data()!;
+                         matchedDocIds.add(docId);
+                         if (eData.isLocked === true || eData.isUpdateLocked === true) {
+                             unchangedCount++;
+                             continue;
+                         }
+
+                         let isModified = false;
+                         const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
+                         const diffLog: string[] = [];
+
+                         for (const field of fieldsToCompare) {
+                             let newVal = event[field] ?? null;
+                             let oldVal = eData[field] ?? null;
+                             if (newVal !== oldVal) {
+                                 isModified = true;
+                                 diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
+                             }
+                         }
+
+                         if (isModified) {
+                             batch.update(docRef, {
+                                 title: event.title ?? null,
+                                 summary: event.summary ?? null,
+                                 startDate: event.startDate ?? null,
+                                 endDate: event.endDate ?? null,
+                                 redeemCode: event.redeemCode ?? null,
+                                 tag: event.tag ?? null,
+                                 eventUrl: event.eventUrl ?? null,
+                                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                                 updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
+                             });
+                             batchCount++;
+                             updatedCount++;
+                             await commitBatchIfNeeded();
+                         } else {
+                             unchangedCount++;
+                         }
+                    } else {
+                        batch.set(docRef, {
+                            ...event,
+                            gameName: gameName,
+                            subTag: null,
+                            imageUrl: null,
+                            isLocked: false,
+                            isUpdateLocked: false,
+                            isCreationLocked: false,
+                            isDeleted: false,
+                            tasks: [],
+                            isCycleEvent: false,
+                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updateHistory: [`[${currentDate}] Created by AI Sync`]
+                        });
+                        batchCount++;
+                        addedCount++;
+                        await commitBatchIfNeeded();
+                    }
+                }
+            }
+
+            for (const existingEvent of currentEventsList) {
+                if (!matchedDocIds.has(existingEvent.docId)) {
+                    const eData = existingEvent.data;
+                    if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isDeleted === true) {
+                        continue;
+                    }
+
+                    if (eData.endDate) {
+                        const endDateObj = getSafeDateObj(eData.endDate);
+                        if (endDateObj && endDateObj < now) {
+                            batch.delete(eventsCollection.doc(existingEvent.docId));
+                            batchCount++;
+                            deletedCount++;
+                            await commitBatchIfNeeded();
+                        }
+                    }
+                }
+            }
+
+            if (batchCount > 0) {
+                await batch.commit();
+            }
+
+            const syncRequestRef = db.collection('sync_requests').doc(requestId);
+            await db.runTransaction(async (t) => {
+                const doc = await t.get(syncRequestRef);
+                if (doc.exists) {
+                    const docData = doc.data()!;
+                    const newTotalTokens = (docData.totalTokens || 0) + totalTokens;
+
+                    const newDebugInfo = {
+                        stage: 'Processed',
+                        game: gameName,
+                        added: addedCount,
+                        updated: updatedCount,
+                        deleted: deletedCount,
+                        unchanged: unchangedCount,
+                        tokens: totalTokens
+                    };
+
+                    t.update(syncRequestRef, {
+                        totalTokens: newTotalTokens,
+                        completedTasks: admin.firestore.FieldValue.increment(1),
+                        debugInfo: admin.firestore.FieldValue.arrayUnion(newDebugInfo),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
                     });
                 }
             });
 
-            const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-
-            // フェーズ1: スクレイパー
-            let scraperPromptText = `【現在日時】 ${currentDate}\n\n` + scraperPromptTemplate
-                .replace(/{{gameName}}/g, game.gameName)
-                .replace(/{{existingEventTitles}}/g, existingEventTitles.join(', '));
-
-            if (game.keywords && game.keywords.trim() !== '') {
-                scraperPromptText += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
+            // Status aggregation
+            const updatedDoc = await syncRequestRef.get();
+            const uData = updatedDoc.data();
+            if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
+                 await syncRequestRef.update({
+                     status: 'completed',
+                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                 });
+                 await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
             }
 
-            let scraperResult = '';
+        } else {
+             const syncRequestRef = db.collection('sync_requests').doc(requestId);
+             await db.runTransaction(async (t) => {
+                 const doc = await t.get(syncRequestRef);
+                 if (doc.exists) {
+                     t.update(syncRequestRef, {
+                         completedTasks: admin.firestore.FieldValue.increment(1),
+                         debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Processed', game: gameName, message: 'No events found' }),
+                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                     });
+                 }
+             });
 
-            try {
-                functions.logger.info(`[${traceId}] Running Phase 1 (Scraper) for: ${game.gameName}`);
-                const scraperResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', scraperPromptText, {
-                    tools: [{ googleSearch: {} }]
-                }, traceId);
-
-                if (scraperResponse.usageMetadata?.totalTokenCount) {
-                    totalTokens += scraperResponse.usageMetadata.totalTokenCount;
-                }
-
-                if (scraperResponse.text) {
-                    scraperResult = scraperResponse.text;
-                    debugInfo.push({ stage: 'Phase 1 (Scraper)', type: 'Response', game: game.gameName, text: scraperResult });
-                    await writeDebugLog(traceId, `Scraper Response for ${game.gameName}`, { text: scraperResult });
-                } else {
-                    throw new Error("Scraper response text was empty.");
-                }
-
-                // 制限回避のため待機
-                await sleep(15000);
-
-                // フェーズ2: オーディター (TODO in next step)
-                // For now, to keep the structure intact, we will set up the try block here but the actual
-                // phase 2 will be in the next step. Let's just do the whole thing here since they are tight together.
-
-                functions.logger.info(`[${traceId}] Running Phase 2 (Auditor) for: ${game.gameName}`);
-                const existingEventsJsonStr = JSON.stringify(existingEventsForPrompt, null, 2);
-                let auditorPromptText = auditorPromptTemplate
-                    .replace(/{{gameName}}/g, game.gameName)
-                    .replace(/{{scraperResult}}/g, scraperResult)
-                    .replace(/{{existingEventsDb}}/g, existingEventsJsonStr)
-                    .replace(/{{forbiddenEvents}}/g, cycleEventTitles.join(', '));
-
-                const auditorResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', auditorPromptText, {}, traceId);
-
-                if (auditorResponse.usageMetadata?.totalTokenCount) {
-                    totalTokens += auditorResponse.usageMetadata.totalTokenCount;
-                }
-
-                if (auditorResponse.text) {
-                    debugInfo.push({ stage: 'Phase 2 (Auditor)', type: 'Response', game: game.gameName, text: auditorResponse.text });
-                    await writeDebugLog(traceId, `Auditor Response for ${game.gameName}`, { text: auditorResponse.text });
-
-                    // パース処理（Markdownの除去およびJSON配列の抽出）
-                    let extractedEvents: any[] = [];
-                    const firstBracket = auditorResponse.text.indexOf('[');
-                    const lastBracket = auditorResponse.text.lastIndexOf(']');
-                    if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
-                        const jsonStr = auditorResponse.text.substring(firstBracket, lastBracket + 1);
-                        extractedEvents = JSON.parse(jsonStr);
-                    } else {
-                        throw new Error("JSON array not found in Auditor response.");
-                    }
-
-                    // 抽出できた場合はFirestoreへ同期
-                    if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
-                        // eventsCollection と currentEventsSnapshot は上で定義済みのため再利用
-                        const currentEventsMap = new Map();
-                        currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
-                        const currentEventsList = Array.from(currentEventsMap.values());
-                        const matchedDocIds = new Set<string>();
-
-                        let batch = db.batch();
-                        let batchCount = 0;
-
-                        let addedCount = 0;
-                        let updatedCount = 0;
-                        let deletedCount = 0;
-                        let unchangedCount = 0;
-
-                        const commitBatchIfNeeded = async () => {
-                            if (batchCount >= 450) {
-                                await batch.commit();
-                                batch = db.batch();
-                                batchCount = 0;
-                            }
-                        };
-
-                        for (const event of extractedEvents) {
-                            if (!event.title) continue;
-
-                            if (event.tag === 'コード' && event.redeemCode) {
-                                // ギフトコードのバリデーション: 英数字とハイフン、アンダースコアのみ許可
-                                if (!/^[a-zA-Z0-9_-]+$/.test(event.redeemCode)) {
-                                    functions.logger.warn(`[${traceId}] Invalid redeemCode detected and skipped: ${event.redeemCode}`);
-                                    continue;
-                                }
-
-                                const matchingConfig = codeUrls.find(c => c.gameName === game.gameName);
-                                if (matchingConfig && matchingConfig.url) {
-                                    event.eventUrl = matchingConfig.url.replace('(コード)', event.redeemCode);
-                                }
-                            }
-
-                            if (event.existingId) {
-                                // 既存イベントの場合
-                                const existingEvent = currentEventsList.find(e => e.docId === event.existingId);
-                                if (existingEvent) {
-                                    matchedDocIds.add(existingEvent.docId);
-                                    const existingData = existingEvent.data;
-
-                                    if (existingData.isLocked === true || existingData.isUpdateLocked === true) {
-                                        unchangedCount++;
-                                        continue;
-                                    }
-
-                                    const hasChanges = existingData.endDate !== event.endDate ||
-                                                       existingData.redeemCode !== event.redeemCode ||
-                                                       existingData.summary !== event.summary;
-
-                                    if (hasChanges) {
-                                        const docRef = eventsCollection.doc(existingEvent.docId);
-                                        const eventDataToSave = { ...event };
-                                        delete eventDataToSave.existingId; // Firestoreには保存しない
-                                        batch.set(docRef, { ...eventDataToSave, gameName: game.gameName, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-                                        batchCount++;
-                                        updatedCount++;
-                                        await commitBatchIfNeeded();
-                                    } else {
-                                        unchangedCount++;
-                                    }
-                                } else {
-                                    functions.logger.warn(`[${traceId}] existingId ${event.existingId} provided but not found in DB.`);
-                                }
-                            } else {
-                                // 新規イベントの場合
-                                let docId;
-                                if (event.tag === 'コード' && event.redeemCode) {
-                                    const normalizedCode = event.redeemCode.replace(/\s+/g, '').toUpperCase();
-                                    docId = `code_${normalizedCode}`;
-                                } else if (event.eventUrl) {
-                                    // URLをハッシュ化してIDを固定
-                                    docId = crypto.createHash('md5').update(game.gameName + '_' + event.eventUrl).digest('hex');
-                                }
-
-                                if (docId) {
-                                    const docRef = eventsCollection.doc(docId);
-                                    const eventDataToSave = { ...event };
-                                    delete eventDataToSave.existingId; // Firestoreには保存しない
-                                    batch.set(docRef, { ...eventDataToSave, gameName: game.gameName, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-                                    batchCount++;
-                                    addedCount++;
-                                    await commitBatchIfNeeded();
-                                } else {
-                                    functions.logger.warn(`[${traceId}] New event skipped due to missing eventUrl: ${event.title}`);
-                                }
-                            }
-                        }
-
-                        // 不要になった過去のイベントを削除（期限切れのもののみ削除）
-                        const now = new Date();
-                        for (const existing of currentEventsList) {
-                            let isExpired = false;
-                            if (existing.data.endDate && existing.data.endDate !== 'TBD') {
-                                const endDate = getSafeDateObj(existing.data.endDate);
-                                if (endDate && endDate < now) {
-                                    isExpired = true;
-                                }
-                            }
-
-                            if (isExpired) {
-                                batch.delete(eventsCollection.doc(existing.docId));
-                                batchCount++;
-                                deletedCount++;
-                                await commitBatchIfNeeded();
-                            }
-                        }
-
-                        if (batchCount > 0) {
-                             await batch.commit();
-                        }
-
-                        const debugIndex = debugInfo.findIndex(info => info.stage === 'Phase 2 (Auditor)' && info.game === game.gameName && info.type === 'Response');
-                        if (debugIndex !== -1) {
-                            debugInfo[debugIndex] = {
-                                ...debugInfo[debugIndex],
-                                added: addedCount,
-                                updated: updatedCount,
-                                deleted: deletedCount,
-                                unchanged: unchangedCount
-                            };
-                        }
-
-                        functions.logger.info(`[${traceId}] Successfully synced ${extractedEvents.length} events for ${game.gameName} (Added: ${addedCount}, Updated: ${updatedCount}, Deleted: ${deletedCount}, Unchanged: ${unchangedCount})`);
-                        await writeDebugLog(traceId, `Successfully synced ${extractedEvents.length} events for ${game.gameName} (Added: ${addedCount}, Updated: ${updatedCount}, Deleted: ${deletedCount}, Unchanged: ${unchangedCount})`);
-                    } else {
-                         functions.logger.info(`[${traceId}] No valid events extracted for ${game.gameName}`);
-                         await writeDebugLog(traceId, `No valid events extracted for ${game.gameName}`);
-                    }
-                }
-            } catch (err: any) {
-                functions.logger.error(`[${traceId}] Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
-                debugInfo.push({ stage: 'Error', game: game.gameName, error: err instanceof Error ? err.stack : String(err) });
-                await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
-            }
-
-            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に25秒待機する
-            await sleep(25000);
+             const updatedDoc = await syncRequestRef.get();
+             const uData = updatedDoc.data();
+             if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
+                  await syncRequestRef.update({
+                      status: 'completed',
+                      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                  });
+                  await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
+             }
         }
-        await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
-        await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');
-        return { success: true, message: 'Sync completed via Grounded Gemini.', debugInfo };
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        await snapshot.ref.update({ status: 'error', error: errorMessage, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-        functions.logger.error(`[${traceId}] Unhandled catastrophic error: ${error instanceof Error ? error.stack : String(error)}`);
+        functions.logger.error(`[${traceId}] Error processing ${gameName}: ${error}`);
+        const syncRequestRef = db.collection('sync_requests').doc(requestId);
+
+        await db.runTransaction(async (t) => {
+             const doc = await t.get(syncRequestRef);
+             if (doc.exists) {
+                 t.update(syncRequestRef, {
+                     completedTasks: admin.firestore.FieldValue.increment(1),
+                     debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Error', game: gameName, error: error instanceof Error ? error.message : String(error) }),
+                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                 });
+             }
+        });
+
+        const updatedDoc = await syncRequestRef.get();
+        const uData = updatedDoc.data();
+        if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
+             // We had an error, so we might want to set status to 'error' or 'completed' with errors.
+             // We'll set it to 'completed' so it doesn't stay 'dispatched', or 'error' if it's considered totally failed.
+             // Let's set it to completed but maybe there's a UI handling for errors in debugInfo.
+             // Setting to 'error' might be better if any task failed, but the prompt says 'status == error' expects an 'error' field.
+             await syncRequestRef.update({
+                 status: 'completed', // Or we can keep it simple
+                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             });
+        }
+
         throw error;
     }
 });
+
 
 export const triggerScheduledSync = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
     // Generate traceId here if we cannot use uuidv4 easily or we can just use a simple random string for now if uuidv4 isn't at the top level

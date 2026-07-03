@@ -713,22 +713,35 @@ class _EventEditScreenState extends State<EventEditScreen> {
       databaseId: 'default',
     );
 
-    try {
-      // Chunk batches of 500
-      for (int i = 0; i < selectedItems.length; i += 500) {
-        final batch = db.batch();
-        final chunk = selectedItems.skip(i).take(500);
-        for (var item in chunk) {
-          batch.delete(item.doc.reference);
-        }
-        await batch.commit();
+    int successCount = 0;
+    int failureCount = 0;
+
+    // Chunk batches of 500
+    for (int i = 0; i < selectedItems.length; i += 500) {
+      final batch = db.batch();
+      final chunk = selectedItems.skip(i).take(500).toList();
+      for (var item in chunk) {
+        batch.delete(item.doc.reference);
       }
+      try {
+        await batch.commit();
+        successCount += chunk.length;
+      } catch (e) {
+        failureCount += chunk.length;
+      }
+    }
 
+    try {
       await _loadData(); // reload list
-
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('削除しました')),
-      );
+      if (failureCount > 0) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('$successCount件成功しましたが、$failureCount件でエラーが発生しました')),
+        );
+      } else {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('削除しました')),
+        );
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -750,66 +763,81 @@ class _EventEditScreenState extends State<EventEditScreen> {
       databaseId: 'default',
     );
 
-    try {
-      List<_EventEditItem> changedItems = [];
-      List<Map<String, dynamic>> updates = [];
+    List<_EventEditItem> changedItems = [];
+    List<Map<String, dynamic>> updates = [];
 
-      for (var item in _items) {
-        final Map<String, dynamic> updateData = {};
+    for (var item in _items) {
+      final Map<String, dynamic> updateData = {};
 
-        void checkAndAdd(String key, String newValue) {
-          final originalValue = item.originalData[key]?.toString() ?? '';
-          if (newValue != originalValue) {
-            updateData[key] = newValue;
-          }
-        }
-
-        checkAndAdd('gameName', item.gameNameCtrl.text);
-        checkAndAdd('title', item.titleCtrl.text);
-        checkAndAdd('summary', item.summaryCtrl.text);
-        checkAndAdd('startDate', item.startDateCtrl.text);
-        checkAndAdd('endDate', item.endDateCtrl.text);
-        checkAndAdd('tag', item.tagCtrl.text);
-        checkAndAdd('subTag', item.subTagCtrl.text);
-        checkAndAdd('redeemCode', item.redeemCodeCtrl.text);
-
-        if (item.isLocked != (item.originalData['isLocked'] == true)) {
-          updateData['isLocked'] = item.isLocked;
-        }
-
-        if (updateData.isNotEmpty) {
-          changedItems.add(item);
-          updates.add(updateData);
+      void checkAndAdd(String key, String newValue) {
+        final originalValue = item.originalData[key]?.toString() ?? '';
+        if (newValue != originalValue) {
+          updateData[key] = newValue;
         }
       }
 
-      if (changedItems.isEmpty) {
-        setState(() {
-          _isLoading = false;
-        });
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('変更はありません')),
-        );
-        return;
+      checkAndAdd('gameName', item.gameNameCtrl.text);
+      checkAndAdd('title', item.titleCtrl.text);
+      checkAndAdd('summary', item.summaryCtrl.text);
+      checkAndAdd('startDate', item.startDateCtrl.text);
+      checkAndAdd('endDate', item.endDateCtrl.text);
+      checkAndAdd('tag', item.tagCtrl.text);
+      checkAndAdd('subTag', item.subTagCtrl.text);
+      checkAndAdd('redeemCode', item.redeemCodeCtrl.text);
+
+      if (item.isLocked != (item.originalData['isLocked'] == true)) {
+        updateData['isLocked'] = item.isLocked;
       }
 
-      for (int i = 0; i < changedItems.length; i += 500) {
-        final batch = db.batch();
-        final chunkItems = changedItems.skip(i).take(500).toList();
-        final chunkUpdates = updates.skip(i).take(500).toList();
+      if (updateData.isNotEmpty) {
+        changedItems.add(item);
+        updates.add(updateData);
+      }
+    }
 
-        for (int j = 0; j < chunkItems.length; j++) {
-          // It's possible that the update logic needs to handle empty values. For now, simple update.
-          batch.update(chunkItems[j].doc.reference, chunkUpdates[j]);
-        }
+    if (changedItems.isEmpty) {
+      setState(() {
+        _isLoading = false;
+      });
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('変更はありません')),
+      );
+      return;
+    }
+
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (int i = 0; i < changedItems.length; i += 500) {
+      final batch = db.batch();
+      final chunkItems = changedItems.skip(i).take(500).toList();
+      final chunkUpdates = updates.skip(i).take(500).toList();
+
+      for (int j = 0; j < chunkItems.length; j++) {
+        // It's possible that the update logic needs to handle empty values. For now, simple update.
+        batch.update(chunkItems[j].doc.reference, chunkUpdates[j]);
+      }
+
+      try {
         await batch.commit();
+        successCount += chunkItems.length;
+      } catch (e) {
+        failureCount += chunkItems.length;
       }
+    }
 
+    try {
       await _loadData();
 
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('保存しました')),
-      );
+      if (failureCount > 0) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('$successCount件成功しましたが、$failureCount件でエラーが発生しました')),
+        );
+      } else {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('保存しました')),
+        );
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;

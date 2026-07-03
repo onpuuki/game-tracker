@@ -99,7 +99,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
       while (endDate.isBefore(now)) {
         endDate = endDate.add(const Duration(days: 14));
       }
-      cycleSettings = {'startDate': _biweeklyStartDate!.toIso8601String(), 'hour': _biweeklyTime!.hour, 'minute': _biweeklyTime!.minute};
+      cycleSettings = {'startDate': Timestamp.fromDate(_biweeklyStartDate!), 'hour': _biweeklyTime!.hour, 'minute': _biweeklyTime!.minute};
       tasks = _biweeklyTaskControllers.map((c) => {'name': c.text, 'isCompleted': false}).toList();
       tag = '隔週';
     } else if (cycleType == 'monthly') {

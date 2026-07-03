@@ -17,6 +17,8 @@ class _AddEventScreenState extends State<AddEventScreen> {
   String _mainTag = 'ゲーム内';
   String _subTag = '常設';
 
+  String _cycleType = 'daily';
+
   TimeOfDay? _dailyTime;
   final List<TextEditingController> _dailyTaskControllers = [];
 
@@ -114,16 +116,14 @@ class _AddEventScreenState extends State<AddEventScreen> {
       tag = 'マンスリー';
     }
 
-    final endDateStr = "${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')} ${endDate.hour.toString().padLeft(2, '0')}:${endDate.minute.toString().padLeft(2, '0')}:00";
-
     final data = {
       'gameName': gameName,
       'title': title,
       'tag': tag,
       'subTag': _subTag,
       'redeemCode': _codeController.text,
-      'startDate': now.toIso8601String(),
-      'endDate': endDateStr,
+      'startDate': Timestamp.fromDate(now),
+      'endDate': Timestamp.fromDate(endDate),
       'isCycleEvent': true,
       'cycleType': cycleType,
       'cycleSettings': cycleSettings,
@@ -249,25 +249,25 @@ class _AddEventScreenState extends State<AddEventScreen> {
           ),
         ),
         const Divider(),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _dailyTaskControllers.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: TextField(
-                  controller: _dailyTaskControllers[index],
-                  decoration: const InputDecoration(hintText: 'タスク名'),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => setState(() {
-                    _dailyTaskControllers[index].dispose();
-                    _dailyTaskControllers.removeAt(index);
-                  }),
-                ),
-              );
-            },
-          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _dailyTaskControllers.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: TextField(
+                controller: _dailyTaskControllers[index],
+                decoration: const InputDecoration(hintText: 'タスク名'),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => setState(() {
+                  _dailyTaskControllers[index].dispose();
+                  _dailyTaskControllers.removeAt(index);
+                }),
+              ),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
@@ -316,25 +316,25 @@ class _AddEventScreenState extends State<AddEventScreen> {
           ),
         ),
         const Divider(),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _weeklyTaskControllers.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: TextField(
-                  controller: _weeklyTaskControllers[index],
-                  decoration: const InputDecoration(hintText: 'タスク名'),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => setState(() {
-                    _weeklyTaskControllers[index].dispose();
-                    _weeklyTaskControllers.removeAt(index);
-                  }),
-                ),
-              );
-            },
-          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _weeklyTaskControllers.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: TextField(
+                controller: _weeklyTaskControllers[index],
+                decoration: const InputDecoration(hintText: 'タスク名'),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => setState(() {
+                  _weeklyTaskControllers[index].dispose();
+                  _weeklyTaskControllers.removeAt(index);
+                }),
+              ),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
@@ -375,25 +375,25 @@ class _AddEventScreenState extends State<AddEventScreen> {
           ),
         ),
         const Divider(),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _biweeklyTaskControllers.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: TextField(
-                  controller: _biweeklyTaskControllers[index],
-                  decoration: const InputDecoration(hintText: 'タスク名'),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => setState(() {
-                    _biweeklyTaskControllers[index].dispose();
-                    _biweeklyTaskControllers.removeAt(index);
-                  }),
-                ),
-              );
-            },
-          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _biweeklyTaskControllers.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: TextField(
+                controller: _biweeklyTaskControllers[index],
+                decoration: const InputDecoration(hintText: 'タスク名'),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => setState(() {
+                  _biweeklyTaskControllers[index].dispose();
+                  _biweeklyTaskControllers.removeAt(index);
+                }),
+              ),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
@@ -434,25 +434,25 @@ class _AddEventScreenState extends State<AddEventScreen> {
           ),
         ),
         const Divider(),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _monthlyTaskControllers.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: TextField(
-                  controller: _monthlyTaskControllers[index],
-                  decoration: const InputDecoration(hintText: 'タスク名'),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => setState(() {
-                    _monthlyTaskControllers[index].dispose();
-                    _monthlyTaskControllers.removeAt(index);
-                  }),
-                ),
-              );
-            },
-          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _monthlyTaskControllers.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: TextField(
+                controller: _monthlyTaskControllers[index],
+                decoration: const InputDecoration(hintText: 'タスク名'),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => setState(() {
+                  _monthlyTaskControllers[index].dispose();
+                  _monthlyTaskControllers.removeAt(index);
+                }),
+              ),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
@@ -469,60 +469,58 @@ class _AddEventScreenState extends State<AddEventScreen> {
   }
 
   Widget _buildAddTab() {
-    return DefaultTabController(
-      length: 4,
+    return SingleChildScrollView(
       child: Column(
         children: [
           _buildTopSection(),
-          const TabBar(
-            tabs: [
-              Tab(text: 'デイリー'),
-              Tab(text: 'ウィークリー'),
-              Tab(text: '隔週'),
-              Tab(text: 'マンスリー'),
+          const SizedBox(height: 16),
+          const Text('サイクル', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'daily', label: Text('デイリー')),
+              ButtonSegment(value: 'weekly', label: Text('ウィークリー')),
+              ButtonSegment(value: 'biweekly', label: Text('隔週')),
+              ButtonSegment(value: 'monthly', label: Text('マンスリー')),
             ],
+            selected: {_cycleType},
+            onSelectionChanged: (Set<String> newSelection) {
+              setState(() {
+                _cycleType = newSelection.first;
+              });
+            },
           ),
-          Expanded(
-            child: Builder(
-              builder: (context) {
-                return Column(
-                  children: [
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          _buildDailyList(),
-                          _buildWeeklyList(),
-                          _buildBiweeklyList(),
-                          _buildMonthlyList(),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16.0),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        ),
-                        onPressed: () {
-                          final index = DefaultTabController.of(context).index;
-                          String cycleType = 'daily';
-                          if (index == 1) cycleType = 'weekly';
-                          if (index == 2) cycleType = 'biweekly';
-                          if (index == 3) cycleType = 'monthly';
-                          _submitData(cycleType);
-                        },
-                        child: const Text('登録', style: TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                  ],
-                );
-              }
+          const SizedBox(height: 16),
+          if (_cycleType == 'daily') _buildDailyList(),
+          if (_cycleType == 'weekly') _buildWeeklyList(),
+          if (_cycleType == 'biweekly') _buildBiweeklyList(),
+          if (_cycleType == 'monthly') _buildMonthlyList(),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+              ),
+              onPressed: () {
+                _submitData(_cycleType);
+              },
+              child: const Text('登録', style: TextStyle(fontSize: 18)),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Timestamp? _parseTimestamp(dynamic val) {
+    if (val == null) return null;
+    if (val is Timestamp) return val;
+    if (val is String) {
+      final dt = DateTime.tryParse(val);
+      if (dt != null) return Timestamp.fromDate(dt);
+    }
+    return null;
   }
 
   Widget _buildEditTab() {
@@ -542,7 +540,13 @@ class _AddEventScreenState extends State<AddEventScreen> {
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final doc = docs[index];
-            final data = doc.data() as Map<String, dynamic>;
+            final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+
+            data['createdAt'] = _parseTimestamp(data['createdAt']);
+            data['updatedAt'] = _parseTimestamp(data['updatedAt']);
+            data['startDate'] = _parseTimestamp(data['startDate']);
+            data['endDate'] = _parseTimestamp(data['endDate']);
+
             final title = data['title'] ?? '';
             final gameName = data['gameName'] ?? '';
             final tag = data['tag'] ?? '';

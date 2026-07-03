@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 
@@ -42,6 +43,17 @@ Future<void> _initializeFirebase() async {
   ).settings = const Settings(
     persistenceEnabled: true,
   );
+
+  try {
+    if (FirebaseAuth.instance.currentUser != null) {
+      debugPrint('Anonymous Login Success: ${FirebaseAuth.instance.currentUser!.uid}');
+    } else {
+      final userCredential = await FirebaseAuth.instance.signInAnonymously();
+      debugPrint('Anonymous Login Success: ${userCredential.user?.uid}');
+    }
+  } catch (e) {
+    debugPrint('Failed to sign in anonymously: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {

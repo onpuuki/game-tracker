@@ -27,6 +27,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
             )
             .collection('sync_requests')
             .orderBy('createdAt', descending: true)
+            .limit(100)
             .snapshots();
   }
 

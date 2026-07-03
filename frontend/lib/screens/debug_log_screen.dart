@@ -24,6 +24,7 @@ class DebugLogScreen extends StatelessWidget {
                         )
                         .collection('debug_logs')
                         .orderBy('timestamp', descending: true)
+                        .limit(100)
                         .get();
 
                 final StringBuffer buffer = StringBuffer();
@@ -99,6 +100,7 @@ class DebugLogScreen extends StatelessWidget {
                 )
                 .collection('debug_logs')
                 .orderBy('timestamp', descending: true)
+                .limit(100)
                 .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {

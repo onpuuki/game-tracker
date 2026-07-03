@@ -39,7 +39,8 @@ class _CodeUrlItem {
 }
 
 class _PromptEditorScreenState extends State<PromptEditorScreen> {
-  final _controller = TextEditingController();
+  final _scraperController = TextEditingController();
+  final _auditorController = TextEditingController();
   final List<_TargetItem> _targetItems = [];
   final List<_CodeUrlItem> _codeUrlItems = [];
   bool _isLoading = true;
@@ -60,8 +61,11 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       if (doc.exists) {
         final data = doc.data();
         if (data != null) {
-          if (data.containsKey('promptTemplate')) {
-            _controller.text = data['promptTemplate'] as String;
+          if (data.containsKey('scraperPrompt')) {
+            _scraperController.text = data['scraperPrompt'] as String;
+          }
+          if (data.containsKey('auditorPrompt')) {
+            _auditorController.text = data['auditorPrompt'] as String;
           }
           if (data.containsKey('targets')) {
             final targets = data['targets'] as List<dynamic>;
@@ -134,7 +138,8 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
         app: Firebase.app(),
         databaseId: 'default',
       ).collection('settings').doc('config').set({
-        'promptTemplate': _controller.text,
+        'scraperPrompt': _scraperController.text,
+        'auditorPrompt': _auditorController.text,
         'targets': targets,
         'codeUrls': codeUrls,
       }, SetOptions(merge: true));
@@ -201,14 +206,16 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     );
 
     if (confirm == true) {
-      _controller.text = '';
+      _scraperController.text = '';
+      _auditorController.text = '';
       await _saveData();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _scraperController.dispose();
+    _auditorController.dispose();
     for (var item in _targetItems) {
       item.dispose();
     }
@@ -226,13 +233,14 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.copy),
-            tooltip: 'Copy',
+            tooltip: 'Copy Prompts',
             onPressed: () async {
               final scaffoldMessenger = ScaffoldMessenger.of(context);
-              await Clipboard.setData(ClipboardData(text: _controller.text));
+              final combinedText = '--- スクレイパー用プロンプト ---\n${_scraperController.text}\n\n--- オーディター用プロンプト ---\n${_auditorController.text}';
+              await Clipboard.setData(ClipboardData(text: combinedText));
               if (mounted) {
                 scaffoldMessenger.showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard')),
+                  const SnackBar(content: Text('Copied both prompts to clipboard')),
                 );
               }
             },
@@ -257,14 +265,35 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const Text(
+                      'スクレイパー用プロンプト',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
                     TextField(
-                      controller: _controller,
-                      minLines: 10,
-                      maxLines: null,
+                      controller: _scraperController,
+                      minLines: 3,
+                      maxLines: 5,
                       textAlignVertical: TextAlignVertical.top,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        hintText: 'Enter your prompt template here...',
+                        hintText: 'Enter scraper prompt here...',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'オーディター用プロンプト',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _auditorController,
+                      minLines: 3,
+                      maxLines: 5,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter auditor prompt here...',
                       ),
                     ),
                     const SizedBox(height: 16),

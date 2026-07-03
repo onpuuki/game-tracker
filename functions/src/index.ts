@@ -89,40 +89,46 @@ export const processSyncRequest = onDocumentCreated({
         const geminiApiKey = configData?.geminiApiKey;
 
         // Firestoreからプロンプトテンプレートを取得（なければデフォルトを使用）
-        const defaultPromptTemplate = `あなたはゲームの公式最新情報を正確に抽出する専門AIです。非公式リークや架空のデータは絶対に除外してください。
-Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開催中】および【近日開催予定】の期間限定イベントやガチャ、コラボ情報を最新のウェブ検索結果から調査してください。
+        const defaultScraperPrompt = `あなたはゲームの公式最新情報を正確に調査する専門のスクレイパーAIです。非公式リークや架空のデータは絶対に除外してください。
+Google検索機能を利用して、ゲーム『{{gameName}}』で【現在開催中】および【近日開催予定】の期間限定イベントやガチャ、コラボ情報を最新のウェブ検索結果から広く調査してください。
+既存のイベントタイトル（{{existingEventTitles}}）も参考にし、新しい情報や既存情報の更新がないか確認してください。
+結果は、調査したイベント名、概要、開始・終了日時（わかる範囲で正確に）、関連URL、ギフトコード等をテキストで詳細に箇条書きで出力してください。`;
+
+        const defaultAuditorPrompt = `あなたは提供された調査結果と既存のデータベースを比較・精査し、最終的なJSONデータを構築する厳格なオーディターAIです。
+対象ゲーム: 『{{gameName}}』
+スクレイパーの調査結果:
+{{scraperResult}}
+
+現在のデータベース状況（既存イベント）:
+{{existingEventsDb}}
+
+【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
+[ {{forbiddenEvents}} ]
 
 【出力要件】
-調査結果を以下のJSON配列形式で出力してください。Markdown装飾(\`\`\`json等)は不要です。
+調査結果と既存DBを比較し、最終的に維持・更新・追加すべきイベント情報を以下のJSON配列形式のみで出力してください。Markdown装飾(\`\`\`json等)は不要です。
 [
   {
-    "existingId": "提供された既存イベントと一致する場合はそのidを文字列で入力。完全に新規の場合はnull",
-    "title": "イベントの正式名称",
+    "existingId": "既存イベントと一致する場合はそのidを文字列で入力。完全に新規の場合はnull",
+    "title": "イベントの正式名称（既存イベントと一致する場合は一言一句同じタイトルを使用）",
     "summary": "イベントの概要や報酬内容",
     "tag": "\"ゲーム内\", \"ゲーム外\", または \"コード\"",
     "redeemCode": "シリアルコードのアルファベット/数字（ない場合はnull）",
     "startDate": "YYYY-MM-DD (時間がわかる場合は YYYY-MM-DD HH:mm:00。不明な場合はnull)",
     "endDate": "YYYY-MM-DD (時間がわかる場合は YYYY-MM-DD HH:mm:00。不明な場合はnull)",
-    "eventUrl": "公式ページや大手メディアの詳細URL（完全に新規のイベントの場合は必須。不明またはexistingIdがある場合はnull可）",
+    "eventUrl": "公式ページや大手メディアの詳細URL（完全に新規の場合は必須。不明またはexistingIdがある場合はnull可。内部リダイレクトURLは禁止）",
     "imageUrl": null
   }
 ]
 
-【重要：期限管理の絶対ルール】本システムは期限管理アプリのデータソースです。イベントの開始日時と終了日時の正確性が命です。
-・記事内の「開催期間」「スケジュール」「〜まで」などの記述を必ず探し出し、正確な日時を抽出してください。
-・「アップデート後」「次期バージョンまで」等の曖昧な表記がある場合は、必ず検索結果からそのアップデート日・メンテナンス日を特定し、具体的な日付（YYYY/MM/DD）に変換して出力してください。
-・時間（hh:mm）がサイトに書かれていない場合は、絶対に null にせず「YYYY-MM-DD」の日付のみを出力してください。
-・「7月8日」のように年が省略されている表記は、現在日時を基準に今年の年（YYYY）を補完してください。
-・安易な推測や捏造は行わず、どうしても特定できない場合のみ null としてください。
+【重要ルール】
+・期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付（YYYY/MM/DD）に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
+・常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
+・既存DBの内容と比較し、実質的に同じイベントは必ず既存の \`id\` を \`existingId\` に指定して名寄せしてください。
+・ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。`;
 
-【厳格な除外条件】
-終了日のない常設コンテンツ、恒常ガチャ、毎月定期開催されるコンテンツは含めないでください。
-【重要：名寄せの絶対ルール】
-検索して見つけたイベントが、提供された『現在のデータベース状況（既存イベント）』にあるイベントと実質的に同じ（参照先URLが違うだけなど）である場合、必ずその既存イベントの \`id\` (ドキュメントID) を \`existingId\` フィールドに入れて返してください。既存イベントと同じものは表記揺れを起こさず、必ず前回と一言一句同じ「公式のタイトル表記」を出力してください。完全に新しいイベントの場合は \`existingId\` を空（null）にし、必ず情報のソース元の \`eventUrl\` を含めてください。
-URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoogle内部のリダイレクトURLや検索用URLは絶対に使用しないでください。必ず、イベントの公式サイトやメディアの『直接の生のURL（https://...）』を出力してください。元のURLが不明な場合は推測せず null にしてください。
-検索結果に実際に存在するURLのみを使用すること。推測や捏造（ハルシネーション）は絶対に行わず、正確なURLが不明な場合は必ず null にすること。`;
-
-        const promptTemplate = configData?.promptTemplate || defaultPromptTemplate;
+        const scraperPromptTemplate = configData?.scraperPrompt || defaultScraperPrompt;
+        const auditorPromptTemplate = configData?.auditorPrompt || defaultAuditorPrompt;
 
         if (!geminiApiKey || targetGames.length === 0) {
             await writeDebugLog(traceId, 'Sync failed: Invalid config');
@@ -143,12 +149,14 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
 
             const existingEventsForPrompt: any[] = [];
             const cycleEventTitles: string[] = [];
+            const existingEventTitles: string[] = [];
 
             currentEventsSnapshot.docs.forEach(doc => {
                 const data = doc.data();
                 if (data.isCycleEvent === true) {
                     cycleEventTitles.push(data.title);
                 } else {
+                    existingEventTitles.push(data.title);
                     existingEventsForPrompt.push({
                         id: doc.id,
                         title: data.title,
@@ -157,44 +165,71 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 }
             });
 
-            const existingEventsJsonStr = JSON.stringify(existingEventsForPrompt, null, 2);
-
-            // テンプレートのプレースホルダーを実際のゲーム名に置換
             const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-            let prompt = `【現在日時】 ${currentDate}\n\n` + promptTemplate.replace(/{{gameName}}/g, game.gameName);
-            prompt += `\n\n【現在のデータベース状況（既存イベント）】\n${existingEventsJsonStr}\n`;
 
-            if (cycleEventTitles.length > 0) {
-                prompt += `\n\n【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：[ ${cycleEventTitles.join(', ')} ]\n`;
-            }
+            // フェーズ1: スクレイパー
+            let scraperPromptText = `【現在日時】 ${currentDate}\n\n` + scraperPromptTemplate
+                .replace(/{{gameName}}/g, game.gameName)
+                .replace(/{{existingEventTitles}}/g, existingEventTitles.join(', '));
 
             if (game.keywords && game.keywords.trim() !== '') {
-                prompt += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
+                scraperPromptText += '\n\n【必須検索指定】\n以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：' + game.keywords;
             }
 
-            try {
-                // Google Search Groundingを有効化して呼び出し
-                const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt, {
-                        tools: [{ googleSearch: {} }]
-                    }, traceId);
+            let scraperResult = '';
 
-                if (response.usageMetadata?.totalTokenCount) {
-                    totalTokens += response.usageMetadata.totalTokenCount;
+            try {
+                functions.logger.info(`[${traceId}] Running Phase 1 (Scraper) for: ${game.gameName}`);
+                const scraperResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', scraperPromptText, {
+                    tools: [{ googleSearch: {} }]
+                }, traceId);
+
+                if (scraperResponse.usageMetadata?.totalTokenCount) {
+                    totalTokens += scraperResponse.usageMetadata.totalTokenCount;
                 }
 
-                if (response.text) {
-                    debugInfo.push({ stage: 1, type: 'Grounded Gemini Response', game: game.gameName, text: response.text });
-                    await writeDebugLog(traceId, `Grounded Gemini Response for ${game.gameName}`, { text: response.text });
+                if (scraperResponse.text) {
+                    scraperResult = scraperResponse.text;
+                    debugInfo.push({ stage: 'Phase 1 (Scraper)', type: 'Response', game: game.gameName, text: scraperResult });
+                    await writeDebugLog(traceId, `Scraper Response for ${game.gameName}`, { text: scraperResult });
+                } else {
+                    throw new Error("Scraper response text was empty.");
+                }
+
+                // 制限回避のため待機
+                await sleep(10000);
+
+                // フェーズ2: オーディター (TODO in next step)
+                // For now, to keep the structure intact, we will set up the try block here but the actual
+                // phase 2 will be in the next step. Let's just do the whole thing here since they are tight together.
+
+                functions.logger.info(`[${traceId}] Running Phase 2 (Auditor) for: ${game.gameName}`);
+                const existingEventsJsonStr = JSON.stringify(existingEventsForPrompt, null, 2);
+                let auditorPromptText = auditorPromptTemplate
+                    .replace(/{{gameName}}/g, game.gameName)
+                    .replace(/{{scraperResult}}/g, scraperResult)
+                    .replace(/{{existingEventsDb}}/g, existingEventsJsonStr)
+                    .replace(/{{forbiddenEvents}}/g, cycleEventTitles.join(', '));
+
+                const auditorResponse = await generateContentWithRetry(ai, 'gemini-2.5-flash', auditorPromptText, {}, traceId);
+
+                if (auditorResponse.usageMetadata?.totalTokenCount) {
+                    totalTokens += auditorResponse.usageMetadata.totalTokenCount;
+                }
+
+                if (auditorResponse.text) {
+                    debugInfo.push({ stage: 'Phase 2 (Auditor)', type: 'Response', game: game.gameName, text: auditorResponse.text });
+                    await writeDebugLog(traceId, `Auditor Response for ${game.gameName}`, { text: auditorResponse.text });
 
                     // パース処理（Markdownの除去およびJSON配列の抽出）
                     let extractedEvents: any[] = [];
-                    const firstBracket = response.text.indexOf('[');
-                    const lastBracket = response.text.lastIndexOf(']');
+                    const firstBracket = auditorResponse.text.indexOf('[');
+                    const lastBracket = auditorResponse.text.lastIndexOf(']');
                     if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
-                        const jsonStr = response.text.substring(firstBracket, lastBracket + 1);
+                        const jsonStr = auditorResponse.text.substring(firstBracket, lastBracket + 1);
                         extractedEvents = JSON.parse(jsonStr);
                     } else {
-                        throw new Error("JSON array not found in response.");
+                        throw new Error("JSON array not found in Auditor response.");
                     }
 
                     // 抽出できた場合はFirestoreへ同期
@@ -318,7 +353,7 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                              await batch.commit();
                         }
 
-                        const debugIndex = debugInfo.findIndex(info => info.stage === 1 && info.game === game.gameName && info.type === 'Grounded Gemini Response');
+                        const debugIndex = debugInfo.findIndex(info => info.stage === 'Phase 2 (Auditor)' && info.game === game.gameName && info.type === 'Response');
                         if (debugIndex !== -1) {
                             debugInfo[debugIndex] = {
                                 ...debugInfo[debugIndex],
@@ -342,8 +377,8 @@ URL出力時の絶対ルール：vertexaisearch.cloud.google.com のようなGoo
                 await writeDebugLog(traceId, `Gemini API failed for ${game.gameName}`, { error: err instanceof Error ? err.stack : String(err) });
             }
 
-            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に30秒待機する
-            await sleep(30000);
+            // レート制限（RPM: 15）を回避するため、次のゲームの処理に移る前に20秒待機する
+            await sleep(20000);
         }
         await snapshot.ref.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp(), debugInfo, totalTokens });
         await writeDebugLog(traceId, 'processSyncRequest process completed successfully.');

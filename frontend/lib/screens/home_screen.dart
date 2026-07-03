@@ -60,8 +60,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String _secondarySortField = 'startDate';
   String _secondarySortOrder = 'asc';
 
-  DateTime? _parseEventDate(String? dateStr) {
-    if (dateStr == null) return null;
+  DateTime? _parseEventDate(dynamic dateData) {
+    if (dateData == null) return null;
+    if (dateData is Timestamp) {
+      return dateData.toDate();
+    }
+    String? dateStr = dateData?.toString();
+    if (dateStr == null || dateStr.isEmpty) return null;
+
     try {
       String formatted = dateStr.replaceAll('/', '-').trim();
       if (formatted.contains(' ')) {
@@ -80,10 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _matchesKeyword(String keyword, _ParsedEvent event) {
     if (keyword.trim().isEmpty) return true;
 
-    final title = event.data['title'] as String? ?? '';
-    final summary = event.data['summary'] as String? ?? '';
+    final title = event.data['title']?.toString() ?? '';
+    final summary = event.data['summary']?.toString() ?? '';
     final gameName = event.gameName;
-    final redeemCode = event.data['redeemCode'] as String? ?? '';
+    final redeemCode = event.data['redeemCode']?.toString() ?? '';
 
     final targetText = '$title $summary $gameName $redeemCode'.toLowerCase();
 
@@ -104,30 +110,40 @@ class _HomeScreenState extends State<HomeScreen> {
     return false;
   }
 
-  String _formatDateString(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return '未定';
-    try {
-      String formatted = dateStr.replaceAll('/', '-').trim();
-      if (formatted.contains(' ')) {
-        formatted = formatted.replaceAll(' ', 'T');
-      }
+  String _formatDateString(dynamic dateData) {
+    if (dateData == null) return '未定';
 
-      final parts = formatted.split('T');
-      if (parts.length == 2 && parts[1].split(':').length == 2) {
-        formatted = '$formatted:00';
-      }
+    DateTime? dt;
+    if (dateData is Timestamp) {
+      dt = dateData.toDate();
+    } else {
+      String? dateStr = dateData?.toString();
+      if (dateStr == null || dateStr.isEmpty) return '未定';
 
-      final dt = DateTime.parse(formatted);
-      if (dt.hour == 0 &&
-          dt.minute == 0 &&
-          dt.second == 0 &&
-          !dateStr.contains(':')) {
-        return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      try {
+        String formatted = dateStr.replaceAll('/', '-').trim();
+        if (formatted.contains(' ')) {
+          formatted = formatted.replaceAll(' ', 'T');
+        }
+
+        final parts = formatted.split('T');
+        if (parts.length == 2 && parts[1].split(':').length == 2) {
+          formatted = '$formatted:00';
+        }
+
+        dt = DateTime.parse(formatted);
+        if (dt.hour == 0 &&
+            dt.minute == 0 &&
+            dt.second == 0 &&
+            !dateStr.contains(':')) {
+          return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+        }
+      } catch (e) {
+        return '未定';
       }
-      return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-    } catch (e) {
-      return dateStr;
     }
+
+    return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
   late Stream<DocumentSnapshot> _configStream;
@@ -971,16 +987,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
               List<_ParsedEvent> parsedEvents = docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                final startDateStr = data['startDate'] as String?;
-                final endDateStr = data['endDate'] as String?;
+                final startDateData = data['startDate'];
+                final endDateData = data['endDate'];
 
-                DateTime? startDate = _parseEventDate(startDateStr);
-                DateTime? endDate = _parseEventDate(endDateStr);
+                DateTime? startDate = _parseEventDate(startDateData);
+                DateTime? endDate = _parseEventDate(endDateData);
 
                 return _ParsedEvent(
                   doc: doc,
                   data: data,
-                  gameName: data['gameName'] as String? ?? 'Unknown Game',
+                  gameName: data['gameName']?.toString() ?? 'Unknown Game',
                   startDate: startDate,
                   endDate: endDate,
                 );
@@ -1159,23 +1175,24 @@ class _HomeScreenState extends State<HomeScreen> {
               return ListView.builder(
                 itemCount: events.length,
                 itemBuilder: (context, index) {
-                  final parsedEvent = events[index];
-                  final eventData = parsedEvent.data;
-                  final eventGameName = parsedEvent.gameName;
-                  final title = eventData['title'] as String? ?? 'No Title';
-                  final tag = eventData['tag'] as String?;
-                  final subTag = eventData['subTag'] as String?;
-                  final redeemCode = eventData['redeemCode'] as String?;
-                  final eventUrl = eventData['eventUrl'] as String?;
+                  try {
+                    final parsedEvent = events[index];
+                    final eventData = parsedEvent.data;
+                    final eventGameName = parsedEvent.gameName;
+                    final title = eventData['title']?.toString() ?? 'No Title';
+                    final tag = eventData['tag']?.toString();
+                    final subTag = eventData['subTag']?.toString();
+                    final redeemCode = eventData['redeemCode']?.toString();
+                    final eventUrl = eventData['eventUrl']?.toString();
 
-                  final startDateStr = eventData['startDate'] as String?;
-                  final endDateStr = eventData['endDate'] as String?;
-                  final startDisplay = _formatDateString(startDateStr);
-                  final endDisplay = _formatDateString(endDateStr);
+                  final startDateData = eventData['startDate'];
+                  final endDateData = eventData['endDate'];
+                  final startDisplay = _formatDateString(startDateData);
+                  final endDisplay = _formatDateString(endDateData);
                   final period = '$startDisplay ~ $endDisplay';
 
-                  final summary = eventData['summary'] as String? ?? '';
-                  final imageUrl = eventData['imageUrl'] as String?;
+                  final summary = eventData['summary']?.toString() ?? '';
+                  final imageUrl = eventData['imageUrl']?.toString();
 
                   final startDate = parsedEvent.startDate;
                   final endDate = parsedEvent.endDate;
@@ -1276,45 +1293,48 @@ class _HomeScreenState extends State<HomeScreen> {
                         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
                   }
 
-                  return _EventCardItem(
-                    parsedEvent: parsedEvent,
-                    eventData: eventData,
-                    eventGameName: eventGameName,
-                    title: title,
-                    tag: tag,
-                    subTag: subTag,
-                    redeemCode: redeemCode,
-                    eventUrl: eventUrl,
-                    startDateStr: startDateStr,
-                    endDateStr: endDateStr,
-                    startDisplay: startDisplay,
-                    endDisplay: endDisplay,
-                    period: period,
-                    summary: summary,
-                    imageUrl: imageUrl,
-                    startDate: startDate,
-                    endDate: endDate,
-                    gameCodeUrl: gameCodeUrl,
-                    hasValidCodeUrl: hasValidCodeUrl,
-                    trailingWidget: trailingWidget,
-                    eventId: eventId,
-                    isCycleEvent: isCycleEvent,
-                    eventIsCompletedDoc: eventIsCompletedDoc,
-                    isChecked: isChecked,
-                    tagColor: tagColor,
-                    isDarkMode: isDarkMode,
-                    dateStr: dateStr,
-                    onCheckedToggle: () {
-                      setState(() {
-                        if (isChecked) {
-                          _checkedEventIds.remove(eventId);
-                        } else {
-                          _checkedEventIds.add(eventId);
-                        }
-                      });
-                      _savePreferences();
-                    },
-                  );
+                    return _EventCardItem(
+                      parsedEvent: parsedEvent,
+                      eventData: eventData,
+                      eventGameName: eventGameName,
+                      title: title,
+                      tag: tag,
+                      subTag: subTag,
+                      redeemCode: redeemCode,
+                      eventUrl: eventUrl,
+                      startDateStr: startDateData?.toString(),
+                      endDateStr: endDateData?.toString(),
+                      startDisplay: startDisplay,
+                      endDisplay: endDisplay,
+                      period: period,
+                      summary: summary,
+                      imageUrl: imageUrl,
+                      startDate: startDate,
+                      endDate: endDate,
+                      gameCodeUrl: gameCodeUrl,
+                      hasValidCodeUrl: hasValidCodeUrl,
+                      trailingWidget: trailingWidget,
+                      eventId: eventId,
+                      isCycleEvent: isCycleEvent,
+                      eventIsCompletedDoc: eventIsCompletedDoc,
+                      isChecked: isChecked,
+                      tagColor: tagColor,
+                      isDarkMode: isDarkMode,
+                      dateStr: dateStr,
+                      onCheckedToggle: () {
+                        setState(() {
+                          if (isChecked) {
+                            _checkedEventIds.remove(eventId);
+                          } else {
+                            _checkedEventIds.add(eventId);
+                          }
+                        });
+                        _savePreferences();
+                      },
+                    );
+                  } catch (e) {
+                    return const SizedBox.shrink();
+                  }
                 },
               );
             },
@@ -1512,6 +1532,7 @@ class _EventCardItemState extends State<_EventCardItem> {
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
@@ -1559,10 +1580,12 @@ class _EventCardItemState extends State<_EventCardItem> {
                 decoration: const InputDecoration(labelText: 'URL', isDense: true),
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text('更新ロック:'),
                       Switch(
@@ -1572,6 +1595,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                     ],
                   ),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       TextButton(
                         onPressed: () {

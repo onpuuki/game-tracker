@@ -920,6 +920,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   ?.cast<Map<String, dynamic>>() ??
               [];
 
+          final codeUrlsData =
+              (data?['codeUrls'] as List<dynamic>?)
+                  ?.cast<Map<String, dynamic>>() ??
+              [];
+          final codeUrls = <String, String>{};
+          for (var item in codeUrlsData) {
+            final gameName = item['gameName'] as String?;
+            final url = item['url'] as String?;
+            if (gameName != null && url != null && url.isNotEmpty) {
+              codeUrls[gameName] = url;
+            }
+          }
+
           final siteConfig = <String, Map<String, bool>>{};
           for (var target in targets) {
             final gameName = target['gameName'] as String?;
@@ -1161,6 +1174,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   final startDate = parsedEvent.startDate;
                   final endDate = parsedEvent.endDate;
+
+                  final gameCodeUrl = codeUrls[eventGameName];
+                  final hasValidCodeUrl = gameCodeUrl != null && gameCodeUrl.isNotEmpty;
 
                   bool isUpcoming = false;
                   int? daysUntilStart;
@@ -1568,8 +1584,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           if (tag == 'コード' &&
-                              eventUrl != null &&
-                              eventUrl.isNotEmpty)
+                              redeemCode != null &&
+                              redeemCode.isNotEmpty)
                             Container(
                               width: 70,
                               decoration: BoxDecoration(
@@ -1579,7 +1595,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 color: isChecked
                                     ? Colors.grey.shade400
-                                    : Theme.of(context).primaryColor,
+                                    : (hasValidCodeUrl
+                                        ? Theme.of(context).primaryColor
+                                        : Colors.blueGrey),
                               ),
                               child: Material(
                                 color: Colors.transparent,
@@ -1591,37 +1609,46 @@ class _HomeScreenState extends State<HomeScreen> {
                                   onTap: isChecked
                                       ? null
                                       : () async {
-                                          final uri = Uri.parse(eventUrl);
-                                          if (await canLaunchUrl(uri)) {
-                                            await launchUrl(
-                                              uri,
-                                              mode: LaunchMode
-                                                  .externalApplication,
-                                            );
-                                          } else if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Could not launch URL',
+                                          final messenger = ScaffoldMessenger.of(context);
+                                          await Clipboard.setData(ClipboardData(text: redeemCode));
+                                          messenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text('コードをコピーしました'),
+                                              duration: Duration(seconds: 1),
+                                            ),
+                                          );
+
+                                          if (hasValidCodeUrl) {
+                                            final urlToLaunch = (eventUrl != null && eventUrl.isNotEmpty)
+                                                ? eventUrl
+                                                : gameCodeUrl!.replaceAll('（コード）', redeemCode);
+                                            final uri = Uri.parse(urlToLaunch);
+                                            if (await canLaunchUrl(uri)) {
+                                              await launchUrl(
+                                                uri,
+                                                mode: LaunchMode.externalApplication,
+                                              );
+                                            } else {
+                                              messenger.showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Could not launch URL'),
                                                 ),
-                                              ),
-                                            );
+                                              );
+                                            }
                                           }
                                         },
-                                  child: const Column(
+                                  child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.open_in_browser,
+                                        hasValidCodeUrl ? Icons.open_in_browser : Icons.copy,
                                         color: Colors.white,
                                       ),
-                                      SizedBox(height: 4),
+                                      const SizedBox(height: 4),
                                       Text(
-                                        '自動\n入力',
+                                        hasValidCodeUrl ? '自動\n入力' : 'コピー',
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,

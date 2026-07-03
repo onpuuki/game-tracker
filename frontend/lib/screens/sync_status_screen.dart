@@ -98,11 +98,25 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
           final docs = snapshot.data?.docs ?? [];
 
           bool isSyncRunning = false;
+          bool isStaleState = false;
           if (docs.isNotEmpty) {
             final firstDocData = docs.first.data() as Map<String, dynamic>;
             final firstStatus = firstDocData['status'] as String?;
-            if (firstStatus == 'pending' || firstStatus == 'processing') {
-              isSyncRunning = true;
+            if (firstStatus == 'pending' || firstStatus == 'processing' || firstStatus == 'dispatched') {
+              final updatedAt = firstDocData['updatedAt'] as Timestamp?;
+              final createdAt = firstDocData['createdAt'] as Timestamp?;
+              final timestamp = updatedAt ?? createdAt;
+
+              if (timestamp != null) {
+                final diff = DateTime.now().difference(timestamp.toDate());
+                if (diff.inMinutes >= 15) {
+                  isStaleState = true;
+                } else {
+                  isSyncRunning = true;
+                }
+              } else {
+                isSyncRunning = true;
+              }
             }
           }
 
@@ -143,6 +157,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                         statusColor = Colors.red;
                         break;
                       case 'processing':
+                      case 'dispatched':
                         statusIcon = Icons.autorenew;
                         statusColor = Colors.orange;
                         break;
@@ -259,9 +274,30 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 ),
                               ),
                             ],
-                            if (status == 'processing') ...[
+                            if (status == 'processing' || status == 'dispatched') ...[
                               const SizedBox(height: 12),
-                              const LinearProgressIndicator(),
+                              if ((() {
+                                final timeToUse = updatedAt ?? createdAt;
+                                if (timeToUse != null) {
+                                  return DateTime.now().difference(timeToUse.toDate()).inMinutes >= 15;
+                                }
+                                return false;
+                              })()) ...[
+                                Row(
+                                  children: const [
+                                    Icon(Icons.error_outline, color: Colors.red, size: 16),
+                                    SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        'バックエンド処理がタイムアウトしました。再実行してください',
+                                        style: TextStyle(color: Colors.red, fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
+                                const LinearProgressIndicator(),
+                              ]
                             ],
                             if (debugInfo != null && debugInfo.isNotEmpty) ...[
                               const SizedBox(height: 12),

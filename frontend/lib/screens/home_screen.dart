@@ -664,7 +664,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: true);
+    const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -1001,6 +1001,11 @@ class _HomeScreenState extends State<HomeScreen> {
               });
 
               List<_ParsedEvent> events = parsedEvents.where((event) {
+                // Ignore logically deleted events
+                if (event.data['isDeleted'] == true) {
+                  return false;
+                }
+
                 // Keyword Filter
                 if (!_matchesKeyword(_filterKeyword, event)) {
                   return false;
@@ -1271,403 +1276,734 @@ class _HomeScreenState extends State<HomeScreen> {
                         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
                   }
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
-                    color: isChecked
-                        ? (isDarkMode ? Colors.grey[850] : Colors.grey.shade200)
-                        : null,
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: isChecked
-                                  ? null
-                                  : () async {
-                                      if (tag == 'コード') {
-                                        final codeToCopy =
-                                            (redeemCode != null &&
-                                                redeemCode.isNotEmpty)
-                                            ? redeemCode
-                                            : title;
-                                        await Clipboard.setData(
-                                          ClipboardData(text: codeToCopy),
-                                        );
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('コードをコピーしました'),
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        final query = '$eventGameName $title';
-                                        final encodedQuery =
-                                            Uri.encodeComponent(query);
-                                        final uri = Uri.parse(
-                                          'https://www.google.com/search?q=$encodedQuery',
-                                        );
-                                        if (await canLaunchUrl(uri)) {
-                                          await launchUrl(
-                                            uri,
-                                            mode:
-                                                LaunchMode.externalApplication,
-                                          );
-                                        } else {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Could not launch URL',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      }
-                                    },
-                              onLongPress: () {
-                                setState(() {
-                                  if (isChecked) {
-                                    _checkedEventIds.remove(eventId);
-                                  } else {
-                                    _checkedEventIds.add(eventId);
-                                  }
-                                });
-                                _savePreferences();
-                              },
-                              child: Stack(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(12.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  if (imageUrl != null &&
-                                                      imageUrl.isNotEmpty)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            bottom: 8.0,
-                                                          ),
-                                                      child: SizedBox(
-                                                        width: 50,
-                                                        height: 50,
-                                                        child: Image.network(
-                                                          imageUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder:
-                                                              (
-                                                                context,
-                                                                error,
-                                                                stackTrace,
-                                                              ) => const Icon(
-                                                                Icons
-                                                                    .image_not_supported,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  Text(
-                                                    eventGameName,
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      color: Theme.of(context).colorScheme.onSurface,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  if (dateStr.isNotEmpty)
-                                                    Padding(
-                                                      padding: const EdgeInsets.only(
-                                                        top: 2.0,
-                                                        bottom: 4.0,
-                                                      ),
-                                                      child: Text(
-                                                        '更新日:$dateStr',
-                                                        style: const TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors.grey,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (trailingWidget != null) ...[
-                                              const SizedBox(width: 8),
-                                              isChecked
-                                                  ? Opacity(
-                                                      opacity: 0.5,
-                                                      child: trailingWidget,
-                                                    )
-                                                  : trailingWidget,
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Wrap(
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              spacing: 6.0,
-                                              children: [
-                                                if (tag != null &&
-                                                    tag.isNotEmpty)
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: tagColor.withAlpha(
-                                                        26,
-                                                      ),
-                                                      border: Border.all(
-                                                        color: tagColor,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          ),
-                                                    ),
-                                                    child: Text(
-                                                      tag,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: tagColor,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                if (subTag != null &&
-                                                    subTag.isNotEmpty)
-                                                  Text(
-                                                    subTag,
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  ),
-                                                Text(
-                                                  title,
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    decoration: isChecked
-                                                        ? TextDecoration
-                                                              .lineThrough
-                                                        : null,
-                                                    color: isChecked
-                                                        ? Colors.grey
-                                                        : null,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              period,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: isChecked
-                                                    ? Colors.grey
-                                                    : Colors.blueGrey,
-                                              ),
-                                            ),
-                                            if (summary.isNotEmpty) ...[
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                summary,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: isChecked
-                                                      ? Colors.grey
-                                                      : null,
-                                                ),
-                                              ),
-                                            ],
-                                            if (isCycleEvent && eventData['tasks'] != null && (eventData['tasks'] as List).isNotEmpty) ...[
-                                              const SizedBox(height: 8),
-                                              Wrap(
-                                                spacing: 8.0,
-                                                runSpacing: -8.0,
-                                                children: (eventData['tasks'] as List).asMap().entries.map((entry) {
-                                                  final taskIndex = entry.key;
-                                                  final task = entry.value as Map<String, dynamic>;
-                                                  final taskName = task['name'] ?? '';
-                                                  final isTaskCompleted = task['isCompleted'] == true;
-
-                                                  return IntrinsicWidth(
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Checkbox(
-                                                          value: isTaskCompleted,
-                                                          onChanged: (bool? value) async {
-                                                            if (value == null) return;
-
-                                                            final updatedTasks = List<Map<String, dynamic>>.from(eventData['tasks']);
-                                                            updatedTasks[taskIndex]['isCompleted'] = value;
-
-                                                            final allCompleted = updatedTasks.every((t) => t['isCompleted'] == true);
-
-                                                            await parsedEvent.doc.reference.update({
-                                                              'tasks': updatedTasks,
-                                                              'isCompleted': allCompleted,
-                                                            });
-                                                          },
-                                                        ),
-                                                        Text(
-                                                          taskName,
-                                                          style: TextStyle(
-                                                            fontSize: 12,
-                                                            decoration: isTaskCompleted ? TextDecoration.lineThrough : null,
-                                                            color: isTaskCompleted ? Colors.grey : null,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (isChecked)
-                                    Positioned.fill(
-                                      child: Center(
-                                        child: Transform.rotate(
-                                          angle: -0.3,
-                                          child: Text(
-                                            '済',
-                                            style: TextStyle(
-                                              fontSize: 60,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red.withAlpha(128),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (tag == 'コード' &&
-                              redeemCode != null &&
-                              redeemCode.isNotEmpty)
-                            Container(
-                              width: 70,
-                              decoration: BoxDecoration(
-                                borderRadius: const BorderRadius.only(
-                                  topRight: Radius.circular(12),
-                                  bottomRight: Radius.circular(12),
-                                ),
-                                color: isChecked
-                                    ? Colors.grey.shade400
-                                    : (hasValidCodeUrl
-                                        ? Theme.of(context).primaryColor
-                                        : Colors.blueGrey),
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: const BorderRadius.only(
-                                    topRight: Radius.circular(12),
-                                    bottomRight: Radius.circular(12),
-                                  ),
-                                  onTap: isChecked
-                                      ? null
-                                      : () async {
-                                          final messenger = ScaffoldMessenger.of(context);
-                                          await Clipboard.setData(ClipboardData(text: redeemCode));
-                                          messenger.showSnackBar(
-                                            const SnackBar(
-                                              content: Text('コードをコピーしました'),
-                                              duration: Duration(seconds: 1),
-                                            ),
-                                          );
-
-                                          if (hasValidCodeUrl) {
-                                            final urlToLaunch = (eventUrl != null && eventUrl.isNotEmpty)
-                                                ? eventUrl
-                                                : gameCodeUrl!.replaceAll('（コード）', redeemCode);
-                                            final uri = Uri.parse(urlToLaunch);
-                                            if (await canLaunchUrl(uri)) {
-                                              await launchUrl(
-                                                uri,
-                                                mode: LaunchMode.externalApplication,
-                                              );
-                                            } else {
-                                              messenger.showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Could not launch URL'),
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        hasValidCodeUrl ? Icons.open_in_browser : Icons.copy,
-                                        color: Colors.white,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        hasValidCodeUrl ? '自動\n入力' : 'コピー',
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                  return _EventCardItem(
+                    parsedEvent: parsedEvent,
+                    eventData: eventData,
+                    eventGameName: eventGameName,
+                    title: title,
+                    tag: tag,
+                    subTag: subTag,
+                    redeemCode: redeemCode,
+                    eventUrl: eventUrl,
+                    startDateStr: startDateStr,
+                    endDateStr: endDateStr,
+                    startDisplay: startDisplay,
+                    endDisplay: endDisplay,
+                    period: period,
+                    summary: summary,
+                    imageUrl: imageUrl,
+                    startDate: startDate,
+                    endDate: endDate,
+                    gameCodeUrl: gameCodeUrl,
+                    hasValidCodeUrl: hasValidCodeUrl,
+                    trailingWidget: trailingWidget,
+                    eventId: eventId,
+                    isCycleEvent: isCycleEvent,
+                    eventIsCompletedDoc: eventIsCompletedDoc,
+                    isChecked: isChecked,
+                    tagColor: tagColor,
+                    isDarkMode: isDarkMode,
+                    dateStr: dateStr,
+                    onCheckedToggle: () {
+                      setState(() {
+                        if (isChecked) {
+                          _checkedEventIds.remove(eventId);
+                        } else {
+                          _checkedEventIds.add(eventId);
+                        }
+                      });
+                      _savePreferences();
+                    },
                   );
                 },
               );
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _EventCardItem extends StatefulWidget {
+  final _ParsedEvent parsedEvent;
+  final Map<String, dynamic> eventData;
+  final String eventGameName;
+  final String title;
+  final String? tag;
+  final String? subTag;
+  final String? redeemCode;
+  final String? eventUrl;
+  final String? startDateStr;
+  final String? endDateStr;
+  final String startDisplay;
+  final String endDisplay;
+  final String period;
+  final String summary;
+  final String? imageUrl;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? gameCodeUrl;
+  final bool hasValidCodeUrl;
+  final Widget? trailingWidget;
+  final String eventId;
+  final bool isCycleEvent;
+  final bool eventIsCompletedDoc;
+  final bool isChecked;
+  final Color tagColor;
+  final bool isDarkMode;
+  final String dateStr;
+  final VoidCallback onCheckedToggle;
+
+  const _EventCardItem({
+    required this.parsedEvent,
+    required this.eventData,
+    required this.eventGameName,
+    required this.title,
+    required this.tag,
+    required this.subTag,
+    required this.redeemCode,
+    required this.eventUrl,
+    required this.startDateStr,
+    required this.endDateStr,
+    required this.startDisplay,
+    required this.endDisplay,
+    required this.period,
+    required this.summary,
+    required this.imageUrl,
+    required this.startDate,
+    required this.endDate,
+    required this.gameCodeUrl,
+    required this.hasValidCodeUrl,
+    required this.trailingWidget,
+    required this.eventId,
+    required this.isCycleEvent,
+    required this.eventIsCompletedDoc,
+    required this.isChecked,
+    required this.tagColor,
+    required this.isDarkMode,
+    required this.dateStr,
+    required this.onCheckedToggle,
+  });
+
+  @override
+  State<_EventCardItem> createState() => _EventCardItemState();
+}
+
+class _EventCardItemState extends State<_EventCardItem> {
+  bool _isEditing = false;
+  late TextEditingController _gameNameController;
+  late TextEditingController _titleController;
+  late TextEditingController _summaryController;
+  late TextEditingController _redeemCodeController;
+  late TextEditingController _startDateController;
+  late TextEditingController _endDateController;
+  late TextEditingController _eventUrlController;
+  String? _selectedTag;
+  String? _selectedSubTag;
+  bool _isUpdateLocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initEditFields();
+  }
+
+  void _initEditFields() {
+    _gameNameController = TextEditingController(text: widget.eventGameName);
+    _titleController = TextEditingController(text: widget.title);
+    _summaryController = TextEditingController(text: widget.summary);
+    _redeemCodeController = TextEditingController(text: widget.redeemCode ?? '');
+    _startDateController = TextEditingController(text: widget.startDateStr ?? '');
+    _endDateController = TextEditingController(text: widget.endDateStr ?? '');
+    _eventUrlController = TextEditingController(text: widget.eventUrl ?? '');
+    _selectedTag = widget.tag;
+    _selectedSubTag = widget.subTag;
+    _isUpdateLocked = widget.eventData['isUpdateLocked'] == true;
+  }
+
+  @override
+  void dispose() {
+    _gameNameController.dispose();
+    _titleController.dispose();
+    _summaryController.dispose();
+    _redeemCodeController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
+    _eventUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveChanges() async {
+    final updateData = {
+      'gameName': _gameNameController.text,
+      'title': _titleController.text,
+      'summary': _summaryController.text,
+      'redeemCode': _redeemCodeController.text,
+      'startDate': _startDateController.text,
+      'endDate': _endDateController.text,
+      'eventUrl': _eventUrlController.text,
+      'tag': _selectedTag,
+      'subTag': _selectedSubTag,
+      'isUpdateLocked': _isUpdateLocked,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await widget.parsedEvent.doc.reference.update(updateData);
+      if (mounted) {
+        setState(() {
+          _isEditing = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save changes: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteEvent() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('削除確認'),
+          content: const Text('本当に該当イベントを削除してよろしいですか？\n(論理削除されます)'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('削除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        await widget.parsedEvent.doc.reference.update({
+          'isDeleted': true,
+          'isCreationLocked': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete event: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isEditing) {
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _gameNameController,
+                decoration: const InputDecoration(labelText: 'ゲーム名', isDense: true),
+              ),
+              TextField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'イベント名', isDense: true),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: ['ゲーム内', 'ゲーム外', 'コード'].contains(_selectedTag) ? _selectedTag : null,
+                items: ['ゲーム内', 'ゲーム外', 'コード'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (val) => setState(() => _selectedTag = val),
+                decoration: const InputDecoration(labelText: 'タグ', isDense: true),
+              ),
+              TextField(
+                controller: _summaryController,
+                decoration: const InputDecoration(labelText: '詳細', isDense: true),
+                maxLines: 2,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _startDateController,
+                      decoration: const InputDecoration(labelText: '開始', isDense: true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _endDateController,
+                      decoration: const InputDecoration(labelText: '終了', isDense: true),
+                    ),
+                  ),
+                ],
+              ),
+              TextField(
+                controller: _redeemCodeController,
+                decoration: const InputDecoration(labelText: 'シリアルコード', isDense: true),
+              ),
+              TextField(
+                controller: _eventUrlController,
+                decoration: const InputDecoration(labelText: 'URL', isDense: true),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text('更新ロック:'),
+                      Switch(
+                        value: _isUpdateLocked,
+                        onChanged: (val) => setState(() => _isUpdateLocked = val),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isEditing = false;
+                            _initEditFields();
+                          });
+                        },
+                        child: const Text('キャンセル'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _saveChanges,
+                        child: const Text('保存'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 16.0,
+        vertical: 8.0,
+      ),
+      color: widget.isChecked
+          ? (widget.isDarkMode ? Colors.grey[850] : Colors.grey.shade200)
+          : null,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: widget.isChecked
+                    ? null
+                    : () async {
+                        if (widget.tag == 'コード') {
+                          final codeToCopy =
+                              (widget.redeemCode != null &&
+                                  widget.redeemCode!.isNotEmpty)
+                              ? widget.redeemCode!
+                              : widget.title;
+                          await Clipboard.setData(
+                            ClipboardData(text: codeToCopy),
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(
+                              const SnackBar(
+                                content: Text('コードをコピーしました'),
+                              ),
+                            );
+                          }
+                        } else {
+                          final query = '${widget.eventGameName} ${widget.title}';
+                          final encodedQuery =
+                              Uri.encodeComponent(query);
+                          final uri = Uri.parse(
+                            'https://www.google.com/search?q=$encodedQuery',
+                          );
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(
+                              uri,
+                              mode:
+                                  LaunchMode.externalApplication,
+                            );
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not launch URL',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      },
+                onLongPress: widget.onCheckedToggle,
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    if (widget.imageUrl != null &&
+                                        widget.imageUrl!.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(
+                                              bottom: 8.0,
+                                            ),
+                                        child: SizedBox(
+                                          width: 50,
+                                          height: 50,
+                                          child: Image.network(
+                                            widget.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (
+                                                  context,
+                                                  error,
+                                                  stackTrace,
+                                                ) => const Icon(
+                                                  Icons
+                                                      .image_not_supported,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    Text(
+                                      widget.eventGameName,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
+                                    ),
+                                    if (widget.dateStr.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 2.0,
+                                          bottom: 4.0,
+                                        ),
+                                        child: Text(
+                                          '更新日:${widget.dateStr}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (widget.trailingWidget != null) ...[
+                                const SizedBox(width: 8),
+                                widget.isChecked
+                                    ? Opacity(
+                                        opacity: 0.5,
+                                        child: widget.trailingWidget,
+                                      )
+                                    : widget.trailingWidget!,
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                crossAxisAlignment:
+                                    WrapCrossAlignment.center,
+                                  spacing: 6.0,
+                                children: [
+                                  if (widget.tag != null &&
+                                      widget.tag!.isNotEmpty)
+                                    Container(
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                      decoration: BoxDecoration(
+                                        color: widget.tagColor.withAlpha(
+                                          26,
+                                        ),
+                                        border: Border.all(
+                                          color: widget.tagColor,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(
+                                              4,
+                                            ),
+                                      ),
+                                      child: Text(
+                                        widget.tag!,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          color: widget.tagColor,
+                                        ),
+                                      ),
+                                    ),
+                                  if (widget.subTag != null &&
+                                      widget.subTag!.isNotEmpty)
+                                    Text(
+                                      widget.subTag!,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  Text(
+                                    widget.title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      decoration: widget.isChecked
+                                          ? TextDecoration
+                                                .lineThrough
+                                          : null,
+                                      color: widget.isChecked
+                                          ? Colors.grey
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.period,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.isChecked
+                                      ? Colors.grey
+                                      : Colors.blueGrey,
+                                ),
+                              ),
+                              if (widget.summary.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.summary,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: widget.isChecked
+                                        ? Colors.grey
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                              if (widget.isCycleEvent && widget.eventData['tasks'] != null && (widget.eventData['tasks'] as List).isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8.0,
+                                  runSpacing: -8.0,
+                                  children: (widget.eventData['tasks'] as List).asMap().entries.map((entry) {
+                                    final taskIndex = entry.key;
+                                    final task = entry.value as Map<String, dynamic>;
+                                    final taskName = task['name'] ?? '';
+                                    final isTaskCompleted = task['isCompleted'] == true;
+
+                                    return IntrinsicWidth(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: isTaskCompleted,
+                                            onChanged: (bool? value) async {
+                                              if (value == null) return;
+
+                                              final updatedTasks = List<Map<String, dynamic>>.from(widget.eventData['tasks']);
+                                              updatedTasks[taskIndex]['isCompleted'] = value;
+
+                                              final allCompleted = updatedTasks.every((t) => t['isCompleted'] == true);
+
+                                              await widget.parsedEvent.doc.reference.update({
+                                                'tasks': updatedTasks,
+                                                'isCompleted': allCompleted,
+                                              });
+                                            },
+                                          ),
+                                          Text(
+                                            taskName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              decoration: isTaskCompleted ? TextDecoration.lineThrough : null,
+                                              color: isTaskCompleted ? Colors.grey : null,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.isChecked)
+                      Positioned.fill(
+                        child: Center(
+                          child: Transform.rotate(
+                            angle: -0.3,
+                            child: Text(
+                              '済',
+                              style: TextStyle(
+                                fontSize: 60,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.withAlpha(128),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false) && !widget.isChecked && !_isEditing)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                          onSelected: (String result) {
+                            if (result == 'edit') {
+                              setState(() {
+                                _isEditing = true;
+                              });
+                            } else if (result == 'delete') {
+                              _deleteEvent();
+                            }
+                          },
+                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Text('イベント編集'),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Text('イベント削除', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.tag == 'コード' &&
+                widget.redeemCode != null &&
+                widget.redeemCode!.isNotEmpty)
+              Container(
+                width: 70,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  ),
+                  color: widget.isChecked
+                      ? Colors.grey.shade400
+                      : (widget.hasValidCodeUrl
+                          ? Theme.of(context).primaryColor
+                          : Colors.blueGrey),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    onTap: widget.isChecked
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await Clipboard.setData(ClipboardData(text: widget.redeemCode!));
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('コードをコピーしました'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+
+                            if (widget.hasValidCodeUrl) {
+                              final urlToLaunch = (widget.eventUrl != null && widget.eventUrl!.isNotEmpty)
+                                  ? widget.eventUrl!
+                                  : widget.gameCodeUrl!.replaceAll('（コード）', widget.redeemCode!);
+                              final uri = Uri.parse(urlToLaunch);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } else {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Could not launch URL'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          widget.hasValidCodeUrl ? Icons.open_in_browser : Icons.copy,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.hasValidCodeUrl ? '自動\n入力' : 'コピー',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

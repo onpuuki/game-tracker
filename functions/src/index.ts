@@ -930,7 +930,8 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
                     endDate: admin.firestore.Timestamp.fromDate(nextEndDateObj),
                     tasks: updatedTasks,
                     isCompleted: false,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updateHistory: admin.firestore.FieldValue.arrayUnion(`[${nextEndDateStr}] サイクル更新（自動リセット）`)
                 });
 
                 updateCount++;

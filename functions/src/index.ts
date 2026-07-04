@@ -322,7 +322,31 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
             const nowMs = new Date().getTime();
 
+            // 1. AIレスポンス内の自己重複を排除する（より情報が多い方を優先してマージ）
+            const uniqueExtractedEvents: any[] = [];
             for (const event of extractedEvents) {
+                const duplicateIdx = uniqueExtractedEvents.findIndex(u =>
+                    (event.eventUrl && u.eventUrl === event.eventUrl) ||
+                    (u.title && event.title && calculateSimilarity(u.title, event.title) >= 0.85)
+                );
+
+                if (duplicateIdx === -1) {
+                    uniqueExtractedEvents.push(event);
+                } else {
+                    // すでに配列内にある場合、情報（URLや終了日）を補完してマージする
+                    const existing = uniqueExtractedEvents[duplicateIdx];
+                    if (!existing.eventUrl && event.eventUrl) existing.eventUrl = event.eventUrl;
+                    if ((!existing.endDate || existing.endDate === 'UNKNOWN') && event.endDate && event.endDate !== 'UNKNOWN') {
+                        existing.endDate = event.endDate;
+                    }
+                    if ((!existing.startDate || existing.startDate === 'UNKNOWN') && event.startDate && event.startDate !== 'UNKNOWN') {
+                        existing.startDate = event.startDate;
+                    }
+                    if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
+                }
+            }
+
+            for (const event of uniqueExtractedEvents) {
                 if (!event.title) continue;
 
                 if (event.startDate === 'UNKNOWN') event.startDate = null;

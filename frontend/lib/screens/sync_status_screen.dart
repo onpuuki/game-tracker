@@ -103,6 +103,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
             final firstDocData = docs.first.data() as Map<String, dynamic>;
             final firstStatus = firstDocData['status'] as String?;
             if (firstStatus == 'pending' || firstStatus == 'processing' || firstStatus == 'dispatched') {
+              isSyncRunning = true;
               final updatedAt = firstDocData['updatedAt'] as Timestamp?;
               final createdAt = firstDocData['createdAt'] as Timestamp?;
               final timestamp = updatedAt ?? createdAt;
@@ -111,11 +112,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                 final diff = DateTime.now().difference(timestamp.toDate());
                 if (diff.inMinutes >= 15) {
                   isStaleState = true;
-                } else {
-                  isSyncRunning = true;
                 }
-              } else {
-                isSyncRunning = true;
               }
             }
           }
@@ -126,7 +123,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: isSyncRunning ? null : _triggerSync,
+                  onPressed: (isSyncRunning && !isStaleState) ? null : _triggerSync,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 40),
                   ),
@@ -144,6 +141,16 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     final debugInfo = data['debugInfo'] as List<dynamic>?;
                     final totalTokens = data['totalTokens'] as int?;
 
+                    bool currentItemStale = false;
+                    if (index == 0) {
+                      currentItemStale = isStaleState;
+                    } else if (status == 'processing' || status == 'dispatched') {
+                      final timeToUse = updatedAt ?? createdAt;
+                      if (timeToUse != null) {
+                        currentItemStale = DateTime.now().difference(timeToUse.toDate()).inMinutes >= 15;
+                      }
+                    }
+
                     IconData statusIcon;
                     Color statusColor;
 
@@ -158,8 +165,13 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                         break;
                       case 'processing':
                       case 'dispatched':
-                        statusIcon = Icons.autorenew;
-                        statusColor = Colors.orange;
+                        if (currentItemStale) {
+                          statusIcon = Icons.error;
+                          statusColor = Colors.red;
+                        } else {
+                          statusIcon = Icons.autorenew;
+                          statusColor = Colors.orange;
+                        }
                         break;
                       case 'pending':
                       default:
@@ -276,13 +288,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                             ],
                             if (status == 'processing' || status == 'dispatched') ...[
                               const SizedBox(height: 12),
-                              if ((() {
-                                final timeToUse = updatedAt ?? createdAt;
-                                if (timeToUse != null) {
-                                  return DateTime.now().difference(timeToUse.toDate()).inMinutes >= 15;
-                                }
-                                return false;
-                              })()) ...[
+                              if (currentItemStale) ...[
                                 Row(
                                   children: const [
                                     Icon(Icons.error_outline, color: Colors.red, size: 16),

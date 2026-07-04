@@ -370,42 +370,41 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         continue;
                     }
 
-                    let isModified = false;
-                    const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
-                    const diffLog: string[] = [];
+                    const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
+                    const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
 
-                    for (const field of fieldsToCompare) {
-                        let newVal = event[field] ?? null;
-                        let oldVal = eData[field] ?? null;
-                        if (newVal !== oldVal) {
-                            isModified = true;
-                            diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
-                        }
-                    }
+                    let changes: string[] = [];
+                    if (event.title && eData.title !== event.title) changes.push('タイトル');
+                    if (event.summary && eData.summary !== event.summary) changes.push('概要');
+                    if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
+                    if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
+                    if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
+                    if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
+                    if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
-                    if (isModified) {
-                        let historyMsg = `[${currentDate}] 自動同期による更新`;
-                        if (event.eventUrl && !eData.eventUrl) historyMsg += ' (URL追加)';
-                        if (event.redeemCode && !eData.redeemCode) historyMsg += ' (コード追加)';
-                        if (eData.endDate !== event.endDate) historyMsg += ` (期限更新: ${eData.endDate || 'なし'} -> ${event.endDate || 'なし'})`;
-
-                        batch.update(eventsCollection.doc(existingEvent.docId), {
-                            title: event.title ?? null,
-                            summary: event.summary ?? null,
-                            startDate: event.startDate ?? null,
-                            endDate: event.endDate ?? null,
-                            redeemCode: event.redeemCode ?? null,
-                            tag: event.tag ?? null,
-                            eventUrl: event.eventUrl ?? null,
-                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
-                        });
-                        batchCount++;
-                        updatedCount++;
-                        await commitBatchIfNeeded();
-                    } else {
+                    if (changes.length === 0) {
                         unchangedCount++;
+                        continue;
                     }
+
+                    const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+
+                    const updateData: any = {
+                        title: event.title || eData.title,
+                        summary: event.summary || eData.summary,
+                        startDate: formattedStart || null,
+                        endDate: formattedEnd || null,
+                        redeemCode: event.redeemCode || eData.redeemCode || null,
+                        eventUrl: event.eventUrl || eData.eventUrl || null,
+                        tag: event.tag || eData.tag || null,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
+                    };
+
+                    batch.update(eventsCollection.doc(existingEvent.docId), updateData);
+                    batchCount++;
+                    updatedCount++;
+                    await commitBatchIfNeeded();
                 } else {
                     const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
                     const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
@@ -423,42 +422,41 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             continue;
                         }
 
-                        let isModified = false;
-                        const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
-                        const diffLog: string[] = [];
+                        const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
+                        const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
 
-                        for (const field of fieldsToCompare) {
-                            let newVal = event[field] ?? null;
-                            let oldVal = eData[field] ?? null;
-                            if (newVal !== oldVal) {
-                                isModified = true;
-                                diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
-                            }
-                        }
+                        let changes: string[] = [];
+                        if (event.title && eData.title !== event.title) changes.push('タイトル');
+                        if (event.summary && eData.summary !== event.summary) changes.push('概要');
+                        if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
+                        if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
+                        if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
+                        if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
+                        if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
-                        if (isModified) {
-                            let historyMsg = `[${currentDate}] 自動同期による更新`;
-                            if (event.eventUrl && !eData.eventUrl) historyMsg += ' (URL追加)';
-                            if (event.redeemCode && !eData.redeemCode) historyMsg += ' (コード追加)';
-                            if (eData.endDate !== event.endDate) historyMsg += ` (期限更新: ${eData.endDate || 'なし'} -> ${event.endDate || 'なし'})`;
-
-                            batch.update(docRef, {
-                                title: event.title ?? null,
-                                summary: event.summary ?? null,
-                                startDate: event.startDate ?? null,
-                                endDate: event.endDate ?? null,
-                                redeemCode: event.redeemCode ?? null,
-                                tag: event.tag ?? null,
-                                eventUrl: event.eventUrl ?? null,
-                                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                                updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
-                            });
-                            batchCount++;
-                            updatedCount++;
-                            await commitBatchIfNeeded();
-                        } else {
+                        if (changes.length === 0) {
                             unchangedCount++;
+                            continue;
                         }
+
+                        const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+
+                        const updateData: any = {
+                            title: event.title || eData.title,
+                            summary: event.summary || eData.summary,
+                            startDate: formattedStart || null,
+                            endDate: formattedEnd || null,
+                            redeemCode: event.redeemCode || eData.redeemCode || null,
+                            eventUrl: event.eventUrl || eData.eventUrl || null,
+                            tag: event.tag || eData.tag || null,
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
+                        };
+
+                        batch.update(docRef, updateData);
+                        batchCount++;
+                        updatedCount++;
+                        await commitBatchIfNeeded();
                     } else {
                         batch.set(docRef, {
                             ...event,

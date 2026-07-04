@@ -204,7 +204,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 [ ${cycleEventTitles.join(', ')} ]
 
 【出力要件】
-マークダウン装飾（\`\`\`json や \`\`\` など）は絶対に使用せず、純粋な [ から始まるJSON配列のテキストのみを直接出力してください。`;
+マークダウン装飾（\`\`\`json や \`\`\` など）は絶対に使用せず、純粋な [ から始まるJSON配列のテキストのみを直接出力してください。
+配列内の各オブジェクトは、必ず以下のプロパティキーを厳格に使用すること：
+- "title": (文字列) イベント名
+- "summary": (文字列) イベント概要
+- "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または null
+- "endDate": (文字列) 終了日時 または null
+- "redeemCode": (文字列) ギフトコード または null
+- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか
+- "eventUrl": (文字列) URL または null`;
 
         const generationConfig = {
             temperature: 0.0,
@@ -219,11 +227,24 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         if (response.text) {
             let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             const startIndex = cleanText.indexOf('[');
-            const endIndex = cleanText.lastIndexOf(']');
-            if (startIndex !== -1 && endIndex !== -1) {
-                cleanText = cleanText.substring(startIndex, endIndex + 1);
+            if (startIndex !== -1) {
+                let parsed = false;
+                // 後ろから ']' を探して、正しいJSONになるまで試行する
+                for (let i = cleanText.lastIndexOf(']'); i >= startIndex; i--) {
+                    if (cleanText[i] === ']') {
+                        try {
+                            extractedEvents = JSON.parse(cleanText.substring(startIndex, i + 1));
+                            parsed = true;
+                            break;
+                        } catch (e) {
+                            // JSONとして不正な場合は次の ']' を探す
+                        }
+                    }
+                }
+                if (!parsed) throw new Error("Failed to parse JSON array from response.");
+            } else {
+                throw new Error("No JSON array found in response.");
             }
-            extractedEvents = JSON.parse(cleanText);
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
             throw new Error("Gemini response text was empty.");

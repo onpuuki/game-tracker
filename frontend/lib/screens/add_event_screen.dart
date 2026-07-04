@@ -259,6 +259,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
           itemCount: _dailyTaskControllers.length,
           itemBuilder: (context, index) {
             return ListTile(
+              key: ObjectKey(_dailyTaskControllers[index]),
               title: TextField(
                 controller: _dailyTaskControllers[index],
                 decoration: const InputDecoration(hintText: 'タスク名'),
@@ -326,6 +327,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
           itemCount: _weeklyTaskControllers.length,
           itemBuilder: (context, index) {
             return ListTile(
+              key: ObjectKey(_weeklyTaskControllers[index]),
               title: TextField(
                 controller: _weeklyTaskControllers[index],
                 decoration: const InputDecoration(hintText: 'タスク名'),
@@ -385,6 +387,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
           itemCount: _biweeklyTaskControllers.length,
           itemBuilder: (context, index) {
             return ListTile(
+              key: ObjectKey(_biweeklyTaskControllers[index]),
               title: TextField(
                 controller: _biweeklyTaskControllers[index],
                 decoration: const InputDecoration(hintText: 'タスク名'),
@@ -444,6 +447,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
           itemCount: _monthlyTaskControllers.length,
           itemBuilder: (context, index) {
             return ListTile(
+              key: ObjectKey(_monthlyTaskControllers[index]),
               title: TextField(
                 controller: _monthlyTaskControllers[index],
                 decoration: const InputDecoration(hintText: 'タスク名'),

@@ -4,8 +4,28 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../utils/debug_log_manager.dart';
 
-class DebugLogScreen extends StatelessWidget {
+class DebugLogScreen extends StatefulWidget {
   const DebugLogScreen({super.key});
+
+  @override
+  State<DebugLogScreen> createState() => _DebugLogScreenState();
+}
+
+class _DebugLogScreenState extends State<DebugLogScreen> {
+  late final Stream<QuerySnapshot> _logsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _logsStream = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'default',
+    )
+        .collection('debug_logs')
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,15 +113,7 @@ class DebugLogScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream:
-            FirebaseFirestore.instanceFor(
-                  app: Firebase.app(),
-                  databaseId: 'default',
-                )
-                .collection('debug_logs')
-                .orderBy('timestamp', descending: true)
-                .limit(100)
-                .snapshots(),
+        stream: _logsStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));

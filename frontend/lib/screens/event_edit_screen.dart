@@ -703,6 +703,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirm != true) return;
 
     setState(() {
@@ -734,6 +735,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
 
     try {
       await _loadData(); // reload list
+      if (!mounted) return;
       if (failureCount > 0) {
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('$successCount件成功しましたが、$failureCount件でエラーが発生しました')),
@@ -744,6 +746,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -833,6 +836,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
 
     try {
       await _loadData();
+      if (!mounted) return;
 
       if (failureCount > 0) {
         scaffoldMessenger.showSnackBar(
@@ -844,6 +848,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });

@@ -6,7 +6,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
 import { google } from 'googleapis';
 
@@ -201,31 +201,14 @@ export const syncSingleGameTask = onTaskDispatched({
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
 【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
-[ ${cycleEventTitles.join(', ')} ]`;
+[ ${cycleEventTitles.join(', ')} ]
 
-        const eventSchema = {
-            type: Type.ARRAY,
-            description: "List of extracted events",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING, description: "Event title" },
-                    summary: { type: Type.STRING, description: "Event summary" },
-                    startDate: { type: Type.STRING, description: "Start date (YYYY-MM-DD or YYYY-MM-DD HH:mm:00), or null", nullable: true },
-                    endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD or YYYY-MM-DD HH:mm:00), or null", nullable: true },
-                    redeemCode: { type: Type.STRING, description: "Redeem code if applicable, or null", nullable: true },
-                    tag: { type: Type.STRING, description: "Tag (e.g. イベント, ガチャ, コード)" },
-                    eventUrl: { type: Type.STRING, description: "Official event URL if available, or null", nullable: true }
-                },
-                required: ["title", "summary", "tag"]
-            }
-        };
+【出力要件】
+マークダウン装飾（\`\`\`json や \`\`\` など）は絶対に使用せず、純粋な [ から始まるJSON配列のテキストのみを直接出力してください。`;
 
         const generationConfig = {
             temperature: 0.0,
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: eventSchema
+            tools: [{ googleSearch: {} }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -234,7 +217,13 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         let extractedEvents: any[] = [];
         if (response.text) {
-            extractedEvents = JSON.parse(response.text);
+            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+            const startIndex = cleanText.indexOf('[');
+            const endIndex = cleanText.lastIndexOf(']');
+            if (startIndex !== -1 && endIndex !== -1) {
+                cleanText = cleanText.substring(startIndex, endIndex + 1);
+            }
+            extractedEvents = JSON.parse(cleanText);
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
             throw new Error("Gemini response text was empty.");

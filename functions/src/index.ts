@@ -708,30 +708,26 @@ export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_c
     }
 });
 
-// イベントの全クリア処理 (バッチ上限対応済み)
+// イベントの全クリア処理 (バッチ上限対応済み・OOM対策済み)
 export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     try {
-        const snapshot = await db.collectionGroup('events').get();
-        if (snapshot.empty) return { success: true, deletedCount: 0 };
+        let totalDeleted = 0;
 
-        const batches: Promise<any>[] = [];
-        let currentBatch = db.batch();
-        let count = 0;
+        while (true) {
+            const snapshot = await db.collectionGroup('events').limit(450).get();
+            if (snapshot.empty) break;
 
-        snapshot.docs.forEach((doc, index) => {
-            currentBatch.delete(doc.ref);
-            count++;
-            // 制限の500に対して安全マージンを取り450でコミットを実行
-            if (count === 450 || index === snapshot.docs.length - 1) {
-                batches.push(currentBatch.commit());
-                currentBatch = db.batch();
-                count = 0;
-            }
-        });
+            const batch = db.batch();
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
 
-        await Promise.all(batches);
-        functions.logger.info(`Successfully deleted ${snapshot.size} events from all games.`);
-        return { success: true, deletedCount: snapshot.size };
+            await batch.commit();
+            totalDeleted += snapshot.docs.length;
+        }
+
+        functions.logger.info(`Successfully deleted ${totalDeleted} events from all games.`);
+        return { success: true, deletedCount: totalDeleted };
     } catch (error) {
         functions.logger.error('Error clearing events from Firestore:', error instanceof Error ? error.stack : String(error));
         throw new functions.https.HttpsError('internal', 'Unable to clear events due to internal error', error);

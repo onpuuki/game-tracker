@@ -919,13 +919,15 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
                 }
 
                 const nextEndDateStr = `${nextEndDateTokyoObj.getFullYear()}-${(nextEndDateTokyoObj.getMonth() + 1).toString().padStart(2, '0')}-${nextEndDateTokyoObj.getDate().toString().padStart(2, '0')} ${nextEndDateTokyoObj.getHours().toString().padStart(2, '0')}:${nextEndDateTokyoObj.getMinutes().toString().padStart(2, '0')}:00`;
+                const nextEndDateObj = new Date(nextEndDateStr.replace(' ', 'T') + '+09:00');
 
                 // Reset tasks
                 const tasks = data.tasks || [];
                 const updatedTasks = tasks.map((task: any) => ({ ...task, isCompleted: false }));
 
                 currentBatch.update(doc.ref, {
-                    endDate: nextEndDateStr,
+                    startDate: admin.firestore.Timestamp.fromDate(endDateUTC),
+                    endDate: admin.firestore.Timestamp.fromDate(nextEndDateObj),
                     tasks: updatedTasks,
                     isCompleted: false,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()

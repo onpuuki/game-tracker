@@ -6,7 +6,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
 import { google } from 'googleapis';
 
@@ -236,28 +236,8 @@ ${existingEventsJsonStr}
 【出力要件】
 調査結果と既存DBを比較し、最終的に維持・更新・追加すべきイベント情報をJSON配列形式で出力してください。既存DBの内容と比較し、実質的に同じイベントは必ず既存の \`id\` を \`existingId\` に指定して名寄せしてください。完全に新規の場合は \`existingId\` に null を指定してください。`;
 
-        const responseSchema: Schema = {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    existingId: { type: Type.STRING, nullable: true },
-                    title: { type: Type.STRING },
-                    summary: { type: Type.STRING },
-                    tag: { type: Type.STRING, enum: ["ゲーム内", "ゲーム外", "コード"] },
-                    redeemCode: { type: Type.STRING, nullable: true },
-                    startDate: { type: Type.STRING, nullable: true },
-                    endDate: { type: Type.STRING, nullable: true },
-                    eventUrl: { type: Type.STRING, nullable: true }
-                },
-                required: ["title", "summary", "tag"]
-            }
-        };
-
         const generationConfig = {
             temperature: 0.0,
-            responseMimeType: "application/json",
-            responseSchema: responseSchema,
             tools: [{ googleSearch: {} }]
         };
 
@@ -267,7 +247,13 @@ ${existingEventsJsonStr}
 
         let extractedEvents: any[] = [];
         if (response.text) {
-            extractedEvents = JSON.parse(response.text);
+            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+            const startIndex = cleanText.indexOf('[');
+            const endIndex = cleanText.lastIndexOf(']');
+            if (startIndex !== -1 && endIndex !== -1) {
+                cleanText = cleanText.substring(startIndex, endIndex + 1);
+            }
+            extractedEvents = JSON.parse(cleanText);
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
             throw new Error("Gemini response text was empty.");

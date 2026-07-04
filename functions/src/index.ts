@@ -206,6 +206,17 @@ export const syncSingleGameTask = onTaskDispatched({
         currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
         const currentEventsList = Array.from(currentEventsMap.values());
 
+        const existingMiniList = currentEventsList.map(e => {
+            const d = e.data;
+            let endStr = '未定';
+            if (d.endDate && typeof d.endDate.toDate === 'function') {
+                endStr = d.endDate.toDate().toLocaleDateString('ja-JP');
+            } else if (typeof d.endDate === 'string') {
+                endStr = d.endDate;
+            }
+            return `[ID: ${e.docId}] ${d.title} (期限: ${endStr})`;
+        }).join('\n');
+
         const cycleEventTitles: string[] = [];
 
         const now = new Date();
@@ -219,7 +230,10 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
-        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。既存データとの比較やIDの付与は不要です。
+        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
+【既存のイベント一覧（参考）】
+${existingMiniList || 'なし'}
+
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
@@ -237,13 +251,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 [ ${cycleEventTitles.join(', ')} ]
 
 【出力要件】
-マークダウン装飾（\`\`\`jsonなど）は使用せず、純粋なJSON配列のみを出力すること。既存イベントとの比較は不要。
+（マークダウン使用禁止。純粋なJSON配列のみ）
 配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
 - "date_extraction_reasoning": (文字列) ※最重要※ 検索結果のテキストから、イベントの開始・終了日時を特定・推測するための論理的な思考プロセスや計算式（例:「開始日は〇日で期間が2週間だから終了日は〇日」）を必ずここに記載すること。
-- "title": (文字列) イベントの公式名称
+- "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。完全に新規の場合は null。
+- "title": (文字列) 既存IDを出力した場合は、一覧と「一言一句同じ」タイトルを使用すること。
 - "summary": (文字列) イベント概要
 - "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または 'UNKNOWN'
-- "endDate": (文字列) 終了日時(YYYY-MM-DD HH:mm:00) または 'UNKNOWN'
+- "endDate": (文字列) 既存IDを出力し、かつ検索結果から終了日が判明しない場合は、絶対にnullにせず一覧にある（期限: xxx）の日付を引き継ぐこと。判明した場合は (YYYY-MM-DD HH:mm:00) または 'UNKNOWN'。
 - "redeemCode": (文字列) ギフトコード または null
 - "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか
 - "eventUrl": (文字列) URL または null`;
@@ -332,18 +347,19 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     }
                 }
 
-                // 多段ファジーマッチングによる名寄せ処理
-                let existingEvent = currentEventsList.find(e => {
-                    // 1. URLが存在し、一致していれば確定
-                    if (event.eventUrl && e.data.eventUrl === event.eventUrl) return true;
-
-                    // 2. URLで確定できない場合、タイトルの類似度で判定
-                    if (e.data.title && event.title) {
-                        const similarity = calculateSimilarity(e.data.title, event.title);
-                        if (similarity >= 0.85) return true;
-                    }
-                    return false;
-                });
+                let existingEvent = undefined;
+                // 1. AIが既存イベントと判定し、IDを返した場合
+                if (event.existing_id) {
+                    existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
+                }
+                // 2. IDがない場合（新規扱い）でも、保険としてURLまたは類似度(85%以上)で照合する
+                if (!existingEvent) {
+                    existingEvent = currentEventsList.find(e => {
+                        if (event.eventUrl && e.data.eventUrl === event.eventUrl) return true;
+                        if (e.data.title && event.title && calculateSimilarity(e.data.title, event.title) >= 0.85) return true;
+                        return false;
+                    });
+                }
 
                 if (existingEvent) {
                     matchedDocIds.add(existingEvent.docId);

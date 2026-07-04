@@ -6,7 +6,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import * as crypto from 'crypto';
 import { google } from 'googleapis';
 
@@ -174,47 +174,20 @@ export const syncSingleGameTask = onTaskDispatched({
         const eventsCollection = db.collection(`games/${gameName}/events`);
         const currentEventsSnapshot = await eventsCollection.get();
 
-        const activeExistingEvents: any[] = [];
         const cycleEventTitles: string[] = [];
-        const existingEventTitles: string[] = [];
 
         const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
         currentEventsSnapshot.docs.forEach(doc => {
             const data = doc.data();
             if (data.isCycleEvent === true || data.isCreationLocked === true || data.isDeleted === true) {
                 cycleEventTitles.push(data.title);
             }
-
-            if (data.isCycleEvent !== true) {
-                existingEventTitles.push(data.title);
-
-                // アクティブなイベントのフィルタリング（現在開催中 または 終了から30日以内）
-                let isActive = true;
-                if (data.endDate) {
-                    const endDateObj = getSafeDateObj(data.endDate);
-                    if (endDateObj && endDateObj < thirtyDaysAgo) {
-                        isActive = false;
-                    }
-                }
-
-                if (isActive) {
-                    activeExistingEvents.push({
-                        id: doc.id,
-                        title: data.title,
-                        summary: data.summary,
-                        startDate: data.startDate,
-                        endDate: data.endDate
-                    });
-                }
-            }
         });
 
         const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-        const existingEventsJsonStr = JSON.stringify(activeExistingEvents, null, 2);
 
-        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、既存のデータベースと比較・精査して最終的なJSONデータを出力する専門AIです。
+        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。既存データとの比較やIDの付与は不要です。
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
@@ -227,18 +200,32 @@ export const syncSingleGameTask = onTaskDispatched({
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
-現在のデータベース状況（アクティブな既存イベント）:
-${existingEventsJsonStr}
-
 【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
-[ ${cycleEventTitles.join(', ')} ]
+[ ${cycleEventTitles.join(', ')} ]`;
 
-【出力要件】
-調査結果と既存DBを比較し、最終的に維持・更新・追加すべきイベント情報をJSON配列形式で出力してください。既存DBの内容と比較し、実質的に同じイベントは必ず既存の \`id\` を \`existingId\` に指定して名寄せしてください。完全に新規の場合は \`existingId\` に null を指定してください。`;
+        const eventSchema = {
+            type: Type.ARRAY,
+            description: "List of extracted events",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING, description: "Event title" },
+                    summary: { type: Type.STRING, description: "Event summary" },
+                    startDate: { type: Type.STRING, description: "Start date (YYYY-MM-DD or YYYY-MM-DD HH:mm:00), or null", nullable: true },
+                    endDate: { type: Type.STRING, description: "End date (YYYY-MM-DD or YYYY-MM-DD HH:mm:00), or null", nullable: true },
+                    redeemCode: { type: Type.STRING, description: "Redeem code if applicable, or null", nullable: true },
+                    tag: { type: Type.STRING, description: "Tag (e.g. イベント, ガチャ, コード)" },
+                    eventUrl: { type: Type.STRING, description: "Official event URL if available, or null", nullable: true }
+                },
+                required: ["title", "summary", "tag"]
+            }
+        };
 
         const generationConfig = {
             temperature: 0.0,
-            tools: [{ googleSearch: {} }]
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
+            responseSchema: eventSchema
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -247,13 +234,7 @@ ${existingEventsJsonStr}
 
         let extractedEvents: any[] = [];
         if (response.text) {
-            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-            const startIndex = cleanText.indexOf('[');
-            const endIndex = cleanText.lastIndexOf(']');
-            if (startIndex !== -1 && endIndex !== -1) {
-                cleanText = cleanText.substring(startIndex, endIndex + 1);
-            }
-            extractedEvents = JSON.parse(cleanText);
+            extractedEvents = JSON.parse(response.text);
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
             throw new Error("Gemini response text was empty.");
@@ -297,12 +278,60 @@ ${existingEventsJsonStr}
                     }
                 }
 
-                if (event.existingId) {
-                    const existingEvent = currentEventsList.find(e => e.docId === event.existingId);
-                    if (existingEvent) {
-                        matchedDocIds.add(existingEvent.docId);
+                const existingEvent = currentEventsList.find(e => e.data.title === event.title || (event.eventUrl && e.data.eventUrl === event.eventUrl));
 
-                        const eData = existingEvent.data;
+                if (existingEvent) {
+                    matchedDocIds.add(existingEvent.docId);
+
+                    const eData = existingEvent.data;
+                    if (eData.isLocked === true || eData.isUpdateLocked === true) {
+                        unchangedCount++;
+                        continue;
+                    }
+
+                    let isModified = false;
+                    const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
+                    const diffLog: string[] = [];
+
+                    for (const field of fieldsToCompare) {
+                        let newVal = event[field] ?? null;
+                        let oldVal = eData[field] ?? null;
+                        if (newVal !== oldVal) {
+                            isModified = true;
+                            diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
+                        }
+                    }
+
+                    if (isModified) {
+                        batch.update(eventsCollection.doc(existingEvent.docId), {
+                            title: event.title ?? null,
+                            summary: event.summary ?? null,
+                            startDate: event.startDate ?? null,
+                            endDate: event.endDate ?? null,
+                            redeemCode: event.redeemCode ?? null,
+                            tag: event.tag ?? null,
+                            eventUrl: event.eventUrl ?? null,
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
+                        });
+                        batchCount++;
+                        updatedCount++;
+                        await commitBatchIfNeeded();
+                    } else {
+                        unchangedCount++;
+                    }
+                } else {
+                    const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
+                    const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
+
+                    const docRef = eventsCollection.doc(docId);
+
+                    // Check if it exists in currentEventsList to avoid overwriting existing events by coincidence (e.g. hash collision)
+                    const existingByHash = currentEventsList.find(e => e.docId === docId);
+
+                    if (existingByHash) {
+                        matchedDocIds.add(docId);
+                        const eData = existingByHash.data;
                         if (eData.isLocked === true || eData.isUpdateLocked === true) {
                             unchangedCount++;
                             continue;
@@ -322,7 +351,7 @@ ${existingEventsJsonStr}
                         }
 
                         if (isModified) {
-                            batch.update(eventsCollection.doc(existingEvent.docId), {
+                            batch.update(docRef, {
                                 title: event.title ?? null,
                                 summary: event.summary ?? null,
                                 startDate: event.startDate ?? null,
@@ -339,74 +368,6 @@ ${existingEventsJsonStr}
                         } else {
                             unchangedCount++;
                         }
-                    } else {
-                        // fallback to create
-                        const docRef = eventsCollection.doc();
-                        batch.set(docRef, {
-                            ...event,
-                            gameName: gameName,
-                            subTag: null,
-                            imageUrl: null,
-                            isLocked: false,
-                            isUpdateLocked: false,
-                            isCreationLocked: false,
-                            isDeleted: false,
-                            tasks: [],
-                            isCycleEvent: false,
-                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updateHistory: [`[${currentDate}] Created by AI Sync`]
-                        });
-                        batchCount++;
-                        addedCount++;
-                        await commitBatchIfNeeded();
-                    }
-                } else {
-                    const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
-                    const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
-
-                    const docRef = eventsCollection.doc(docId);
-
-                    const existingDoc = await docRef.get();
-                    if (existingDoc.exists) {
-                         const eData = existingDoc.data()!;
-                         matchedDocIds.add(docId);
-                         if (eData.isLocked === true || eData.isUpdateLocked === true) {
-                             unchangedCount++;
-                             continue;
-                         }
-
-                         let isModified = false;
-                         const fieldsToCompare = ['title', 'summary', 'startDate', 'endDate', 'redeemCode', 'tag'];
-                         const diffLog: string[] = [];
-
-                         for (const field of fieldsToCompare) {
-                             let newVal = event[field] ?? null;
-                             let oldVal = eData[field] ?? null;
-                             if (newVal !== oldVal) {
-                                 isModified = true;
-                                 diffLog.push(`${field}: ${oldVal} -> ${newVal}`);
-                             }
-                         }
-
-                         if (isModified) {
-                             batch.update(docRef, {
-                                 title: event.title ?? null,
-                                 summary: event.summary ?? null,
-                                 startDate: event.startDate ?? null,
-                                 endDate: event.endDate ?? null,
-                                 redeemCode: event.redeemCode ?? null,
-                                 tag: event.tag ?? null,
-                                 eventUrl: event.eventUrl ?? null,
-                                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                                 updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
-                             });
-                             batchCount++;
-                             updatedCount++;
-                             await commitBatchIfNeeded();
-                         } else {
-                             unchangedCount++;
-                         }
                     } else {
                         batch.set(docRef, {
                             ...event,

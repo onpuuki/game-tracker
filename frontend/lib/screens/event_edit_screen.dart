@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -790,6 +791,10 @@ class _EventEditScreenState extends State<EventEditScreen> {
       }
 
       if (updateData.isNotEmpty) {
+        final now = DateTime.now();
+        final timeStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+        updateData['updateHistory'] = FieldValue.arrayUnion(['[$timeStr] 管理者により手動更新']);
+
         changedItems.add(item);
         updates.add(updateData);
       }

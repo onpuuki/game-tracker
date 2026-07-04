@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/intl.dart';
 
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
@@ -116,6 +117,8 @@ class _AddEventScreenState extends State<AddEventScreen> {
       tag = 'マンスリー';
     }
 
+    final String timeStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
     final data = {
       'gameName': gameName,
       'title': title,
@@ -132,6 +135,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
       'isLocked': false,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
+      'updateHistory': ['[$timeStr] 新規作成 (手動)'],
     };
 
     try {

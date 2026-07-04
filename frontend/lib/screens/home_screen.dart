@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import 'debug_log_screen.dart';
 import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
@@ -1907,24 +1908,47 @@ class _EventCardItemState extends State<_EventCardItem> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              _isHistoryExpanded = !_isHistoryExpanded;
-                                            });
-                                          },
-                                          style: TextButton.styleFrom(
-                                            padding: EdgeInsets.zero,
-                                            minimumSize: const Size(0, 0),
-                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          ),
-                                          child: Text(
-                                            _isHistoryExpanded ? '▲ 更新履歴を閉じる' : '▼ 更新履歴',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.blueGrey,
+                                        Row(
+                                          children: [
+                                            TextButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  _isHistoryExpanded = !_isHistoryExpanded;
+                                                });
+                                              },
+                                              style: TextButton.styleFrom(
+                                                padding: EdgeInsets.zero,
+                                                minimumSize: const Size(0, 0),
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              child: Text(
+                                                _isHistoryExpanded ? '▲ 更新履歴を閉じる' : '▼ 更新履歴',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.blueGrey,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 8),
+                                            Builder(
+                                              builder: (context) {
+                                                final dynamic ts = widget.eventData['updatedAt'] ?? widget.eventData['createdAt'];
+                                                String formattedDate = '';
+                                                if (ts is Timestamp) {
+                                                  formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(ts.toDate());
+                                                } else if (ts is String) {
+                                                  formattedDate = ts;
+                                                }
+                                                return Text(
+                                                  formattedDate.isNotEmpty ? '更新: $formattedDate' : '',
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
                                         ),
                                         PopupMenuButton<String>(
                                           padding: EdgeInsets.zero,

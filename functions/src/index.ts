@@ -114,7 +114,7 @@ export const processSyncRequest = onDocumentCreated({
             return;
         }
 
-        const queue = getFunctions().taskQueue('syncSingleGameTask');
+        const queue = getFunctions().taskQueue('locations/asia-northeast1/functions/syncSingleGameTask');
 
         const debugInfo: any[] = [];
 

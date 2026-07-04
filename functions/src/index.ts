@@ -174,6 +174,21 @@ export const syncSingleGameTask = onTaskDispatched({
         const eventsCollection = db.collection(`games/${gameName}/events`);
         const currentEventsSnapshot = await eventsCollection.get();
 
+        const currentEventsMap = new Map();
+        currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
+        const currentEventsList = Array.from(currentEventsMap.values());
+
+        const existingMiniList = currentEventsList.map(e => {
+            const d = e.data;
+            let endStr = '未定';
+            if (d.endDate && typeof d.endDate.toDate === 'function') {
+                endStr = d.endDate.toDate().toLocaleDateString('ja-JP');
+            } else if (typeof d.endDate === 'string') {
+                endStr = d.endDate;
+            }
+            return `- ${d.title} (終了日: ${endStr})`;
+        }).join('\n');
+
         const cycleEventTitles: string[] = [];
 
         const now = new Date();
@@ -188,6 +203,8 @@ export const syncSingleGameTask = onTaskDispatched({
         const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
         const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。既存データとの比較やIDの付与は不要です。
+【既存のイベント一覧（参考）】
+${existingMiniList || 'なし'}
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
@@ -198,6 +215,7 @@ export const syncSingleGameTask = onTaskDispatched({
 5. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
 6. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
 7. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
+8. 【重要: 名寄せと期限の引継ぎ】既存のイベント一覧と同じイベントを出力する場合、表記揺れを防ぐため必ず一覧と「一言一句同じtitle」を使用してください。また、検索結果で終了日が不明でも、一覧に終了日が存在する場合はその日付を優先して引き継いでください。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -254,9 +272,6 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         let totalTokens = response.usageMetadata?.totalTokenCount || 0;
 
         if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
-            const currentEventsMap = new Map();
-            currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
-            const currentEventsList = Array.from(currentEventsMap.values());
             const matchedDocIds = new Set<string>();
 
             let batch = db.batch();
@@ -299,7 +314,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     }
                 }
 
-                const existingEvent = currentEventsList.find(e => e.data.title === event.title || (event.eventUrl && e.data.eventUrl === event.eventUrl));
+                const normalize = (str: string) => {
+                    if (!str) return '';
+                    return str.replace(/[\s　]+/g, '').toLowerCase();
+                };
+
+                const existingEvent = currentEventsList.find(e =>
+                    (e.data.title && normalize(e.data.title) === normalize(event.title)) ||
+                    (event.eventUrl && e.data.eventUrl === event.eventUrl)
+                );
 
                 if (existingEvent) {
                     matchedDocIds.add(existingEvent.docId);

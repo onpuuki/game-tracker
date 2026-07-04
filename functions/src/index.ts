@@ -197,6 +197,7 @@ export const syncSingleGameTask = onTaskDispatched({
 4. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
 5. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
 6. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
+7. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -274,8 +275,18 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 }
             };
 
+            const nowMs = new Date().getTime();
+
             for (const event of extractedEvents) {
                 if (!event.title) continue;
+
+                if (event.endDate) {
+                    const endMs = new Date(event.endDate).getTime();
+                    if (!isNaN(endMs) && endMs < nowMs) {
+                        functions.logger.info(`[${traceId}] Skipping past event: ${event.title} (endDate: ${event.endDate})`);
+                        continue;
+                    }
+                }
 
                 if (event.tag === 'コード' && event.redeemCode) {
                     if (!/^[a-zA-Z0-9_-]+$/.test(event.redeemCode)) {
@@ -313,6 +324,11 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     }
 
                     if (isModified) {
+                        let historyMsg = `[${currentDate}] 自動同期による更新`;
+                        if (event.eventUrl && !eData.eventUrl) historyMsg += ' (URL追加)';
+                        if (event.redeemCode && !eData.redeemCode) historyMsg += ' (コード追加)';
+                        if (eData.endDate !== event.endDate) historyMsg += ` (期限更新: ${eData.endDate || 'なし'} -> ${event.endDate || 'なし'})`;
+
                         batch.update(eventsCollection.doc(existingEvent.docId), {
                             title: event.title ?? null,
                             summary: event.summary ?? null,
@@ -322,7 +338,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             tag: event.tag ?? null,
                             eventUrl: event.eventUrl ?? null,
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
+                            updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
                         });
                         batchCount++;
                         updatedCount++;
@@ -361,6 +377,11 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         }
 
                         if (isModified) {
+                            let historyMsg = `[${currentDate}] 自動同期による更新`;
+                            if (event.eventUrl && !eData.eventUrl) historyMsg += ' (URL追加)';
+                            if (event.redeemCode && !eData.redeemCode) historyMsg += ' (コード追加)';
+                            if (eData.endDate !== event.endDate) historyMsg += ` (期限更新: ${eData.endDate || 'なし'} -> ${event.endDate || 'なし'})`;
+
                             batch.update(docRef, {
                                 title: event.title ?? null,
                                 summary: event.summary ?? null,
@@ -370,7 +391,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 tag: event.tag ?? null,
                                 eventUrl: event.eventUrl ?? null,
                                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                                updateHistory: admin.firestore.FieldValue.arrayUnion(`[${currentDate}] ${diffLog.join(', ')}`)
+                                updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
                             });
                             batchCount++;
                             updatedCount++;

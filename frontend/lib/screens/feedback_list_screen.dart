@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import '../utils/debug_log_manager.dart';
 
 class FeedbackListScreen extends StatefulWidget {
   const FeedbackListScreen({super.key});
@@ -268,8 +269,16 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
           const SnackBar(content: Text('エクスポートに失敗しました。')),
         );
       }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      final errorMsg = 'Functionsエラー: [${e.code}] ${e.message}\n詳細: ${e.details}';
+      DebugLogManager().addLog(errorMsg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMsg)),
+      );
     } catch (e) {
       if (!mounted) return;
+      DebugLogManager().addLog('エクスポート中にエラーが発生しました: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('エクスポート中にエラーが発生しました: $e')),
       );

@@ -1998,52 +1998,59 @@ class _EventCardItemState extends State<_EventCardItem> {
                                           ],
                                         ),
                                         const SizedBox(width: 8),
-                                        if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false))
-                                          PopupMenuButton<String>(
-                                            padding: EdgeInsets.zero,
-                                            child: const Text('管理者メニュー', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                                            onSelected: (String result) {
-                                              if (result == 'edit') {
-                                                setState(() {
-                                                  _isEditing = true;
-                                                });
-                                              } else if (result == 'delete') {
-                                                _deleteEvent();
-                                              }
-                                            },
-                                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                              const PopupMenuItem<String>(
-                                                value: 'edit',
-                                                child: Text('イベント編集'),
-                                              ),
-                                              const PopupMenuItem<String>(
-                                                value: 'delete',
-                                                child: Text('イベント削除', style: TextStyle(color: Colors.red)),
-                                              ),
-                                            ],
-                                          ),
-                                        PopupMenuButton<String>(
-                                          padding: EdgeInsets.zero,
-                                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                                          onSelected: (String result) {
-                                            if (result == 'report') {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => FeedbackScreen(
-                                                    initialTitle: '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
-                                                    initialTag: '誤情報',
-                                                    targetEventId: widget.parsedEvent.doc.id,
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false))
+                                              PopupMenuButton<String>(
+                                                padding: EdgeInsets.zero,
+                                                child: const Text('管理者メニュー', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                                                onSelected: (String result) {
+                                                  if (result == 'edit') {
+                                                    setState(() {
+                                                      _isEditing = true;
+                                                    });
+                                                  } else if (result == 'delete') {
+                                                    _deleteEvent();
+                                                  }
+                                                },
+                                                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                                  const PopupMenuItem<String>(
+                                                    value: 'edit',
+                                                    child: Text('イベント編集'),
                                                   ),
+                                                  const PopupMenuItem<String>(
+                                                    value: 'delete',
+                                                    child: Text('イベント削除', style: TextStyle(color: Colors.red)),
+                                                  ),
+                                                ],
+                                              ),
+                                            PopupMenuButton<String>(
+                                              padding: EdgeInsets.zero,
+                                              icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                                              onSelected: (String result) {
+                                                if (result == 'report') {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => FeedbackScreen(
+                                                        initialTitle: '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
+                                                        initialTag: '誤情報',
+                                                        targetEventId: widget.parsedEvent.doc.id,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                                const PopupMenuItem<String>(
+                                                  value: 'report',
+                                                  child: Text('誤情報報告'),
                                                 ),
-                                              );
-                                            }
-                                          },
-                                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                            const PopupMenuItem<String>(
-                                              value: 'report',
-                                              child: Text('誤情報報告'),
+                                              ],
                                             ),
+                                            if (widget.tag == 'コード' && widget.redeemCode != null && widget.redeemCode!.isNotEmpty)
+                                              const SizedBox(width: 70),
                                           ],
                                         ),
                                       ],

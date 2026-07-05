@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,7 +24,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
   String? _selectedTag;
-  bool _isLoading = false;
 
   final List<String> _tags = [
     '要望',
@@ -55,7 +53,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     super.dispose();
   }
 
-  Future<void> _submitFeedback() async {
+  void _submitFeedback() {
     if (_bodyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('本文を入力してください。')),
@@ -63,69 +61,27 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
+    DebugLogManager().addLog('Submit started (fire-and-forget)');
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    FirebaseFirestore.instance.collection('feedbacks').add({
+      'title': _titleController.text.trim(),
+      'tag': _selectedTag,
+      'body': _bodyController.text.trim(),
+      'targetEventId': widget.targetEventId,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'uid': uid,
+    }).catchError((e) {
+      DebugLogManager().addLog('Error in background feedback submission: $e');
+      throw e;
     });
 
-    await DebugLogManager().addLog('Submit started');
-
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-
-      await DebugLogManager().addLog('Firestore add called');
-
-      await FirebaseFirestore.instance.collection('feedbacks').add({
-        'title': _titleController.text.trim(),
-        'tag': _selectedTag,
-        'body': _bodyController.text.trim(),
-        'targetEventId': widget.targetEventId,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'uid': uid,
-      }).timeout(const Duration(seconds: 10));
-
-      await DebugLogManager().addLog('Firestore add completed');
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      await DebugLogManager().addLog('Navigating to success screen');
-
-      if (!mounted) return;
-      if (!context.mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      if (e is TimeoutException) {
-        await DebugLogManager().addLog('Error caught (Timeout): $e');
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        if (!context.mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
-        );
-      } else {
-        await DebugLogManager().addLog('Error caught: $e');
-        if (!mounted) return;
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エラーが発生しました: $e')),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
+    );
   }
 
   Widget _buildTagButton(String tag) {
@@ -169,9 +125,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       appBar: AppBar(
         title: const Text('フィードバックを送信'),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+      body: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -23,5 +23,10 @@ service cloud.firestore {
       allow create, read: if isAuthenticated();
       allow update, delete: if false;
     }
+
+    match /feedbacks/{feedbackId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAuthenticated();
+    }
   }
 }

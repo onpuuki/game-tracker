@@ -189,8 +189,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                         });
                       },
                       contentPadding: EdgeInsets.zero,
-                      activeTrackColor: Colors.redAccent.withAlpha(128),
-                      activeThumbColor: Colors.redAccent,
+                      activeColor: Colors.redAccent,
                     ),
                     const Divider(),
                     const SizedBox(height: 8),

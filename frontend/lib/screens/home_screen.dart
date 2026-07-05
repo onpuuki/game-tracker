@@ -1534,7 +1534,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                 decoration: const InputDecoration(labelText: 'イベント名', isDense: true),
               ),
               DropdownButtonFormField<String>(
-                value: ['ゲーム内', 'ゲーム外', 'コード'].contains(_selectedTag) ? _selectedTag : null,
+                initialValue: ['ゲーム内', 'ゲーム外', 'コード'].contains(_selectedTag) ? _selectedTag : null,
                 items: ['ゲーム内', 'ゲーム外', 'コード'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: (val) => setState(() => _selectedTag = val),
                 decoration: const InputDecoration(labelText: 'タグ', isDense: true),

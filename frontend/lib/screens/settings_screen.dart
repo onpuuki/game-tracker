@@ -121,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.feedback_outlined),
-            title: const Text('情報の誤り・不具合を報告する'),
+            title: const Text('フィードバックを送信'),
             onTap: () {
               Navigator.push(
                 context,

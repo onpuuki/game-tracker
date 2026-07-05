@@ -2032,7 +2032,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                 MaterialPageRoute(
                                                   builder: (context) => FeedbackScreen(
                                                     initialTitle: '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
-                                                    initialTag: 'イベント誤情報',
+                                                    initialTag: '誤情報',
                                                     targetEventId: widget.parsedEvent.doc.id,
                                                   ),
                                                 ),

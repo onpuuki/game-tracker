@@ -414,9 +414,9 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
 
               // Handle Timestamp properly
               final createdAtData = data['createdAt'];
-              DateTime? createdAt;
+              DateTime? createdDateTime;
               if (createdAtData is Timestamp) {
-                createdAt = createdAtData.toDate();
+                createdDateTime = createdAtData.toDate();
               }
 
               final isSelected = _selectedFeedbackIds.contains(doc.id);
@@ -456,9 +456,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                               ),
                             ),
                             Text(
-                              createdAt != null
-                                  ? DateFormat('yyyy-MM-dd HH:mm').format(createdAt)
-                                  : '日時不明',
+                              DateFormat('yyyy-MM-dd HH:mm').format(createdDateTime ?? DateTime.now()),
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ],

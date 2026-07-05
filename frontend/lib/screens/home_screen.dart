@@ -11,6 +11,8 @@ import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
 import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
+import 'feedback_screen.dart';
+import 'feedback_list_screen.dart';
 
 import 'add_event_screen.dart';
 import 'game_selection_screen.dart';
@@ -803,6 +805,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const PromptEditorScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.feedback),
+              title: const Text('フィードバック一覧'),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const FeedbackListScreen(),
                   ),
                 );
               },
@@ -1982,50 +1997,54 @@ class _EventCardItemState extends State<_EventCardItem> {
                                             ),
                                           ],
                                         ),
+                                        const SizedBox(width: 8),
+                                        if (const bool.fromEnvironment('IS_ADMIN', defaultValue: false))
+                                          PopupMenuButton<String>(
+                                            padding: EdgeInsets.zero,
+                                            child: const Text('管理者メニュー', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                                            onSelected: (String result) {
+                                              if (result == 'edit') {
+                                                setState(() {
+                                                  _isEditing = true;
+                                                });
+                                              } else if (result == 'delete') {
+                                                _deleteEvent();
+                                              }
+                                            },
+                                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                              const PopupMenuItem<String>(
+                                                value: 'edit',
+                                                child: Text('イベント編集'),
+                                              ),
+                                              const PopupMenuItem<String>(
+                                                value: 'delete',
+                                                child: Text('イベント削除', style: TextStyle(color: Colors.red)),
+                                              ),
+                                            ],
+                                          ),
                                         PopupMenuButton<String>(
                                           padding: EdgeInsets.zero,
                                           icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                                          onSelected: (String result) async {
+                                          onSelected: (String result) {
                                             if (result == 'report') {
-                                              final Uri url = Uri.parse('https://forms.gle/dummy_url');
-                                              if (await canLaunchUrl(url)) {
-                                                await launchUrl(url, mode: LaunchMode.externalApplication);
-                                              } else {
-                                                if (context.mounted) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    const SnackBar(content: Text('報告フォームを開けませんでした。')),
-                                                  );
-                                                }
-                                              }
-                                            } else if (result == 'edit') {
-                                              setState(() {
-                                                _isEditing = true;
-                                              });
-                                            } else if (result == 'delete') {
-                                              _deleteEvent();
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => FeedbackScreen(
+                                                    initialTitle: '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
+                                                    initialTag: 'イベント誤情報',
+                                                    targetEventId: widget.parsedEvent.doc.id,
+                                                  ),
+                                                ),
+                                              );
                                             }
                                           },
-                                          itemBuilder: (BuildContext context) {
-                                            const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
-                                            return <PopupMenuEntry<String>>[
-                                              const PopupMenuItem<String>(
-                                                value: 'report',
-                                                child: Text('情報の誤りを報告'),
-                                              ),
-                                              if (isAdmin)
-                                                const PopupMenuDivider(),
-                                              if (isAdmin)
-                                                const PopupMenuItem<String>(
-                                                  value: 'edit',
-                                                  child: Text('イベント編集'),
-                                                ),
-                                              if (isAdmin)
-                                                const PopupMenuItem<String>(
-                                                  value: 'delete',
-                                                  child: Text('イベント削除', style: TextStyle(color: Colors.red)),
-                                                ),
-                                            ];
-                                          },
+                                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                            const PopupMenuItem<String>(
+                                              value: 'report',
+                                              child: Text('誤情報報告'),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),

@@ -2142,9 +2142,9 @@ class _EventCardItemState extends State<_EventCardItem> {
                             );
 
                             if (widget.hasValidCodeUrl) {
-                              final urlToLaunch = (widget.eventUrl != null && widget.eventUrl!.isNotEmpty)
-                                  ? widget.eventUrl!
-                                  : widget.gameCodeUrl!.replaceAll('（コード）', widget.redeemCode!);
+                              final urlToLaunch = widget.gameCodeUrl!
+                                  .replaceAll('（コード）', widget.redeemCode!)
+                                  .replaceAll('(コード)', widget.redeemCode!);
                               final uri = Uri.parse(urlToLaunch);
                               if (await canLaunchUrl(uri)) {
                                 await launchUrl(

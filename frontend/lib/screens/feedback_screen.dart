@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'feedback_success_screen.dart';
 
 class FeedbackScreen extends StatefulWidget {
   final String? initialTitle;
@@ -36,12 +37,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     super.initState();
     _titleController = TextEditingController(text: widget.initialTitle ?? '');
     _bodyController = TextEditingController();
-    _selectedTag = widget.initialTag ?? _tags.first;
+    _bodyController.addListener(_onBodyChanged);
+    _selectedTag = widget.initialTag;
+  }
+
+  void _onBodyChanged() {
+    setState(() {});
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _bodyController.removeListener(_onBodyChanged);
     _bodyController.dispose();
     super.dispose();
   }
@@ -73,10 +80,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('フィードバックを送信しました。ご協力ありがとうございます！')),
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
       );
-      Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,6 +97,41 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         _isSubmitting = false;
       });
     }
+  }
+
+  Widget _buildTagButton(String tag) {
+    final isSelected = _selectedTag == tag;
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        onPressed: () {
+          setState(() {
+            _selectedTag = tag;
+          });
+        },
+        style: OutlinedButton.styleFrom(
+          backgroundColor: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
+          side: BorderSide(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+        ),
+        child: Text(
+          tag,
+          style: TextStyle(
+            color: isSelected
+                ? Theme.of(context).colorScheme.onPrimaryContainer
+                : Theme.of(context).colorScheme.onSurface,
+            fontSize: 12,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,26 +161,36 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    '要望タグ',
+                    'フィードバック内容(必須)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 8.0,
-                    children: _tags.map((tag) {
-                      return ChoiceChip(
-                        label: Text(tag),
-                        selected: _selectedTag == tag,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedTag = tag;
-                            });
-                          }
-                        },
-                      );
-                    }).toList(),
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTagButton(_tags[0]),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildTagButton(_tags[1]),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTagButton(_tags[2]),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildTagButton(_tags[3]),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   const Text(
@@ -152,7 +208,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton(
-                    onPressed: _submitFeedback,
+                    onPressed: (_selectedTag != null && _bodyController.text.trim().isNotEmpty)
+                        ? _submitFeedback
+                        : null,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),

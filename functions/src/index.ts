@@ -100,7 +100,11 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
             // エラーオブジェクト内のどこに429/503が含まれていても検知できるように文字列化して判定
             const errStr = String(err?.message || '') + JSON.stringify(err);
-            const isRetryable = errStr.includes('429') || errStr.includes('503') || errStr.includes('RESOURCE_EXHAUSTED');
+            let isRetryable = errStr.includes('429') || errStr.includes('503') || errStr.includes('RESOURCE_EXHAUSTED');
+
+            if (errStr.includes('GenerateRequestsPerDay') || errStr.includes('FreeTier')) {
+                isRetryable = false;
+            }
 
             functions.logger.warn(`[${traceId}] Gemini API failed (Attempt ${attempt}/${maxRetries}). isRetryable: ${isRetryable}, Error: ${err.message}`);
 
@@ -1005,6 +1009,38 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
         if (totalUpdated > 0 || totalDeleted > 0) {
             await writeDebugLog(traceId, `Successfully reset ${totalUpdated} cycle events and deleted ${totalDeleted} expired normal events.`);
         }
+
+        // Clean up debug_logs older than 7 days
+        const sevenDaysAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+        const oldLogsSnapshot = await db.collection('debug_logs').where('timestamp', '<', sevenDaysAgo).get();
+
+        let deletedLogsCount = 0;
+        if (!oldLogsSnapshot.empty) {
+            const logBatches: Promise<any>[] = [];
+            let logBatch = db.batch();
+            let logOpCount = 0;
+
+            for (const logDoc of oldLogsSnapshot.docs) {
+                logBatch.delete(logDoc.ref);
+                logOpCount++;
+                deletedLogsCount++;
+
+                if (logOpCount === 450) {
+                    logBatches.push(logBatch.commit());
+                    logBatch = db.batch();
+                    logOpCount = 0;
+                }
+            }
+
+            if (logOpCount > 0) {
+                logBatches.push(logBatch.commit());
+            }
+
+            await Promise.all(logBatches);
+        }
+
+        functions.logger.info(`[${traceId}] Successfully deleted ${deletedLogsCount} old debug logs.`);
+        await writeDebugLog(traceId, `Successfully deleted ${deletedLogsCount} old debug logs.`);
 
     } catch (error: any) {
         functions.logger.error(`[${traceId}] Error in resetCycleEvents: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });

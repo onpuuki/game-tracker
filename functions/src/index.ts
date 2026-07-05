@@ -904,6 +904,112 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
     }
 });
 
+export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    const traceId = 'exportFeedbacks-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    const folderId = data.folderId;
+    const targetIds = data.targetIds;
+
+    if (!folderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'folderId is required');
+    }
+
+    functions.logger.info(`[${traceId}] Starting exportFeedbacksToDrive to folder: ${folderId}`);
+    await writeDebugLog(traceId, `Starting feedback export to Google Drive. Folder ID: ${folderId}`);
+
+    try {
+        let feedbacksSnapshot;
+        const feedbacksRef = db.collection('feedbacks');
+
+        if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
+            // Fetch all and filter in memory to avoid query chunking limits
+            const allDocs = await feedbacksRef.get();
+            feedbacksSnapshot = {
+                docs: allDocs.docs.filter(doc => targetIds.includes(doc.id))
+            };
+        } else {
+            feedbacksSnapshot = await feedbacksRef.get();
+        }
+
+        const feedbacks = feedbacksSnapshot.docs.map(doc => {
+            const docData = doc.data();
+            let createdAt = null;
+            if (docData.createdAt && docData.createdAt.toDate) {
+                createdAt = docData.createdAt.toDate().toISOString();
+            }
+
+            return {
+                id: doc.id,
+                title: docData.title ?? null,
+                body: docData.body ?? null,
+                tag: docData.tag ?? null,
+                status: docData.status ?? null,
+                createdAt: createdAt
+            };
+        });
+
+        const jsonString = JSON.stringify(feedbacks, null, 2);
+        const fileName = 'feedback.json';
+
+        const auth = new google.auth.GoogleAuth({
+            scopes: ['https://www.googleapis.com/auth/drive']
+        });
+        const drive = google.drive({ version: 'v3', auth });
+
+        const query = `'${folderId}' in parents and trashed=false`;
+        const res = await drive.files.list({
+            q: query,
+            spaces: 'drive',
+            fields: 'files(id, name, mimeType)',
+            includeItemsFromAllDrives: true,
+            supportsAllDrives: true
+        });
+
+        const allFiles = res.data.files || [];
+        const existingFile = allFiles.find(f => f.name === fileName);
+
+        const media = {
+            mimeType: 'application/json',
+            body: jsonString
+        };
+
+        let driveFile;
+        if (existingFile) {
+            const fileId = existingFile.id!;
+            functions.logger.info(`[${traceId}] Updating existing file: ${fileId}`);
+            const updateRes = await drive.files.update({
+                fileId: fileId,
+                media: media
+            });
+            driveFile = updateRes.data;
+            await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
+        } else {
+            functions.logger.info(`[${traceId}] Creating new file: ${fileName}`);
+            const createRes = await drive.files.create({
+                requestBody: {
+                    name: fileName,
+                    parents: [folderId]
+                },
+                media: media
+            });
+            driveFile = createRes.data;
+            await writeDebugLog(traceId, `Created new file in Drive. File ID: ${driveFile.id}`);
+        }
+
+        functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);
+        return {
+            success: true,
+            message: 'Export successful',
+            fileId: driveFile.id,
+            exportedCount: feedbacks.length
+        };
+
+    } catch (error: any) {
+         functions.logger.error(`[${traceId}] Export failed: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+         await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));
+         throw new functions.https.HttpsError('internal', 'Failed to export feedbacks to Google Drive', error.message);
+    }
+});
+
 export const resetCycleEvents = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
     const traceId = 'cycle-reset-' + Date.now();
     functions.logger.info(`[${traceId}] Starting resetCycleEvents job`);

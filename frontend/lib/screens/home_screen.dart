@@ -11,7 +11,7 @@ import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
 import 'settings_screen.dart';
 import 'timer_settings_screen.dart';
-import 'event_edit_screen.dart';
+
 import 'add_event_screen.dart';
 import 'game_selection_screen.dart';
 import 'export_settings_screen.dart';
@@ -823,19 +823,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('イベント編集'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const EventEditScreen(),
-                  ),
-                );
-              },
-            ),
+
             ListTile(
               leading: const Icon(Icons.delete),
               title: _isClearingEvents
@@ -1546,7 +1534,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                 decoration: const InputDecoration(labelText: 'イベント名', isDense: true),
               ),
               DropdownButtonFormField<String>(
-                initialValue: ['ゲーム内', 'ゲーム外', 'コード'].contains(_selectedTag) ? _selectedTag : null,
+                value: ['ゲーム内', 'ゲーム外', 'コード'].contains(_selectedTag) ? _selectedTag : null,
                 items: ['ゲーム内', 'ゲーム外', 'コード'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: (val) => setState(() => _selectedTag = val),
                 decoration: const InputDecoration(labelText: 'タグ', isDense: true),

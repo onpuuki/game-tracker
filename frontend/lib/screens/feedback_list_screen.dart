@@ -235,7 +235,19 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
 
   Future<void> _exportFeedbacks(List<String> targetIds) async {
     try {
-      final configDoc = await FirebaseFirestore.instance.collection('settings').doc('export_config').get();
+      DocumentSnapshot<Map<String, dynamic>> configDoc;
+      try {
+        configDoc = await FirebaseFirestore.instance
+            .collection('settings')
+            .doc('export_config')
+            .get()
+            .timeout(const Duration(seconds: 5));
+      } catch (e) {
+        configDoc = await FirebaseFirestore.instance
+            .collection('settings')
+            .doc('export_config')
+            .get(const GetOptions(source: Source.cache));
+      }
       final folderId = configDoc.data()?['folder_id'] as String?;
 
       if (!mounted) return;
@@ -321,6 +333,8 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
             final createdAtData = data['createdAt'];
             if (createdAtData is Timestamp) {
               createdAt = createdAtData.toDate();
+            } else if (createdAtData is String) {
+              createdAt = DateTime.tryParse(createdAtData);
             }
 
             // Keyword filter
@@ -426,6 +440,8 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
               DateTime? createdDateTime;
               if (createdAtData is Timestamp) {
                 createdDateTime = createdAtData.toDate();
+              } else if (createdAtData is String) {
+                createdDateTime = DateTime.tryParse(createdAtData);
               }
 
               final isSelected = _selectedFeedbackIds.contains(doc.id);
@@ -465,7 +481,11 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                               ),
                             ),
                             Text(
-                              DateFormat('yyyy-MM-dd HH:mm').format(createdDateTime ?? DateTime.now()),
+                              createdAtData == null
+                                  ? '同期中...'
+                                  : (createdDateTime != null
+                                      ? DateFormat('yyyy-MM-dd HH:mm').format(createdDateTime)
+                                      : '日時不明'),
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ],

@@ -9,6 +9,15 @@ import { CloudSchedulerClient } from '@google-cloud/scheduler';
 import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
 import { google } from 'googleapis';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrBefore);
+dayjs.tz.setDefault("Asia/Tokyo");
 
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
@@ -228,7 +237,7 @@ export const syncSingleGameTask = onTaskDispatched({
             }
         });
 
-        const currentDate = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+        const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
 
         const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
 【既存のイベント一覧（参考）】
@@ -902,7 +911,7 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
             return null;
         }
 
-        const now = new Date(); // Native UTC date
+        const now = dayjs().tz('Asia/Tokyo');
 
         const batches: Promise<any>[] = [];
         let currentBatch = db.batch();
@@ -915,69 +924,47 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
             const endDateUTC = getSafeDateObj(data.endDate);
             if (!endDateUTC) continue;
 
-            if (endDateUTC <= now) {
+            const endDateDayjs = dayjs(endDateUTC).tz('Asia/Tokyo');
+
+            if (endDateDayjs.isSameOrBefore(now)) {
                 if (data.isCycleEvent === true) {
                     // The cycle event has expired, recalculate next deadline based on Tokyo time.
                     const cycleType = data.cycleType;
                     const cycleSettings = data.cycleSettings || {};
 
-                    // Get current Tokyo time components directly from 'now'
-                    const tokyoFormatter = new Intl.DateTimeFormat('en-US', {
-                        timeZone: 'Asia/Tokyo',
-                        year: 'numeric', month: '2-digit', day: '2-digit',
-                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-                    });
-
-                    const tokyoParts = tokyoFormatter.formatToParts(now);
-                    const getPart = (type: string) => parseInt(tokyoParts.find(p => p.type === type)?.value || '0', 10);
-
-                    const tYear = getPart('year');
-                    const tMonth = getPart('month') - 1; // 0-indexed
-                    const tDay = getPart('day');
-
-                    // We construct a mock Date object to easily manipulate days/months in Tokyo context,
-                    // but note that new Date(year, month, day) in Cloud Functions creates a UTC/local date.
-                    // However, since we just need the string logic, we'll format it back properly.
-                    let nextEndDateTokyoObj = new Date(tYear, tMonth, tDay, cycleSettings.hour || 0, cycleSettings.minute || 0);
-                    const mockNowTokyoObj = new Date(tYear, tMonth, tDay, getPart('hour'), getPart('minute'), getPart('second'));
+                    let nextEndDateTokyoObj = now.hour(cycleSettings.hour || 0).minute(cycleSettings.minute || 0).second(0).millisecond(0);
 
                     if (cycleType === 'daily') {
-                        if (nextEndDateTokyoObj <= mockNowTokyoObj) {
-                            nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 1);
+                        if (nextEndDateTokyoObj.isSameOrBefore(now)) {
+                            nextEndDateTokyoObj = nextEndDateTokyoObj.add(1, 'day');
                         }
                     } else if (cycleType === 'weekly') {
                         const targetDay = cycleSettings.dayOfWeek || 1; // 1: Mon .. 7: Sun
-                        while (nextEndDateTokyoObj.getDay() !== (targetDay === 7 ? 0 : targetDay) || nextEndDateTokyoObj <= mockNowTokyoObj) {
-                            nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 1);
+                        // dayjs 0 is Sunday, 1 is Monday ... 6 is Saturday
+                        const targetDayjsDay = targetDay === 7 ? 0 : targetDay;
+
+                        while (nextEndDateTokyoObj.day() !== targetDayjsDay || nextEndDateTokyoObj.isSameOrBefore(now)) {
+                            nextEndDateTokyoObj = nextEndDateTokyoObj.add(1, 'day');
                         }
                     } else if (cycleType === 'biweekly') {
                         // Biweekly is relative to its original start date.
                         // Instead of starting from today, jump 14 days from its previous end date until it's > now
+                        nextEndDateTokyoObj = endDateDayjs.hour(cycleSettings.hour || 0).minute(cycleSettings.minute || 0).second(0).millisecond(0);
 
-                        // Reconstruct the original Tokyo date exactly
-                        const originalParts = tokyoFormatter.formatToParts(endDateUTC);
-                        const getOrigPart = (type: string) => parseInt(originalParts.find(p => p.type === type)?.value || '0', 10);
-                        const originalTYear = getOrigPart('year');
-                        const originalTMonth = getOrigPart('month') - 1;
-                        const originalTDay = getOrigPart('day');
-                        const originalTHour = getOrigPart('hour');
-                        const originalTMinute = getOrigPart('minute');
-
-                        nextEndDateTokyoObj = new Date(originalTYear, originalTMonth, originalTDay, originalTHour, originalTMinute);
-
-                        while (nextEndDateTokyoObj <= mockNowTokyoObj) {
-                            nextEndDateTokyoObj.setDate(nextEndDateTokyoObj.getDate() + 14);
+                        while (nextEndDateTokyoObj.isSameOrBefore(now)) {
+                            nextEndDateTokyoObj = nextEndDateTokyoObj.add(14, 'day');
                         }
                     } else if (cycleType === 'monthly') {
                         const dayOfMonth = cycleSettings.dayOfMonth || 1;
-                        nextEndDateTokyoObj = new Date(tYear, tMonth, dayOfMonth, cycleSettings.hour || 0, cycleSettings.minute || 0);
-                        if (nextEndDateTokyoObj <= mockNowTokyoObj) {
-                            nextEndDateTokyoObj = new Date(tYear, tMonth + 1, dayOfMonth, cycleSettings.hour || 0, cycleSettings.minute || 0);
+                        nextEndDateTokyoObj = now.date(dayOfMonth).hour(cycleSettings.hour || 0).minute(cycleSettings.minute || 0).second(0).millisecond(0);
+
+                        if (nextEndDateTokyoObj.isSameOrBefore(now)) {
+                            nextEndDateTokyoObj = nextEndDateTokyoObj.add(1, 'month');
                         }
                     }
 
-                    const nextEndDateStr = `${nextEndDateTokyoObj.getFullYear()}-${(nextEndDateTokyoObj.getMonth() + 1).toString().padStart(2, '0')}-${nextEndDateTokyoObj.getDate().toString().padStart(2, '0')} ${nextEndDateTokyoObj.getHours().toString().padStart(2, '0')}:${nextEndDateTokyoObj.getMinutes().toString().padStart(2, '0')}:00`;
-                    const nextEndDateObj = new Date(nextEndDateStr.replace(' ', 'T') + '+09:00');
+                    const nextEndDateStr = nextEndDateTokyoObj.format('YYYY-MM-DD HH:mm:00');
+                    const nextEndDateObj = nextEndDateTokyoObj.toDate();
 
                     // Reset tasks
                     const tasks = data.tasks || [];

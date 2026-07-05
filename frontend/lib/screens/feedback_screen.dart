@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback_success_screen.dart';
+import '../utils/debug_log_manager.dart';
 
 class FeedbackScreen extends StatefulWidget {
   final String? initialTitle;
@@ -65,8 +67,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       _isLoading = true;
     });
 
+    await DebugLogManager().addLog('Submit started');
+
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
+
+      await DebugLogManager().addLog('Firestore add called');
 
       await FirebaseFirestore.instance.collection('feedbacks').add({
         'title': _titleController.text.trim(),
@@ -76,7 +82,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'uid': uid,
-      });
+      }).timeout(const Duration(seconds: 10));
+
+      await DebugLogManager().addLog('Firestore add completed');
 
       if (!mounted) return;
 
@@ -84,6 +92,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         _isLoading = false;
       });
 
+      await DebugLogManager().addLog('Navigating to success screen');
+
+      if (!mounted) return;
       if (!context.mounted) return;
       Navigator.pushReplacement(
         context,
@@ -91,13 +102,29 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エラーが発生しました: $e')),
-      );
-      setState(() {
-        _isLoading = false;
-      });
+
+      if (e is TimeoutException) {
+        await DebugLogManager().addLog('Error caught (Timeout): $e');
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+        if (!context.mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
+        );
+      } else {
+        await DebugLogManager().addLog('Error caught: $e');
+        if (!mounted) return;
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エラーが発生しました: $e')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

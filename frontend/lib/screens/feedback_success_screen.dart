@@ -23,7 +23,7 @@ class FeedbackSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'フィードバックいただきありがとうございます。\nいただいた内容はアプリの改善に活用させていただきます',
+                'フィードバックいただきありがとうございます。いただいた内容はアプリの改善に活用させていただきます',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,

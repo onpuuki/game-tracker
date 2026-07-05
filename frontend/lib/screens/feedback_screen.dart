@@ -23,12 +23,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
   String? _selectedTag;
-  bool _isSubmitting = false;
+  bool _isLoading = false;
 
   final List<String> _tags = [
-    '機能追加要望',
-    'バグ報告',
-    'イベント誤情報',
+    '要望',
+    'バグ',
+    '誤情報',
     'その他',
   ];
 
@@ -62,7 +62,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
 
     setState(() {
-      _isSubmitting = true;
+      _isLoading = true;
     });
 
     try {
@@ -81,20 +81,22 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       if (!mounted) return;
 
       setState(() {
-        _isSubmitting = false;
+        _isLoading = false;
       });
 
+      if (!context.mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const FeedbackSuccessScreen()),
       );
     } catch (e) {
       if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('エラーが発生しました: $e')),
       );
       setState(() {
-        _isSubmitting = false;
+        _isLoading = false;
       });
     }
   }
@@ -140,7 +142,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       appBar: AppBar(
         title: const Text('フィードバックを送信'),
       ),
-      body: _isSubmitting
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),

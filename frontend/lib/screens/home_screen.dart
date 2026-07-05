@@ -194,6 +194,42 @@ class _HomeScreenState extends State<HomeScreen> {
           prefs.getString('secondarySortField') ?? 'startDate';
       _secondarySortOrder = prefs.getString('secondarySortOrder') ?? 'asc';
     });
+
+    final hasShownWelcomeDialog = prefs.getBool('hasShownWelcomeDialog') ?? false;
+    if (!hasShownWelcomeDialog) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showWelcomeDialog();
+      });
+    }
+  }
+
+  Future<void> _showWelcomeDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('はじめに（必ずお読みください）'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'ダウンロードありがとうございます！\n本アプリは、複数ゲームのイベントスケジュールやコード情報を効率よく確認するためのファンメイドの非公式アプリです。各ゲームの公式運営会社様とは一切関係ありません。\n\n掲載しているイベント情報はAIを活用して自動収集しているため、実際の開催期間や内容と異なる場合があります。課金やガチャなどに関する正確な情報は、必ず公式のアナウンスをご確認ください。',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('hasShownWelcomeDialog', true);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('同意してはじめる'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _savePreferences() async {
@@ -904,6 +940,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) => const ExportSettingsScreen(),
                   ),
                 );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('ウェルカムダイアログ確認'),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                _showWelcomeDialog();
               },
             ),
           ],
@@ -1941,8 +1985,19 @@ class _EventCardItemState extends State<_EventCardItem> {
                                         PopupMenuButton<String>(
                                           padding: EdgeInsets.zero,
                                           icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                                          onSelected: (String result) {
-                                            if (result == 'edit') {
+                                          onSelected: (String result) async {
+                                            if (result == 'report') {
+                                              final Uri url = Uri.parse('https://forms.gle/dummy_url');
+                                              if (await canLaunchUrl(url)) {
+                                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                                              } else {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('報告フォームを開けませんでした。')),
+                                                  );
+                                                }
+                                              }
+                                            } else if (result == 'edit') {
                                               setState(() {
                                                 _isEditing = true;
                                               });
@@ -1950,16 +2005,27 @@ class _EventCardItemState extends State<_EventCardItem> {
                                               _deleteEvent();
                                             }
                                           },
-                                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                            const PopupMenuItem<String>(
-                                              value: 'edit',
-                                              child: Text('イベント編集'),
-                                            ),
-                                            const PopupMenuItem<String>(
-                                              value: 'delete',
-                                              child: Text('イベント削除', style: TextStyle(color: Colors.red)),
-                                            ),
-                                          ],
+                                          itemBuilder: (BuildContext context) {
+                                            const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
+                                            return <PopupMenuEntry<String>>[
+                                              const PopupMenuItem<String>(
+                                                value: 'report',
+                                                child: Text('情報の誤りを報告'),
+                                              ),
+                                              if (isAdmin)
+                                                const PopupMenuDivider(),
+                                              if (isAdmin)
+                                                const PopupMenuItem<String>(
+                                                  value: 'edit',
+                                                  child: Text('イベント編集'),
+                                                ),
+                                              if (isAdmin)
+                                                const PopupMenuItem<String>(
+                                                  value: 'delete',
+                                                  child: Text('イベント削除', style: TextStyle(color: Colors.red)),
+                                                ),
+                                            ];
+                                          },
                                         ),
                                       ],
                                     ),

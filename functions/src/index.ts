@@ -40,9 +40,18 @@ function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
     if (val.toDate && typeof val.toDate === 'function') return val.toDate();
     if (typeof val === 'string') {
-        const str = val.includes(' ') ? val.replace(' ', 'T') + '+09:00' : val + 'T23:59:59+09:00';
-        const d = new Date(str);
-        return isNaN(d.getTime()) ? null : d;
+        // AIの出力揺れ（JST等の文字列）を除去
+        const cleanVal = val.replace(/JST|UTC|GMT/gi, '').trim();
+        const d = dayjs(cleanVal).tz('Asia/Tokyo');
+
+        if (d.isValid()) {
+            // 時間指定がなく日付（YYYY-MM-DDやYYYY/MM/DD）のみの場合は、その日の23:59:59に設定
+            if (!cleanVal.includes(' ') && !cleanVal.includes('T')) {
+                return d.hour(23).minute(59).second(59).toDate();
+            }
+            return d.toDate();
+        }
+        return null;
     }
     return null;
 }

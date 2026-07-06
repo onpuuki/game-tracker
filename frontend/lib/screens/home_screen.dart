@@ -1734,453 +1734,486 @@ class _EventCardItemState extends State<_EventCardItem> {
           ? (widget.isDarkMode ? Colors.grey[850] : Colors.grey.shade200)
           : null,
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          InkWell(
-            onTap: widget.isChecked
-                ? null
-                : () async {
-                    if (widget.tag == 'コード') {
-                      final codeToCopy =
-                          (widget.redeemCode != null &&
-                              widget.redeemCode!.isNotEmpty)
-                          ? widget.redeemCode!
-                          : widget.title;
-                      await Clipboard.setData(ClipboardData(text: codeToCopy));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('コードをコピーしました')),
-                        );
-                      }
-                    } else {
-                      final query = '${widget.eventGameName} ${widget.title}';
-                      final encodedQuery = Uri.encodeComponent(query);
-                      final uri = Uri.parse(
-                        'https://www.google.com/search?q=$encodedQuery',
-                      );
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(
-                          uri,
-                          mode: LaunchMode.externalApplication,
-                        );
-                      } else {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Could not launch URL'),
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  },
-            onLongPress: widget.onCheckedToggle,
-            child: Stack(
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: 12.0,
-                    top: 12.0,
-                    bottom: 12.0,
-                    right: showAutoFillButton ? 82.0 : 12.0,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (widget.imageUrl != null &&
-                                    widget.imageUrl!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8.0),
-                                    child: SizedBox(
-                                      width: 50,
-                                      height: 50,
-                                      child: Image.network(
-                                        widget.imageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                const Icon(
-                                                  Icons.image_not_supported,
-                                                ),
-                                      ),
-                                    ),
-                                  ),
-                                Text(
-                                  widget.eventGameName,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (widget.dateStr.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 2.0,
-                                      bottom: 4.0,
-                                    ),
-                                    child: Text(
-                                      '更新日:${widget.dateStr}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (widget.trailingWidget != null) ...[
-                            const SizedBox(width: 8),
-                            widget.isChecked
-                                ? Opacity(
-                                    opacity: 0.5,
-                                    child: widget.trailingWidget,
-                                  )
-                                : widget.trailingWidget!,
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 6.0,
-                            children: [
-                              if (widget.tag != null && widget.tag!.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: widget.tagColor.withAlpha(26),
-                                    border: Border.all(color: widget.tagColor),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    widget.tag!,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: widget.tagColor,
-                                    ),
-                                  ),
-                                ),
-                              if (widget.subTag != null &&
-                                  widget.subTag!.isNotEmpty)
-                                Text(
-                                  widget.subTag!,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              Text(
-                                widget.title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  decoration: widget.isChecked
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: widget.isChecked ? Colors.grey : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.period,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: widget.isChecked
-                                  ? Colors.grey
-                                  : Colors.blueGrey,
-                            ),
-                          ),
-                          if (widget.summary.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.summary,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: widget.isChecked ? Colors.grey : null,
-                              ),
-                            ),
-                          ],
-                          if (widget.isCycleEvent &&
-                              widget.eventData['tasks'] != null &&
-                              (widget.eventData['tasks'] as List)
-                                  .isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8.0,
-                              runSpacing: -8.0,
-                              children: (widget.eventData['tasks'] as List)
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
-                                    final taskIndex = entry.key;
-                                    final task =
-                                        entry.value as Map<String, dynamic>;
-                                    final taskName = task['name'] ?? '';
-                                    final isTaskCompleted =
-                                        task['isCompleted'] == true;
-
-                                    return IntrinsicWidth(
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Checkbox(
-                                            value: isTaskCompleted,
-                                            onChanged: (bool? value) async {
-                                              if (value == null) return;
-
-                                              final updatedTasks =
-                                                  List<
-                                                    Map<String, dynamic>
-                                                  >.from(
-                                                    widget.eventData['tasks'],
-                                                  );
-                                              updatedTasks[taskIndex]['isCompleted'] =
-                                                  value;
-
-                                              final allCompleted = updatedTasks
-                                                  .every(
-                                                    (t) =>
-                                                        t['isCompleted'] ==
-                                                        true,
-                                                  );
-
-                                              await widget
-                                                  .parsedEvent
-                                                  .doc
-                                                  .reference
-                                                  .update({
-                                                    'tasks': updatedTasks,
-                                                    'isCompleted': allCompleted,
-                                                  });
-                                            },
-                                          ),
-                                          Text(
-                                            taskName,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              decoration: isTaskCompleted
-                                                  ? TextDecoration.lineThrough
-                                                  : null,
-                                              color: isTaskCompleted
-                                                  ? Colors.grey
-                                                  : null,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  })
-                                  .toList(),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.isChecked)
-                  Positioned.fill(
-                    child: Center(
-                      child: Transform.rotate(
-                        angle: -0.3,
-                        child: Text(
-                          '済',
-                          style: TextStyle(
-                            fontSize: 60,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.withAlpha(128),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
           Padding(
-            padding: const EdgeInsets.only(left: 12.0, bottom: 8.0, right: 8.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: EdgeInsets.only(right: showAutoFillButton ? 75.0 : 0.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (const bool.fromEnvironment(
-                            'IS_ADMIN',
-                            defaultValue: false,
-                          ) &&
-                          !widget.isChecked &&
-                          !_isEditing)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _isHistoryExpanded = !_isHistoryExpanded;
-                                });
-                              },
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 0),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                _isHistoryExpanded ? '▲ 更新履歴を閉じる' : '▼ 更新履歴',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blueGrey,
-                                ),
-                              ),
-                            ),
-                            if (_isHistoryExpanded)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Builder(
-                                  builder: (context) {
-                                    final dynamic historyData =
-                                        widget.eventData['updateHistory'];
-                                    List<String> historyList = [];
-                                    if (historyData is List) {
-                                      historyList = historyData
-                                          .map((e) => e?.toString() ?? '')
-                                          .where((e) => e.isNotEmpty)
-                                          .toList();
-                                    }
-
-                                    if (historyList.isEmpty) {
-                                      return const Text(
-                                        '更新履歴はありません',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      );
-                                    }
-
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: historyList.reversed
-                                          .map(
-                                            (history) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 4.0,
-                                              ),
-                                              child: Text(
-                                                history,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (const bool.fromEnvironment(
-                      'IS_ADMIN',
-                      defaultValue: false,
-                    ))
-                      PopupMenuButton<String>(
-                        padding: EdgeInsets.zero,
-                        child: const Text(
-                          '管理者メニュー',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        onSelected: (String result) {
-                          if (result == 'edit') {
-                            setState(() {
-                              _isEditing = true;
-                            });
-                          } else if (result == 'delete') {
-                            _deleteEvent();
+                InkWell(
+                  onTap: widget.isChecked
+                      ? null
+                      : () async {
+                          if (widget.tag == 'コード') {
+                            final codeToCopy =
+                                (widget.redeemCode != null &&
+                                    widget.redeemCode!.isNotEmpty)
+                                ? widget.redeemCode!
+                                : widget.title;
+                            await Clipboard.setData(
+                              ClipboardData(text: codeToCopy),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('コードをコピーしました')),
+                              );
+                            }
+                          } else {
+                            final query =
+                                '${widget.eventGameName} ${widget.title}';
+                            final encodedQuery = Uri.encodeComponent(query);
+                            final uri = Uri.parse(
+                              'https://www.google.com/search?q=$encodedQuery',
+                            );
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Could not launch URL'),
+                                  ),
+                                );
+                              }
+                            }
                           }
                         },
-                        itemBuilder: (BuildContext context) =>
-                            <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'edit',
-                                child: Text('イベント編集'),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'delete',
-                                child: Text(
-                                  'イベント削除',
-                                  style: TextStyle(color: Colors.red),
+                  onLongPress: widget.onCheckedToggle,
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (widget.imageUrl != null &&
+                                          widget.imageUrl!.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8.0,
+                                          ),
+                                          child: SizedBox(
+                                            width: 50,
+                                            height: 50,
+                                            child: Image.network(
+                                              widget.imageUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) => const Icon(
+                                                    Icons.image_not_supported,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      Text(
+                                        widget.eventGameName,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (widget.dateStr.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 2.0,
+                                            bottom: 4.0,
+                                          ),
+                                          child: Text(
+                                            '更新日:${widget.dateStr}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                      ),
-                    PopupMenuButton<String>(
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        Icons.more_vert,
-                        size: 20,
-                        color: Colors.grey,
-                      ),
-                      onSelected: (String result) {
-                        if (result == 'report') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => FeedbackScreen(
-                                initialTitle:
-                                    '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
-                                initialTag: '誤情報',
-                                targetEventId: widget.parsedEvent.doc.id,
-                              ),
+                                if (widget.trailingWidget != null) ...[
+                                  const SizedBox(width: 8),
+                                  widget.isChecked
+                                      ? Opacity(
+                                          opacity: 0.5,
+                                          child: widget.trailingWidget,
+                                        )
+                                      : widget.trailingWidget!,
+                                ],
+                              ],
                             ),
-                          );
-                        }
-                      },
-                      itemBuilder: (BuildContext context) =>
-                          <PopupMenuEntry<String>>[
-                            const PopupMenuItem<String>(
-                              value: 'report',
-                              child: Text('誤情報報告'),
+                            const SizedBox(height: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6.0,
+                                  children: [
+                                    if (widget.tag != null &&
+                                        widget.tag!.isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: widget.tagColor.withAlpha(26),
+                                          border: Border.all(
+                                            color: widget.tagColor,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          widget.tag!,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: widget.tagColor,
+                                          ),
+                                        ),
+                                      ),
+                                    if (widget.subTag != null &&
+                                        widget.subTag!.isNotEmpty)
+                                      Text(
+                                        widget.subTag!,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    Text(
+                                      widget.title,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        decoration: widget.isChecked
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        color: widget.isChecked
+                                            ? Colors.grey
+                                            : null,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.period,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.isChecked
+                                        ? Colors.grey
+                                        : Colors.blueGrey,
+                                  ),
+                                ),
+                                if (widget.summary.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.summary,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: widget.isChecked
+                                          ? Colors.grey
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                                if (widget.isCycleEvent &&
+                                    widget.eventData['tasks'] != null &&
+                                    (widget.eventData['tasks'] as List)
+                                        .isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8.0,
+                                    runSpacing: -8.0,
+                                    children: (widget.eventData['tasks'] as List)
+                                        .asMap()
+                                        .entries
+                                        .map((entry) {
+                                          final taskIndex = entry.key;
+                                          final task =
+                                              entry.value
+                                                  as Map<String, dynamic>;
+                                          final taskName = task['name'] ?? '';
+                                          final isTaskCompleted =
+                                              task['isCompleted'] == true;
+
+                                          return IntrinsicWidth(
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Checkbox(
+                                                  value: isTaskCompleted,
+                                                  onChanged: (bool? value) async {
+                                                    if (value == null) return;
+
+                                                    final updatedTasks =
+                                                        List<
+                                                          Map<String, dynamic>
+                                                        >.from(
+                                                          widget
+                                                              .eventData['tasks'],
+                                                        );
+                                                    updatedTasks[taskIndex]['isCompleted'] =
+                                                        value;
+
+                                                    final allCompleted =
+                                                        updatedTasks.every(
+                                                          (t) =>
+                                                              t['isCompleted'] ==
+                                                              true,
+                                                        );
+
+                                                    await widget
+                                                        .parsedEvent
+                                                        .doc
+                                                        .reference
+                                                        .update({
+                                                          'tasks': updatedTasks,
+                                                          'isCompleted':
+                                                              allCompleted,
+                                                        });
+                                                  },
+                                                ),
+                                                Text(
+                                                  taskName,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    decoration: isTaskCompleted
+                                                        ? TextDecoration
+                                                              .lineThrough
+                                                        : null,
+                                                    color: isTaskCompleted
+                                                        ? Colors.grey
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        })
+                                        .toList(),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
-                    ),
-                  ],
+                        ),
+                      ),
+                      if (widget.isChecked)
+                        Positioned.fill(
+                          child: Center(
+                            child: Transform.rotate(
+                              angle: -0.3,
+                              child: Text(
+                                '済',
+                                style: TextStyle(
+                                  fontSize: 60,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.withAlpha(128),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 12.0,
+                    bottom: 8.0,
+                    right: 8.0,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (const bool.fromEnvironment(
+                                  'IS_ADMIN',
+                                  defaultValue: false,
+                                ) &&
+                                !widget.isChecked &&
+                                !_isEditing)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _isHistoryExpanded =
+                                            !_isHistoryExpanded;
+                                      });
+                                    },
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      _isHistoryExpanded
+                                          ? '▲ 更新履歴を閉じる'
+                                          : '▼ 更新履歴',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isHistoryExpanded)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final dynamic historyData =
+                                              widget.eventData['updateHistory'];
+                                          List<String> historyList = [];
+                                          if (historyData is List) {
+                                            historyList = historyData
+                                                .map((e) => e?.toString() ?? '')
+                                                .where((e) => e.isNotEmpty)
+                                                .toList();
+                                          }
+
+                                          if (historyList.isEmpty) {
+                                            return const Text(
+                                              '更新履歴はありません',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            );
+                                          }
+
+                                          return Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: historyList.reversed
+                                                .map(
+                                                  (history) => Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          bottom: 4.0,
+                                                        ),
+                                                    child: Text(
+                                                      history,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (const bool.fromEnvironment(
+                            'IS_ADMIN',
+                            defaultValue: false,
+                          ))
+                            PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              child: const Text(
+                                '管理者メニュー',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              onSelected: (String result) {
+                                if (result == 'edit') {
+                                  setState(() {
+                                    _isEditing = true;
+                                  });
+                                } else if (result == 'delete') {
+                                  _deleteEvent();
+                                }
+                              },
+                              itemBuilder: (BuildContext context) =>
+                                  <PopupMenuEntry<String>>[
+                                    const PopupMenuItem<String>(
+                                      value: 'edit',
+                                      child: Text('イベント編集'),
+                                    ),
+                                    const PopupMenuItem<String>(
+                                      value: 'delete',
+                                      child: Text(
+                                        'イベント削除',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ),
+                                  ],
+                            ),
+                          PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.more_vert,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                            onSelected: (String result) {
+                              if (result == 'report') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => FeedbackScreen(
+                                      initialTitle:
+                                          '${widget.eventGameName}のイベント『${widget.title}』の情報に誤りがあります',
+                                      initialTag: '誤情報',
+                                      targetEventId: widget.parsedEvent.doc.id,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            itemBuilder: (BuildContext context) =>
+                                <PopupMenuEntry<String>>[
+                                  const PopupMenuItem<String>(
+                                    value: 'report',
+                                    child: Text('誤情報報告'),
+                                  ),
+                                ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

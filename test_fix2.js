@@ -1,0 +1,18 @@
+const fs = require('fs');
+
+let content = fs.readFileSync('frontend/lib/screens/home_screen.dart', 'utf8');
+
+// I need to find the showAutoFillButton block and the InkWell child
+const childIndex = content.indexOf('child: Stack(');
+if (childIndex !== -1) {
+    // We will extract the showAutoFillButton button from the bottom row
+    const autoFillButtonStart = content.indexOf('if (showAutoFillButton)\n                      Container(');
+    const autoFillButtonRegex = /if \(showAutoFillButton\)\s+Container\([\s\S]*?width: 70,[\s\S]*?decoration: BoxDecoration\([\s\S]*?borderRadius: BorderRadius\.circular\(12\),[\s\S]*?color: widget\.isChecked[\s\S]*?\? Colors\.grey\.shade400[\s\S]*?: \(widget\.hasValidCodeUrl[\s\S]*?\? Theme\.of\(context\)\.primaryColor[\s\S]*?: Colors\.blueGrey\),[\s\S]*?\),[\s\S]*?child: Material\([\s\S]*?color: Colors\.transparent,[\s\S]*?child: InkWell\([\s\S]*?borderRadius: BorderRadius\.circular\(12\),[\s\S]*?onTap: widget\.isChecked[\s\S]*?\? null[\s\S]*?: \(\) async {[\s\S]*?final messenger = ScaffoldMessenger\.of\([\s\S]*?context,[\s\S]*?\);[\s\S]*?await Clipboard\.setData\([\s\S]*?ClipboardData\(text: widget\.redeemCode!\),[\s\S]*?\);[\s\S]*?messenger\.showSnackBar\([\s\S]*?const SnackBar\([\s\S]*?content: Text\('コードをコピーしました'\),[\s\S]*?duration: Duration\(seconds: 1\),[\s\S]*?\),[\s\S]*?\);[\s\S]*?if \(widget\.hasValidCodeUrl\) {[\s\S]*?final urlToLaunch = widget\.gameCodeUrl![\s\S]*?\.replaceAll\([\s\S]*?'（コード）',[\s\S]*?widget\.redeemCode!,[\s\S]*?\)[\s\S]*?\.replaceAll\([\s\S]*?'\(コード\)',[\s\S]*?widget\.redeemCode!,[\s\S]*?\);[\s\S]*?final uri = Uri\.parse\(urlToLaunch\);[\s\S]*?if \(await canLaunchUrl\(uri\)\) {[\s\S]*?await launchUrl\([\s\S]*?uri,[\s\S]*?mode: LaunchMode\.externalApplication,[\s\S]*?\);[\s\S]*?} else {[\s\S]*?messenger\.showSnackBar\([\s\S]*?const SnackBar\([\s\S]*?content: Text\([\s\S]*?'Could not launch URL',[\s\S]*?\),[\s\S]*?\),[\s\S]*?\);[\s\S]*?}[\s\S]*?}[\s\S]*?},[\s\S]*?child: Padding\([\s\S]*?padding: const EdgeInsets\.symmetric\([\s\S]*?vertical: 4\.0,[\s\S]*?\),[\s\S]*?child: Column\([\s\S]*?mainAxisAlignment: MainAxisAlignment\.center,[\s\S]*?mainAxisSize: MainAxisSize\.min,[\s\S]*?children: \[[\s\S]*?Icon\([\s\S]*?widget\.hasValidCodeUrl[\s\S]*?\? Icons\.open_in_browser[\s\S]*?: Icons\.copy,[\s\S]*?color: Colors\.white,[\s\S]*?size: 16,[\s\S]*?\),[\s\S]*?const SizedBox\(height: 2\),[\s\S]*?Text\([\s\S]*?widget\.hasValidCodeUrl \? '自動\\n入力' : 'コピー',[\s\S]*?textAlign: TextAlign\.center,[\s\S]*?style: const TextStyle\([\s\S]*?color: Colors\.white,[\s\S]*?fontSize: 12,[\s\S]*?fontWeight: FontWeight\.bold,[\s\S]*?\),[\s\S]*?\),[\s\S]*?\],[\s\S]*?\),[\s\S]*?\),[\s\S]*?\),[\s\S]*?\),[\s\S]*?\),/m;
+
+    let modifiedContent = content.replace(autoFillButtonRegex, '');
+
+    // Note: the original codebase has memory constraints on layout, let's look at memory. "Flutter UI Layout Rule: To align action buttons at the bottom of cards (like event cards), avoid using `IntrinsicHeight`, `Stack`, and absolute `Positioned` elements. Instead, use a structured `Column` with a `Row` at the bottom, utilizing `Spacer()` to push elements to the edges naturally."
+    // Wait, the prompt specifically asks to return it to the original layout: "カードの右端にベタ付けされ、上から下までカード全体の高さを持つ大きなボタン... IntrinsicHeight活用など...". The memory rule says avoid IntrinsicHeight and Stack for *bottom row alignment*. Here, we are talking about a full-height right-aligned button, which inherently requires IntrinsicHeight if it's placed in a Row with the main content. The user prompt explicitly suggests: "解決策として、`Stack` や `Row`（IntrinsicHeight活用など）を用いて大きなボタンを右端に配置しつつ..."
+
+    // I need to be careful with the replacement. Let's do it with replace_with_git_merge_diff since the code is large.
+}

@@ -158,14 +158,17 @@ class EditTab extends HookConsumerWidget {
               .where('isCycleEvent', isEqualTo: true)
               .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
-        if (!snapshot.hasData)
+        }
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
 
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty)
+        if (docs.isEmpty) {
           return const Center(child: Text('登録されたサイクルイベントがありません'));
+        }
 
         return ListView.builder(
           itemCount: docs.length,

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../utils/debug_log_manager.dart';
 
 class SyncStatusScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class SyncStatusScreen extends StatefulWidget {
 
 class _SyncStatusScreenState extends State<SyncStatusScreen> {
   late Stream<QuerySnapshot> _syncRequestsStream;
+  bool _isCycleSyncRunning = false;
 
   @override
   void initState() {
@@ -29,6 +31,40 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
             .orderBy('createdAt', descending: true)
             .limit(100)
             .snapshots();
+  }
+
+  Future<void> _triggerCycleReset() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _isCycleSyncRunning = true;
+    });
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      ).httpsCallable('manualResetCycleEvents');
+      final result = await callable.call();
+
+      if (!mounted) return;
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(result.data['message'] ?? 'サイクルスキャンが完了しました')),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('サイクルスキャンエラー: ${e.message}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('予期せぬエラー: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCycleSyncRunning = false;
+        });
+      }
+    }
   }
 
   Future<void> _triggerSync() async {
@@ -124,14 +160,41 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
               Container(
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
-                child: FilledButton(
-                  onPressed: (isSyncRunning && !isStaleState)
-                      ? null
-                      : _triggerSync,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 40),
-                  ),
-                  child: const Text('Run Sync'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: (isSyncRunning && !isStaleState)
+                            ? null
+                            : _triggerSync,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
+                        child: const Text('AIスキャン'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _isCycleSyncRunning
+                            ? null
+                            : _triggerCycleReset,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
+                        child: _isCycleSyncRunning
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('サイクルスキャン'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Expanded(

@@ -16,7 +16,9 @@ class TopSection extends HookConsumerWidget {
     final initialState = ref.read(addEventProvider);
     final notifier = ref.read(addEventProvider.notifier);
 
-    final gameNameController = useTextEditingController(text: initialState.gameName);
+    final gameNameController = useTextEditingController(
+      text: initialState.gameName,
+    );
     final titleController = useTextEditingController(text: initialState.title);
     final codeController = useTextEditingController(text: initialState.code);
 

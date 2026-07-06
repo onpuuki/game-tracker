@@ -55,9 +55,7 @@ class _GameSelectionScreenState extends State<GameSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('ゲーム絞り込み'),
-      ),
+      appBar: AppBar(title: const Text('ゲーム絞り込み')),
       body: Column(
         children: [
           Padding(

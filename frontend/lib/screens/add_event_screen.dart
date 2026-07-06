@@ -20,12 +20,7 @@ class AddEventScreen extends HookConsumerWidget {
             ],
           ),
         ),
-        body: const TabBarView(
-          children: [
-            AddTab(),
-            EditTab(),
-          ],
-        ),
+        body: const TabBarView(children: [AddTab(), EditTab()]),
       ),
     );
   }

@@ -102,7 +102,9 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
           if (docs.isNotEmpty) {
             final firstDocData = docs.first.data() as Map<String, dynamic>;
             final firstStatus = firstDocData['status'] as String?;
-            if (firstStatus == 'pending' || firstStatus == 'processing' || firstStatus == 'dispatched') {
+            if (firstStatus == 'pending' ||
+                firstStatus == 'processing' ||
+                firstStatus == 'dispatched') {
               isSyncRunning = true;
               final updatedAt = firstDocData['updatedAt'] as Timestamp?;
               final createdAt = firstDocData['createdAt'] as Timestamp?;
@@ -123,7 +125,9 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: (isSyncRunning && !isStaleState) ? null : _triggerSync,
+                  onPressed: (isSyncRunning && !isStaleState)
+                      ? null
+                      : _triggerSync,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 40),
                   ),
@@ -144,10 +148,15 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     bool currentItemStale = false;
                     if (index == 0) {
                       currentItemStale = isStaleState;
-                    } else if (status == 'processing' || status == 'dispatched') {
+                    } else if (status == 'processing' ||
+                        status == 'dispatched') {
                       final timeToUse = updatedAt ?? createdAt;
                       if (timeToUse != null) {
-                        currentItemStale = DateTime.now().difference(timeToUse.toDate()).inMinutes >= 15;
+                        currentItemStale =
+                            DateTime.now()
+                                .difference(timeToUse.toDate())
+                                .inMinutes >=
+                            15;
                       }
                     }
 
@@ -286,24 +295,32 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 ),
                               ),
                             ],
-                            if (status == 'processing' || status == 'dispatched') ...[
+                            if (status == 'processing' ||
+                                status == 'dispatched') ...[
                               const SizedBox(height: 12),
                               if (currentItemStale) ...[
                                 Row(
                                   children: const [
-                                    Icon(Icons.error_outline, color: Colors.red, size: 16),
+                                    Icon(
+                                      Icons.error_outline,
+                                      color: Colors.red,
+                                      size: 16,
+                                    ),
                                     SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
                                         'バックエンド処理がタイムアウトしました。再実行してください',
-                                        style: TextStyle(color: Colors.red, fontSize: 12),
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ] else ...[
                                 const LinearProgressIndicator(),
-                              ]
+                              ],
                             ],
                             if (debugInfo != null && debugInfo.isNotEmpty) ...[
                               const SizedBox(height: 12),

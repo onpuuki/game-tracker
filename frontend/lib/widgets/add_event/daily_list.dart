@@ -6,7 +6,11 @@ import 'add_event_providers.dart';
 class DailyList extends HookConsumerWidget {
   const DailyList({super.key});
 
-  Future<void> _selectTime(BuildContext context, Function(TimeOfDay?) onSelected, TimeOfDay? initialTime) async {
+  Future<void> _selectTime(
+    BuildContext context,
+    Function(TimeOfDay?) onSelected,
+    TimeOfDay? initialTime,
+  ) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: initialTime ?? TimeOfDay.now(),
@@ -31,7 +35,8 @@ class DailyList extends HookConsumerWidget {
               const Text('実行時刻:', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 16),
               ElevatedButton(
-                onPressed: () => _selectTime(context, notifier.updateDailyTime, dailyTime),
+                onPressed: () =>
+                    _selectTime(context, notifier.updateDailyTime, dailyTime),
                 child: Text(dailyTime?.format(context) ?? '時間選択'),
               ),
             ],
@@ -44,8 +49,13 @@ class DailyList extends HookConsumerWidget {
           itemBuilder: (context, index) {
             final task = dailyTasks[index];
             return Padding(
-              key: ValueKey(task.id), // Use the unique ID as the key to prevent cursor jumping when items are removed
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              key: ValueKey(
+                task.id,
+              ), // Use the unique ID as the key to prevent cursor jumping when items are removed
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 4.0,
+              ),
               child: Row(
                 children: [
                   Expanded(

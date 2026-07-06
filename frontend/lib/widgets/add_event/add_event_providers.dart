@@ -124,55 +124,86 @@ class AddEventNotifier extends Notifier<AddEventState> {
 
   String _uuid() => DateTime.now().microsecondsSinceEpoch.toString();
 
-  void updateDailyTime(TimeOfDay? val) => state = state.copyWith(dailyTime: val);
-  void addDailyTask() => state = state.copyWith(dailyTasks: [...state.dailyTasks, TaskItem(id: _uuid(), text: '')]);
+  void updateDailyTime(TimeOfDay? val) =>
+      state = state.copyWith(dailyTime: val);
+  void addDailyTask() => state = state.copyWith(
+    dailyTasks: [
+      ...state.dailyTasks,
+      TaskItem(id: _uuid(), text: ''),
+    ],
+  );
   void updateDailyTask(int index, String val) {
     final tasks = List<TaskItem>.from(state.dailyTasks);
     tasks[index] = tasks[index].copyWith(text: val);
     state = state.copyWith(dailyTasks: tasks);
   }
+
   void removeDailyTask(int index) {
     final tasks = List<TaskItem>.from(state.dailyTasks);
     tasks.removeAt(index);
     state = state.copyWith(dailyTasks: tasks);
   }
 
-  void updateWeeklyDayOfWeek(String? val) => state = state.copyWith(weeklyDayOfWeek: val);
-  void updateWeeklyTime(TimeOfDay? val) => state = state.copyWith(weeklyTime: val);
-  void addWeeklyTask() => state = state.copyWith(weeklyTasks: [...state.weeklyTasks, TaskItem(id: _uuid(), text: '')]);
+  void updateWeeklyDayOfWeek(String? val) =>
+      state = state.copyWith(weeklyDayOfWeek: val);
+  void updateWeeklyTime(TimeOfDay? val) =>
+      state = state.copyWith(weeklyTime: val);
+  void addWeeklyTask() => state = state.copyWith(
+    weeklyTasks: [
+      ...state.weeklyTasks,
+      TaskItem(id: _uuid(), text: ''),
+    ],
+  );
   void updateWeeklyTask(int index, String val) {
     final tasks = List<TaskItem>.from(state.weeklyTasks);
     tasks[index] = tasks[index].copyWith(text: val);
     state = state.copyWith(weeklyTasks: tasks);
   }
+
   void removeWeeklyTask(int index) {
     final tasks = List<TaskItem>.from(state.weeklyTasks);
     tasks.removeAt(index);
     state = state.copyWith(weeklyTasks: tasks);
   }
 
-  void updateBiweeklyStartDate(DateTime? val) => state = state.copyWith(biweeklyStartDate: val);
-  void updateBiweeklyTime(TimeOfDay? val) => state = state.copyWith(biweeklyTime: val);
-  void addBiweeklyTask() => state = state.copyWith(biweeklyTasks: [...state.biweeklyTasks, TaskItem(id: _uuid(), text: '')]);
+  void updateBiweeklyStartDate(DateTime? val) =>
+      state = state.copyWith(biweeklyStartDate: val);
+  void updateBiweeklyTime(TimeOfDay? val) =>
+      state = state.copyWith(biweeklyTime: val);
+  void addBiweeklyTask() => state = state.copyWith(
+    biweeklyTasks: [
+      ...state.biweeklyTasks,
+      TaskItem(id: _uuid(), text: ''),
+    ],
+  );
   void updateBiweeklyTask(int index, String val) {
     final tasks = List<TaskItem>.from(state.biweeklyTasks);
     tasks[index] = tasks[index].copyWith(text: val);
     state = state.copyWith(biweeklyTasks: tasks);
   }
+
   void removeBiweeklyTask(int index) {
     final tasks = List<TaskItem>.from(state.biweeklyTasks);
     tasks.removeAt(index);
     state = state.copyWith(biweeklyTasks: tasks);
   }
 
-  void updateMonthlyStartDate(DateTime? val) => state = state.copyWith(monthlyStartDate: val);
-  void updateMonthlyTime(TimeOfDay? val) => state = state.copyWith(monthlyTime: val);
-  void addMonthlyTask() => state = state.copyWith(monthlyTasks: [...state.monthlyTasks, TaskItem(id: _uuid(), text: '')]);
+  void updateMonthlyStartDate(DateTime? val) =>
+      state = state.copyWith(monthlyStartDate: val);
+  void updateMonthlyTime(TimeOfDay? val) =>
+      state = state.copyWith(monthlyTime: val);
+  void addMonthlyTask() => state = state.copyWith(
+    monthlyTasks: [
+      ...state.monthlyTasks,
+      TaskItem(id: _uuid(), text: ''),
+    ],
+  );
   void updateMonthlyTask(int index, String val) {
     final tasks = List<TaskItem>.from(state.monthlyTasks);
     tasks[index] = tasks[index].copyWith(text: val);
     state = state.copyWith(monthlyTasks: tasks);
   }
+
   void removeMonthlyTask(int index) {
     final tasks = List<TaskItem>.from(state.monthlyTasks);
     tasks.removeAt(index);
@@ -189,9 +220,9 @@ class AddEventNotifier extends Notifier<AddEventState> {
     final title = s.title.trim();
 
     if (gameName.isEmpty || title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ゲーム名とタイトルを入力してください')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ゲーム名とタイトルを入力してください')));
       return;
     }
 
@@ -203,53 +234,114 @@ class AddEventNotifier extends Notifier<AddEventState> {
 
     if (s.cycleType == 'daily') {
       if (s.dailyTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('時刻を選択してください')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('時刻を選択してください')));
         return;
       }
-      endDate = DateTime(now.year, now.month, now.day, s.dailyTime!.hour, s.dailyTime!.minute);
+      endDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        s.dailyTime!.hour,
+        s.dailyTime!.minute,
+      );
       if (endDate.isBefore(now)) {
         endDate = endDate.add(const Duration(days: 1));
       }
-      cycleSettings = {'hour': s.dailyTime!.hour, 'minute': s.dailyTime!.minute};
-      tasks = s.dailyTasks.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      cycleSettings = {
+        'hour': s.dailyTime!.hour,
+        'minute': s.dailyTime!.minute,
+      };
+      tasks = s.dailyTasks
+          .map((c) => {'name': c.text, 'isCompleted': false})
+          .toList();
       tag = 'デイリー';
     } else if (s.cycleType == 'weekly') {
       if (s.weeklyDayOfWeek == null || s.weeklyTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('曜日と時刻を選択してください')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('曜日と時刻を選択してください')));
         return;
       }
       final daysOfWeek = ['月', '火', '水', '木', '金', '土', '日'];
       final targetWeekday = daysOfWeek.indexOf(s.weeklyDayOfWeek!) + 1;
-      endDate = DateTime(now.year, now.month, now.day, s.weeklyTime!.hour, s.weeklyTime!.minute);
+      endDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        s.weeklyTime!.hour,
+        s.weeklyTime!.minute,
+      );
       while (endDate.weekday != targetWeekday || endDate.isBefore(now)) {
         endDate = endDate.add(const Duration(days: 1));
       }
-      cycleSettings = {'dayOfWeek': targetWeekday, 'hour': s.weeklyTime!.hour, 'minute': s.weeklyTime!.minute};
-      tasks = s.weeklyTasks.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      cycleSettings = {
+        'dayOfWeek': targetWeekday,
+        'hour': s.weeklyTime!.hour,
+        'minute': s.weeklyTime!.minute,
+      };
+      tasks = s.weeklyTasks
+          .map((c) => {'name': c.text, 'isCompleted': false})
+          .toList();
       tag = 'ウィークリー';
     } else if (s.cycleType == 'biweekly') {
       if (s.biweeklyStartDate == null || s.biweeklyTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
         return;
       }
-      endDate = DateTime(s.biweeklyStartDate!.year, s.biweeklyStartDate!.month, s.biweeklyStartDate!.day, s.biweeklyTime!.hour, s.biweeklyTime!.minute);
+      endDate = DateTime(
+        s.biweeklyStartDate!.year,
+        s.biweeklyStartDate!.month,
+        s.biweeklyStartDate!.day,
+        s.biweeklyTime!.hour,
+        s.biweeklyTime!.minute,
+      );
       while (endDate.isBefore(now)) {
         endDate = endDate.add(const Duration(days: 14));
       }
-      cycleSettings = {'startDate': Timestamp.fromDate(s.biweeklyStartDate!), 'hour': s.biweeklyTime!.hour, 'minute': s.biweeklyTime!.minute};
-      tasks = s.biweeklyTasks.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      cycleSettings = {
+        'startDate': Timestamp.fromDate(s.biweeklyStartDate!),
+        'hour': s.biweeklyTime!.hour,
+        'minute': s.biweeklyTime!.minute,
+      };
+      tasks = s.biweeklyTasks
+          .map((c) => {'name': c.text, 'isCompleted': false})
+          .toList();
       tag = '隔週';
     } else if (s.cycleType == 'monthly') {
       if (s.monthlyStartDate == null || s.monthlyTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
         return;
       }
-      endDate = DateTime(now.year, now.month, s.monthlyStartDate!.day, s.monthlyTime!.hour, s.monthlyTime!.minute);
+      endDate = DateTime(
+        now.year,
+        now.month,
+        s.monthlyStartDate!.day,
+        s.monthlyTime!.hour,
+        s.monthlyTime!.minute,
+      );
       if (endDate.isBefore(now)) {
-        endDate = DateTime(now.year, now.month + 1, s.monthlyStartDate!.day, s.monthlyTime!.hour, s.monthlyTime!.minute);
+        endDate = DateTime(
+          now.year,
+          now.month + 1,
+          s.monthlyStartDate!.day,
+          s.monthlyTime!.hour,
+          s.monthlyTime!.minute,
+        );
       }
-      cycleSettings = {'dayOfMonth': s.monthlyStartDate!.day, 'hour': s.monthlyTime!.hour, 'minute': s.monthlyTime!.minute};
-      tasks = s.monthlyTasks.map((c) => {'name': c.text, 'isCompleted': false}).toList();
+      cycleSettings = {
+        'dayOfMonth': s.monthlyStartDate!.day,
+        'hour': s.monthlyTime!.hour,
+        'minute': s.monthlyTime!.minute,
+      };
+      tasks = s.monthlyTasks
+          .map((c) => {'name': c.text, 'isCompleted': false})
+          .toList();
       tag = 'マンスリー';
     }
 
@@ -281,20 +373,21 @@ class AddEventNotifier extends Notifier<AddEventState> {
       ).collection('games').doc(gameName).collection('events').add(data);
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$tag イベントを追加しました')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$tag イベントを追加しました')));
 
       state = state.copyWith(title: '', code: '');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('追加に失敗しました: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('追加に失敗しました: $e')));
     }
   }
 }
 
-final addEventProvider = NotifierProvider.autoDispose<AddEventNotifier, AddEventState>(() {
-  return AddEventNotifier();
-});
+final addEventProvider =
+    NotifierProvider.autoDispose<AddEventNotifier, AddEventState>(() {
+      return AddEventNotifier();
+    });

@@ -125,9 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const FeedbackScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const FeedbackScreen()),
               );
             },
           ),
@@ -135,10 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: EdgeInsets.all(16.0),
             child: Text(
               '本アプリは非公式アプリです。各ゲームの画像や名称の著作権はそれぞれの権利者に帰属します。',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
           ),

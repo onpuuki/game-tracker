@@ -25,12 +25,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   late TextEditingController _bodyController;
   String? _selectedTag;
 
-  final List<String> _tags = [
-    '要望',
-    'バグ',
-    '誤情報',
-    'その他',
-  ];
+  final List<String> _tags = ['要望', 'バグ', '誤情報', 'その他'];
 
   @override
   void initState() {
@@ -55,9 +50,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   void _submitFeedback() {
     if (_bodyController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('本文を入力してください。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本文を入力してください。')));
       return;
     }
 
@@ -65,18 +60,23 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    FirebaseFirestore.instance.collection('feedbacks').add({
-      'title': _titleController.text.trim(),
-      'tag': _selectedTag,
-      'body': _bodyController.text.trim(),
-      'targetEventId': widget.targetEventId,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-      'uid': uid,
-    }).catchError((e) {
-      DebugLogManager().addLog('Error in background feedback submission: $e');
-      throw e;
-    });
+    FirebaseFirestore.instance
+        .collection('feedbacks')
+        .add({
+          'title': _titleController.text.trim(),
+          'tag': _selectedTag,
+          'body': _bodyController.text.trim(),
+          'targetEventId': widget.targetEventId,
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+          'uid': uid,
+        })
+        .catchError((e) {
+          DebugLogManager().addLog(
+            'Error in background feedback submission: $e',
+          );
+          throw e;
+        });
 
     Navigator.pushReplacement(
       context,
@@ -122,86 +122,78 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('フィードバックを送信'),
-      ),
+      appBar: AppBar(title: const Text('フィードバックを送信')),
       body: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'タイトル (任意)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'タイトルを入力',
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'フィードバック内容(必須)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTagButton(_tags[0]),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildTagButton(_tags[1]),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTagButton(_tags[2]),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildTagButton(_tags[3]),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    '本文 (必須)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _bodyController,
-                    maxLines: 8,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: '具体的な内容をご記入ください',
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    onPressed: (_selectedTag != null && _bodyController.text.trim().isNotEmpty)
-                        ? _submitFeedback
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: const Text('送信', style: TextStyle(fontSize: 16)),
-                  ),
-                ],
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'タイトル (任意)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'タイトルを入力',
               ),
             ),
+            const SizedBox(height: 24),
+            const Text(
+              'フィードバック内容(必須)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _buildTagButton(_tags[0])),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildTagButton(_tags[1])),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: _buildTagButton(_tags[2])),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildTagButton(_tags[3])),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              '本文 (必須)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _bodyController,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: '具体的な内容をご記入ください',
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed:
+                  (_selectedTag != null &&
+                      _bodyController.text.trim().isNotEmpty)
+                  ? _submitFeedback
+                  : null,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text('送信', style: TextStyle(fontSize: 16)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

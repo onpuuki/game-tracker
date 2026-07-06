@@ -990,7 +990,8 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
                     name: fileName,
                     parents: [folderId]
                 },
-                media: media
+                media: media,
+                supportsAllDrives: true
             });
             driveFile = createRes.data;
             await writeDebugLog(traceId, `Created new file in Drive. File ID: ${driveFile.id}`);

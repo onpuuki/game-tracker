@@ -88,9 +88,15 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                       initialValue: tag,
                       items: [
                         const DropdownMenuItem(value: null, child: Text('すべて')),
-                        const DropdownMenuItem(value: '不具合', child: Text('不具合')),
+                        const DropdownMenuItem(
+                          value: '不具合',
+                          child: Text('不具合'),
+                        ),
                         const DropdownMenuItem(value: '要望', child: Text('要望')),
-                        const DropdownMenuItem(value: 'その他', child: Text('その他')),
+                        const DropdownMenuItem(
+                          value: 'その他',
+                          child: Text('その他'),
+                        ),
                       ],
                       onChanged: (val) {
                         setDialogState(() {
@@ -116,7 +122,11 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                                 });
                               }
                             },
-                            child: Text(startDate != null ? DateFormat('yyyy-MM-dd').format(startDate!) : '開始日を選択'),
+                            child: Text(
+                              startDate != null
+                                  ? DateFormat('yyyy-MM-dd').format(startDate!)
+                                  : '開始日を選択',
+                            ),
                           ),
                         ),
                         Expanded(
@@ -130,11 +140,22 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  endDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+                                  endDate = DateTime(
+                                    picked.year,
+                                    picked.month,
+                                    picked.day,
+                                    23,
+                                    59,
+                                    59,
+                                  );
                                 });
                               }
                             },
-                            child: Text(endDate != null ? DateFormat('yyyy-MM-dd').format(endDate!) : '終了日を選択'),
+                            child: Text(
+                              endDate != null
+                                  ? DateFormat('yyyy-MM-dd').format(endDate!)
+                                  : '終了日を選択',
+                            ),
                           ),
                         ),
                       ],
@@ -203,12 +224,15 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
       int count = 0;
 
       for (final id in targetIds) {
-        batch.delete(FirebaseFirestore.instance.collection('feedbacks').doc(id));
+        batch.delete(
+          FirebaseFirestore.instance.collection('feedbacks').doc(id),
+        );
         count++;
         // WriteBatch limit is 500
         if (count == 500) {
           await batch.commit();
-          batch = FirebaseFirestore.instance.batch(); // Re-initialize the batch for next items
+          batch = FirebaseFirestore.instance
+              .batch(); // Re-initialize the batch for next items
           count = 0;
         }
       }
@@ -227,73 +251,50 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('削除中にエラーが発生しました: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('削除中にエラーが発生しました: $e')));
     }
   }
 
   Future<void> _exportFeedbacks(List<String> targetIds) async {
     try {
-      DocumentSnapshot<Map<String, dynamic>> configDoc;
-      try {
-        configDoc = await FirebaseFirestore.instance
-            .collection('settings')
-            .doc('export_config')
-            .get()
-            .timeout(const Duration(seconds: 5));
-      } catch (e) {
-        configDoc = await FirebaseFirestore.instance
-            .collection('settings')
-            .doc('export_config')
-            .get(const GetOptions(source: Source.cache));
-      }
-      final folderId = configDoc.data()?['folder_id'] as String?;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('エクスポートを開始しました...')));
 
-      if (!mounted) return;
-
-      if (folderId == null || folderId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('エラー: エクスポート先フォルダIDが設定されていません。')),
-        );
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('エクスポートを開始しました...')),
-      );
-
-      final result = await FirebaseFunctions.instanceFor(region: 'asia-northeast1')
-          .httpsCallable('exportFeedbacksToDrive')
-          .call({
-        'folderId': folderId,
-        'targetIds': targetIds.isNotEmpty ? targetIds : null,
-      });
+      final result =
+          await FirebaseFunctions.instanceFor(region: 'asia-northeast1')
+              .httpsCallable('exportFeedbacksToDrive')
+              .call({'targetIds': targetIds.isNotEmpty ? targetIds : null});
 
       if (!mounted) return;
 
       if (result.data['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エクスポートが完了しました。(${result.data['exportedCount']}件)')),
+          SnackBar(
+            content: Text('エクスポートが完了しました。(${result.data['exportedCount']}件)'),
+          ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('エクスポートに失敗しました。')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('エクスポートに失敗しました。')));
       }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      final errorMsg = 'Functionsエラー: [${e.code}] ${e.message}\n詳細: ${e.details}';
+      final errorMsg =
+          'Functionsエラー: [${e.code}] ${e.message}\n詳細: ${e.details}';
       DebugLogManager().addLog(errorMsg);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMsg)));
     } catch (e) {
       if (!mounted) return;
       DebugLogManager().addLog('エクスポート中にエラーが発生しました: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エクスポート中にエラーが発生しました: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('エクスポート中にエラーが発生しました: $e')));
     }
   }
 
@@ -322,199 +323,233 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
 
         List<QueryDocumentSnapshot> docs = snapshot.data?.docs ?? [];
 
-          // Client-side filtering
-          docs = docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final title = data['title']?.toString() ?? '';
-            final body = data['body']?.toString() ?? '';
-            final tag = data['tag']?.toString();
+        // Client-side filtering
+        docs = docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final title = data['title']?.toString() ?? '';
+          final body = data['body']?.toString() ?? '';
+          final tag = data['tag']?.toString();
 
-            DateTime? createdAt;
-            final createdAtData = data['createdAt'];
-            if (createdAtData is Timestamp) {
-              createdAt = createdAtData.toDate();
-            } else if (createdAtData is String) {
-              createdAt = DateTime.tryParse(createdAtData);
-            }
+          DateTime? createdAt;
+          final createdAtData = data['createdAt'];
+          if (createdAtData is Timestamp) {
+            createdAt = createdAtData.toDate();
+          } else if (createdAtData is String) {
+            createdAt = DateTime.tryParse(createdAtData);
+          }
 
-            // Keyword filter
-            if (_filterKeyword.isNotEmpty) {
-              if (!title.contains(_filterKeyword) && !body.contains(_filterKeyword)) {
-                return false;
-              }
-            }
-
-            // Tag filter
-            if (_filterTag != null && tag != _filterTag) {
+          // Keyword filter
+          if (_filterKeyword.isNotEmpty) {
+            if (!title.contains(_filterKeyword) &&
+                !body.contains(_filterKeyword)) {
               return false;
             }
+          }
 
-            // Date filter
-            if (createdAt != null) {
-              if (_filterStartDate != null && createdAt.isBefore(_filterStartDate!)) {
-                return false;
-              }
-              if (_filterEndDate != null && createdAt.isAfter(_filterEndDate!)) {
-                return false;
-              }
-            } else if (_filterStartDate != null || _filterEndDate != null) {
-              // If there's a date filter and no createdAt, we probably filter it out
+          // Tag filter
+          if (_filterTag != null && tag != _filterTag) {
+            return false;
+          }
+
+          // Date filter
+          if (createdAt != null) {
+            if (_filterStartDate != null &&
+                createdAt.isBefore(_filterStartDate!)) {
               return false;
             }
-
-            return true;
-          }).toList();
-
-          // Client-side sorting
-          docs.sort((a, b) {
-            final dataA = a.data() as Map<String, dynamic>;
-            final dataB = b.data() as Map<String, dynamic>;
-
-            if (_sortCriteria == 'tag') {
-              final tagA = dataA['tag']?.toString() ?? '';
-              final tagB = dataB['tag']?.toString() ?? '';
-              return tagA.compareTo(tagB);
-            } else {
-              DateTime? dateA;
-              if (dataA['createdAt'] is Timestamp) {
-                dateA = (dataA['createdAt'] as Timestamp).toDate();
-              }
-              DateTime? dateB;
-              if (dataB['createdAt'] is Timestamp) {
-                dateB = (dataB['createdAt'] as Timestamp).toDate();
-              }
-
-              if (dateA == null && dateB == null) return 0;
-              if (dateA == null) return 1;
-              if (dateB == null) return -1;
-
-              return _sortCriteria == 'date_asc' ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+            if (_filterEndDate != null && createdAt.isAfter(_filterEndDate!)) {
+              return false;
             }
-          });
+          } else if (_filterStartDate != null || _filterEndDate != null) {
+            // If there's a date filter and no createdAt, we probably filter it out
+            return false;
+          }
 
-          final hasSelection = _selectedFeedbackIds.isNotEmpty;
-          final List<String> currentFilteredIds = docs.map((d) => d.id).toList();
+          return true;
+        }).toList();
 
-          return Scaffold(
-            appBar: AppBar(
-              title: Text(hasSelection ? '${_selectedFeedbackIds.length}件選択中' : 'フィードバック一覧'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.sort),
-                  onPressed: _showSortDialog,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: _showFilterDialog,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: docs.isEmpty ? null : () {
-                    final targets = hasSelection ? _selectedFeedbackIds.toList() : currentFilteredIds;
-                    _deleteFeedbacks(targets);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.file_download),
-                  onPressed: docs.isEmpty ? null : () {
-                    final targets = hasSelection ? _selectedFeedbackIds.toList() : currentFilteredIds;
-                    _exportFeedbacks(targets);
-                  },
-                ),
-              ],
+        // Client-side sorting
+        docs.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+
+          if (_sortCriteria == 'tag') {
+            final tagA = dataA['tag']?.toString() ?? '';
+            final tagB = dataB['tag']?.toString() ?? '';
+            return tagA.compareTo(tagB);
+          } else {
+            DateTime? dateA;
+            if (dataA['createdAt'] is Timestamp) {
+              dateA = (dataA['createdAt'] as Timestamp).toDate();
+            }
+            DateTime? dateB;
+            if (dataB['createdAt'] is Timestamp) {
+              dateB = (dataB['createdAt'] as Timestamp).toDate();
+            }
+
+            if (dateA == null && dateB == null) return 0;
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+
+            return _sortCriteria == 'date_asc'
+                ? dateA.compareTo(dateB)
+                : dateB.compareTo(dateA);
+          }
+        });
+
+        final hasSelection = _selectedFeedbackIds.isNotEmpty;
+        final List<String> currentFilteredIds = docs.map((d) => d.id).toList();
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              hasSelection ? '${_selectedFeedbackIds.length}件選択中' : 'フィードバック一覧',
             ),
-            body: docs.isEmpty
-                ? const Center(child: Text('フィードバックはありません。'))
-                : ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.sort),
+                onPressed: _showSortDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.filter_list),
+                onPressed: _showFilterDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: docs.isEmpty
+                    ? null
+                    : () {
+                        final targets = hasSelection
+                            ? _selectedFeedbackIds.toList()
+                            : currentFilteredIds;
+                        _deleteFeedbacks(targets);
+                      },
+              ),
+              IconButton(
+                icon: const Icon(Icons.file_download),
+                onPressed: docs.isEmpty
+                    ? null
+                    : () {
+                        final targets = hasSelection
+                            ? _selectedFeedbackIds.toList()
+                            : currentFilteredIds;
+                        _exportFeedbacks(targets);
+                      },
+              ),
+            ],
+          ),
+          body: docs.isEmpty
+              ? const Center(child: Text('フィードバックはありません。'))
+              : ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
 
-              final title = data['title']?.toString() ?? 'タイトルなし';
-              final tag = data['tag']?.toString() ?? 'タグなし';
-              final body = data['body']?.toString() ?? '本文なし';
+                    final title = data['title']?.toString() ?? 'タイトルなし';
+                    final tag = data['tag']?.toString() ?? 'タグなし';
+                    final body = data['body']?.toString() ?? '本文なし';
 
-              // Handle Timestamp properly
-              final createdAtData = data['createdAt'];
-              DateTime? createdDateTime;
-              if (createdAtData is Timestamp) {
-                createdDateTime = createdAtData.toDate();
-              } else if (createdAtData is String) {
-                createdDateTime = DateTime.tryParse(createdAtData);
-              }
-
-              final isSelected = _selectedFeedbackIds.contains(doc.id);
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.2) : null,
-                child: InkWell(
-                  onLongPress: () => _toggleSelection(doc.id),
-                  onTap: () {
-                    if (_selectedFeedbackIds.isNotEmpty) {
-                      _toggleSelection(doc.id);
+                    // Handle Timestamp properly
+                    final createdAtData = data['createdAt'];
+                    DateTime? createdDateTime;
+                    if (createdAtData is Timestamp) {
+                      createdDateTime = createdAtData.toDate();
+                    } else if (createdAtData is String) {
+                      createdDateTime = DateTime.tryParse(createdAtData);
                     }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Row 1: Tag and Date
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                                border: Border.all(color: Theme.of(context).primaryColor),
-                                borderRadius: BorderRadius.circular(4),
+
+                    final isSelected = _selectedFeedbackIds.contains(doc.id);
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      color: isSelected
+                          ? Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.2)
+                          : null,
+                      child: InkWell(
+                        onLongPress: () => _toggleSelection(doc.id),
+                        onTap: () {
+                          if (_selectedFeedbackIds.isNotEmpty) {
+                            _toggleSelection(doc.id);
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Row 1: Tag and Date
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).primaryColor.withValues(alpha: 0.1),
+                                      border: Border.all(
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      tag,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    createdAtData == null
+                                        ? '同期中...'
+                                        : (createdDateTime != null
+                                              ? DateFormat(
+                                                  'yyyy-MM-dd HH:mm',
+                                                ).format(createdDateTime)
+                                              : '日時不明'),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: Text(
-                                tag,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context).primaryColor,
+                              const SizedBox(height: 8),
+                              // Row 2: Title
+                              Text(
+                                title.isEmpty ? '(タイトルなし)' : title,
+                                style: const TextStyle(
+                                  fontSize: 14, // Same as body
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
-                            Text(
-                              createdAtData == null
-                                  ? '同期中...'
-                                  : (createdDateTime != null
-                                      ? DateFormat('yyyy-MM-dd HH:mm').format(createdDateTime)
-                                      : '日時不明'),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // Row 2: Title
-                        Text(
-                          title.isEmpty ? '(タイトルなし)' : title,
-                          style: const TextStyle(
-                            fontSize: 14, // Same as body
-                            fontWeight: FontWeight.bold,
+                              const SizedBox(height: 8),
+                              // Row 3: Body
+                              Text(
+                                body,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        // Row 3: Body
-                        Text(
-                          body,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          );
-        },
-      );
+        );
+      },
+    );
   }
 }

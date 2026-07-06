@@ -49,3 +49,117 @@ jobs:
           files: |
             frontend/build/app/outputs/flutter-apk/app-admin-release.apk
             frontend/build/app/outputs/flutter-apk/app-user-release.apk
+
+      - name: Generate SourceCode.txt
+        run: |
+          OUTPUT_FILE="SourceCode.txt"
+          echo "=== GIT LOG ===" > "$OUTPUT_FILE"
+          git log -n 5 --oneline >> "$OUTPUT_FILE"
+          echo "" >> "$OUTPUT_FILE"
+
+          FILES=$(find frontend/lib/ functions/src/ .github/workflows/ -type f \( -name "*.dart" -o -name "*.ts" -o -name "*.yml" \) | grep -E -v "\.g\.dart$|\.freezed\.dart$" || true)
+          EXTRA_FILES="frontend/pubspec.yaml frontend/analysis_options.yaml functions/package.json firestore.rules firestore.indexes.json firebase.json"
+
+          for FILE in $FILES $EXTRA_FILES; do
+            if [ -f "$FILE" ]; then
+              echo "=== FILE: $FILE ===" >> "$OUTPUT_FILE"
+              cat "$FILE" >> "$OUTPUT_FILE"
+              echo "" >> "$OUTPUT_FILE"
+            fi
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install googleapis
+        run: npm install googleapis
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Upload to Google Drive
+        run: |
+          cat << 'EOF' > upload.js
+          const { google } = require('googleapis');
+          const fs = require('fs');
+          const path = require('path');
+
+          async function uploadFile(auth, folderId, filePath) {
+            const drive = google.drive({ version: 'v3', auth });
+            const fileName = path.basename(filePath);
+
+            let mimeType = 'application/octet-stream';
+            if (fileName.endsWith('.txt')) {
+              mimeType = 'text/plain';
+            } else if (fileName.endsWith('.apk')) {
+              mimeType = 'application/vnd.android.package-archive';
+            }
+
+            console.log(`Uploading ${fileName}...`);
+
+            const res = await drive.files.list({
+              q: `'${folderId}' in parents and name = '${fileName}' and trashed = false`,
+              spaces: 'drive',
+              fields: 'files(id, name)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            });
+
+            const media = {
+              mimeType: mimeType,
+              body: fs.createReadStream(filePath),
+            };
+
+            if (res.data.files && res.data.files.length > 0) {
+              const fileId = res.data.files[0].id;
+              console.log(`Updating existing file: ${fileName} (${fileId})`);
+              await drive.files.update({
+                fileId: fileId,
+                media: media,
+                supportsAllDrives: true,
+              });
+            } else {
+              console.log(`Creating new file: ${fileName}`);
+              await drive.files.create({
+                requestBody: {
+                  name: fileName,
+                  parents: [folderId],
+                },
+                media: media,
+                supportsAllDrives: true,
+              });
+            }
+            console.log(`Successfully uploaded ${fileName}`);
+          }
+
+          async function main() {
+            const auth = new google.auth.GoogleAuth({
+              scopes: ['https://www.googleapis.com/auth/drive'],
+            });
+
+            const folderId = '1jHDT34dWhHOqNLrBa2_n-8vyCNJOlhYr';
+            const files = [
+              'SourceCode.txt',
+              'frontend/build/app/outputs/flutter-apk/app-admin-release.apk',
+              'frontend/build/app/outputs/flutter-apk/app-user-release.apk'
+            ];
+
+            for (const file of files) {
+              if (fs.existsSync(file)) {
+                await uploadFile(auth, folderId, file);
+              } else {
+                console.warn(`File not found: ${file}`);
+              }
+            }
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          EOF
+          node upload.js

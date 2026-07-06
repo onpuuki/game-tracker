@@ -64,6 +64,25 @@ function calculateSimilarity(s1: string, s2: string): number {
     }
     const longerLength = longer.length;
     if (longerLength === 0) return 1.0;
+    const shorterLength = shorter.length;
+    if (shorterLength === 0) return 0.0;
+
+    // LCS (Longest Common Subsequence) based logic for 80% partial match
+    const dp = Array.from({ length: longerLength + 1 }, () => new Array(shorterLength + 1).fill(0));
+
+    for (let i = 1; i <= longerLength; i++) {
+        for (let j = 1; j <= shorterLength; j++) {
+            if (longer[i - 1] === shorter[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    const lcsLength = dp[longerLength][shorterLength];
+    if (lcsLength / shorterLength >= 0.8) {
+        return 0.85; // Meets the 80% partial match criteria
+    }
 
     const costs: number[] = [];
     for (let i = 0; i <= longer.length; i++) {
@@ -276,7 +295,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 （マークダウン使用禁止。純粋なJSON配列のみ）
 配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
 - "date_extraction_reasoning": (文字列) ※最重要※ 検索結果のテキストから、イベントの開始・終了日時を特定・推測するための論理的な思考プロセスや計算式（例:「開始日は〇日で期間が2週間だから終了日は〇日」）を必ずここに記載すること。
-- "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。完全に新規の場合は null。
+- "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。検索結果が外国語（英語等）でも、既存の日本語イベントの和訳・意訳と思われる場合は『実質的に同じ』とみなし、既存のIDを紐づけること。また、省略形や一部欠落でも明らかに同じイベントを指している場合は新規にせず紐づけること。完全に新規の場合は null。
 - "title": (文字列) 既存IDを出力した場合は、一覧と「一言一句同じ」タイトルを使用すること。
 - "summary": (文字列) イベント概要
 - "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または 'UNKNOWN'
@@ -1021,15 +1040,13 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
     }
 });
 
-export const resetCycleEvents = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
-    const traceId = 'cycle-reset-' + Date.now();
-    functions.logger.info(`[${traceId}] Starting resetCycleEvents job`);
-
+async function runCycleResetLogic(traceId: string) {
+    functions.logger.info(`[${traceId}] Starting runCycleResetLogic`);
     try {
         const eventsSnapshot = await db.collectionGroup('events').get();
         if (eventsSnapshot.empty) {
             functions.logger.info(`[${traceId}] No events found`);
-            return null;
+            return;
         }
 
         const now = dayjs().tz('Asia/Tokyo');
@@ -1160,8 +1177,27 @@ export const resetCycleEvents = functions.region('asia-northeast1').pubsub.sched
         await writeDebugLog(traceId, `Successfully deleted ${deletedLogsCount} old debug logs.`);
 
     } catch (error: any) {
-        functions.logger.error(`[${traceId}] Error in resetCycleEvents: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
-        await writeDebugLog(traceId, 'Error in resetCycleEvents', error instanceof Error ? error.stack : String(error));
+        functions.logger.error(`[${traceId}] Error in runCycleResetLogic: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Error in runCycleResetLogic', error instanceof Error ? error.stack : String(error));
+        throw error;
     }
+}
+
+export const resetCycleEvents = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
+    const traceId = 'cycle-reset-pubsub-' + Date.now();
+    await runCycleResetLogic(traceId);
     return null;
+});
+
+export const manualResetCycleEvents = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated to run cycle reset.');
+    }
+    const traceId = 'cycle-reset-manual-' + Date.now();
+    try {
+        await runCycleResetLogic(traceId);
+        return { success: true, message: 'Cycle reset logic completed successfully.' };
+    } catch (error: any) {
+        throw new functions.https.HttpsError('internal', 'Error executing manual cycle reset', error.message);
+    }
 });

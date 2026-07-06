@@ -906,17 +906,18 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
 
 export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     const traceId = 'exportFeedbacks-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    const folderId = data.folderId;
     const targetIds = data.targetIds;
 
-    if (!folderId) {
-        throw new functions.https.HttpsError('invalid-argument', 'folderId is required');
-    }
-
-    functions.logger.info(`[${traceId}] Starting exportFeedbacksToDrive to folder: ${folderId}`);
-    await writeDebugLog(traceId, `Starting feedback export to Google Drive. Folder ID: ${folderId}`);
-
     try {
+        const configDoc = await db.collection('settings').doc('export_config').get();
+        const folderId = configDoc.data()?.folder_id;
+
+        if (!folderId) {
+            throw new functions.https.HttpsError('failed-precondition', 'folderId is not set in settings/export_config');
+        }
+
+        functions.logger.info(`[${traceId}] Starting exportFeedbacksToDrive to folder: ${folderId}`);
+        await writeDebugLog(traceId, `Starting feedback export to Google Drive. Folder ID: ${folderId}`);
         let feedbacksSnapshot;
         const feedbacksRef = db.collection('feedbacks');
 

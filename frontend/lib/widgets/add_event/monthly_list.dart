@@ -7,7 +7,11 @@ import 'add_event_providers.dart';
 class MonthlyList extends HookConsumerWidget {
   const MonthlyList({super.key});
 
-  Future<void> _selectTime(BuildContext context, Function(TimeOfDay?) onSelected, TimeOfDay? initialTime) async {
+  Future<void> _selectTime(
+    BuildContext context,
+    Function(TimeOfDay?) onSelected,
+    TimeOfDay? initialTime,
+  ) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: initialTime ?? TimeOfDay.now(),
@@ -17,7 +21,11 @@ class MonthlyList extends HookConsumerWidget {
     }
   }
 
-  Future<void> _selectDate(BuildContext context, Function(DateTime?) onSelected, DateTime? initialDate) async {
+  Future<void> _selectDate(
+    BuildContext context,
+    Function(DateTime?) onSelected,
+    DateTime? initialDate,
+  ) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate ?? DateTime.now(),
@@ -31,9 +39,15 @@ class MonthlyList extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monthlyStartDate = ref.watch(addEventProvider.select((s) => s.monthlyStartDate));
-    final monthlyTime = ref.watch(addEventProvider.select((s) => s.monthlyTime));
-    final monthlyTasks = ref.watch(addEventProvider.select((s) => s.monthlyTasks));
+    final monthlyStartDate = ref.watch(
+      addEventProvider.select((s) => s.monthlyStartDate),
+    );
+    final monthlyTime = ref.watch(
+      addEventProvider.select((s) => s.monthlyTime),
+    );
+    final monthlyTasks = ref.watch(
+      addEventProvider.select((s) => s.monthlyTasks),
+    );
     final notifier = ref.read(addEventProvider.notifier);
 
     return Column(
@@ -47,10 +61,16 @@ class MonthlyList extends HookConsumerWidget {
                   const Text('毎月の実行日 (起算用):', style: TextStyle(fontSize: 16)),
                   const SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () => _selectDate(context, notifier.updateMonthlyStartDate, monthlyStartDate),
-                    child: Text(monthlyStartDate != null
-                        ? DateFormat('dd').format(monthlyStartDate)
-                        : '日付選択'),
+                    onPressed: () => _selectDate(
+                      context,
+                      notifier.updateMonthlyStartDate,
+                      monthlyStartDate,
+                    ),
+                    child: Text(
+                      monthlyStartDate != null
+                          ? DateFormat('dd').format(monthlyStartDate)
+                          : '日付選択',
+                    ),
                   ),
                 ],
               ),
@@ -60,7 +80,11 @@ class MonthlyList extends HookConsumerWidget {
                   const Text('実行時刻:', style: TextStyle(fontSize: 16)),
                   const SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () => _selectTime(context, notifier.updateMonthlyTime, monthlyTime),
+                    onPressed: () => _selectTime(
+                      context,
+                      notifier.updateMonthlyTime,
+                      monthlyTime,
+                    ),
                     child: Text(monthlyTime?.format(context) ?? '時間選択'),
                   ),
                 ],
@@ -76,13 +100,17 @@ class MonthlyList extends HookConsumerWidget {
             final task = monthlyTasks[index];
             return Padding(
               key: ValueKey(task.id),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 4.0,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: _TaskTextField(
                       initialText: task.text,
-                      onChanged: (val) => notifier.updateMonthlyTask(index, val),
+                      onChanged: (val) =>
+                          notifier.updateMonthlyTask(index, val),
                     ),
                   ),
                   IconButton(

@@ -33,11 +33,7 @@ void main() async {
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   }
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 Future<void> _initializeFirebase() async {
@@ -51,7 +47,9 @@ Future<void> _initializeFirebase() async {
 
   try {
     if (FirebaseAuth.instance.currentUser != null) {
-      debugPrint('Anonymous Login Success: ${FirebaseAuth.instance.currentUser!.uid}');
+      debugPrint(
+        'Anonymous Login Success: ${FirebaseAuth.instance.currentUser!.uid}',
+      );
     } else {
       final userCredential = await FirebaseAuth.instance.signInAnonymously();
       debugPrint('Anonymous Login Success: ${userCredential.user?.uid}');

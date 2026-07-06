@@ -7,7 +7,11 @@ import 'add_event_providers.dart';
 class BiweeklyList extends HookConsumerWidget {
   const BiweeklyList({super.key});
 
-  Future<void> _selectTime(BuildContext context, Function(TimeOfDay?) onSelected, TimeOfDay? initialTime) async {
+  Future<void> _selectTime(
+    BuildContext context,
+    Function(TimeOfDay?) onSelected,
+    TimeOfDay? initialTime,
+  ) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: initialTime ?? TimeOfDay.now(),
@@ -17,7 +21,11 @@ class BiweeklyList extends HookConsumerWidget {
     }
   }
 
-  Future<void> _selectDate(BuildContext context, Function(DateTime?) onSelected, DateTime? initialDate) async {
+  Future<void> _selectDate(
+    BuildContext context,
+    Function(DateTime?) onSelected,
+    DateTime? initialDate,
+  ) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate ?? DateTime.now(),
@@ -31,9 +39,15 @@ class BiweeklyList extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final biweeklyStartDate = ref.watch(addEventProvider.select((s) => s.biweeklyStartDate));
-    final biweeklyTime = ref.watch(addEventProvider.select((s) => s.biweeklyTime));
-    final biweeklyTasks = ref.watch(addEventProvider.select((s) => s.biweeklyTasks));
+    final biweeklyStartDate = ref.watch(
+      addEventProvider.select((s) => s.biweeklyStartDate),
+    );
+    final biweeklyTime = ref.watch(
+      addEventProvider.select((s) => s.biweeklyTime),
+    );
+    final biweeklyTasks = ref.watch(
+      addEventProvider.select((s) => s.biweeklyTasks),
+    );
     final notifier = ref.read(addEventProvider.notifier);
 
     return Column(
@@ -47,10 +61,16 @@ class BiweeklyList extends HookConsumerWidget {
                   const Text('起点日:', style: TextStyle(fontSize: 16)),
                   const SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () => _selectDate(context, notifier.updateBiweeklyStartDate, biweeklyStartDate),
-                    child: Text(biweeklyStartDate != null
-                        ? DateFormat('yyyy-MM-dd').format(biweeklyStartDate)
-                        : '日付選択'),
+                    onPressed: () => _selectDate(
+                      context,
+                      notifier.updateBiweeklyStartDate,
+                      biweeklyStartDate,
+                    ),
+                    child: Text(
+                      biweeklyStartDate != null
+                          ? DateFormat('yyyy-MM-dd').format(biweeklyStartDate)
+                          : '日付選択',
+                    ),
                   ),
                 ],
               ),
@@ -60,7 +80,11 @@ class BiweeklyList extends HookConsumerWidget {
                   const Text('実行時刻:', style: TextStyle(fontSize: 16)),
                   const SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () => _selectTime(context, notifier.updateBiweeklyTime, biweeklyTime),
+                    onPressed: () => _selectTime(
+                      context,
+                      notifier.updateBiweeklyTime,
+                      biweeklyTime,
+                    ),
                     child: Text(biweeklyTime?.format(context) ?? '時間選択'),
                   ),
                 ],
@@ -76,13 +100,17 @@ class BiweeklyList extends HookConsumerWidget {
             final task = biweeklyTasks[index];
             return Padding(
               key: ValueKey(task.id),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 4.0,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: _TaskTextField(
                       initialText: task.text,
-                      onChanged: (val) => notifier.updateBiweeklyTask(index, val),
+                      onChanged: (val) =>
+                          notifier.updateBiweeklyTask(index, val),
                     ),
                   ),
                   IconButton(

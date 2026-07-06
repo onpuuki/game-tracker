@@ -6,7 +6,11 @@ import 'add_event_providers.dart';
 class WeeklyList extends HookConsumerWidget {
   const WeeklyList({super.key});
 
-  Future<void> _selectTime(BuildContext context, Function(TimeOfDay?) onSelected, TimeOfDay? initialTime) async {
+  Future<void> _selectTime(
+    BuildContext context,
+    Function(TimeOfDay?) onSelected,
+    TimeOfDay? initialTime,
+  ) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: initialTime ?? TimeOfDay.now(),
@@ -18,9 +22,13 @@ class WeeklyList extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final weeklyDayOfWeek = ref.watch(addEventProvider.select((s) => s.weeklyDayOfWeek));
+    final weeklyDayOfWeek = ref.watch(
+      addEventProvider.select((s) => s.weeklyDayOfWeek),
+    );
     final weeklyTime = ref.watch(addEventProvider.select((s) => s.weeklyTime));
-    final weeklyTasks = ref.watch(addEventProvider.select((s) => s.weeklyTasks));
+    final weeklyTasks = ref.watch(
+      addEventProvider.select((s) => s.weeklyTasks),
+    );
     final notifier = ref.read(addEventProvider.notifier);
 
     final daysOfWeek = ['月', '火', '水', '木', '金', '土', '日'];
@@ -37,10 +45,7 @@ class WeeklyList extends HookConsumerWidget {
                 value: weeklyDayOfWeek,
                 hint: const Text('選択'),
                 items: daysOfWeek.map((String day) {
-                  return DropdownMenuItem<String>(
-                    value: day,
-                    child: Text(day),
-                  );
+                  return DropdownMenuItem<String>(value: day, child: Text(day));
                 }).toList(),
                 onChanged: notifier.updateWeeklyDayOfWeek,
               ),
@@ -48,7 +53,8 @@ class WeeklyList extends HookConsumerWidget {
               const Text('実行時刻:', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 16),
               ElevatedButton(
-                onPressed: () => _selectTime(context, notifier.updateWeeklyTime, weeklyTime),
+                onPressed: () =>
+                    _selectTime(context, notifier.updateWeeklyTime, weeklyTime),
                 child: Text(weeklyTime?.format(context) ?? '時間選択'),
               ),
             ],
@@ -62,7 +68,10 @@ class WeeklyList extends HookConsumerWidget {
             final task = weeklyTasks[index];
             return Padding(
               key: ValueKey(task.id),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 4.0,
+              ),
               child: Row(
                 children: [
                   Expanded(

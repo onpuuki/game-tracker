@@ -458,6 +458,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                     } else if (createdAtData is String) {
                       createdDateTime = DateTime.tryParse(createdAtData);
                     }
+                    final displayTime = createdDateTime ?? DateTime.now();
 
                     final isSelected = _selectedFeedbackIds.contains(doc.id);
 
@@ -511,13 +512,9 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                                     ),
                                   ),
                                   Text(
-                                    createdAtData == null
-                                        ? '同期中...'
-                                        : (createdDateTime != null
-                                              ? DateFormat(
-                                                  'yyyy-MM-dd HH:mm',
-                                                ).format(createdDateTime)
-                                              : '日時不明'),
+                                    DateFormat(
+                                      'yyyy-MM-dd HH:mm',
+                                    ).format(displayTime),
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey,

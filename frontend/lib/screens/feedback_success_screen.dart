@@ -25,10 +25,7 @@ class FeedbackSuccessScreen extends StatelessWidget {
               const Text(
                 'フィードバックいただきありがとうございます。いただいた内容はアプリの改善に活用させていただきます',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 16, height: 1.5),
               ),
               const SizedBox(height: 40),
               ElevatedButton(
@@ -41,10 +38,7 @@ class FeedbackSuccessScreen extends StatelessWidget {
                     vertical: 16,
                   ),
                 ),
-                child: const Text(
-                  'イベント一覧に戻る',
-                  style: TextStyle(fontSize: 16),
-                ),
+                child: const Text('イベント一覧に戻る', style: TextStyle(fontSize: 16)),
               ),
             ],
           ),

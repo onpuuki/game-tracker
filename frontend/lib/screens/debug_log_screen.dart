@@ -17,14 +17,15 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
   @override
   void initState() {
     super.initState();
-    _logsStream = FirebaseFirestore.instanceFor(
-      app: Firebase.app(),
-      databaseId: 'default',
-    )
-        .collection('debug_logs')
-        .orderBy('timestamp', descending: true)
-        .limit(100)
-        .snapshots();
+    _logsStream =
+        FirebaseFirestore.instanceFor(
+              app: Firebase.app(),
+              databaseId: 'default',
+            )
+            .collection('debug_logs')
+            .orderBy('timestamp', descending: true)
+            .limit(100)
+            .snapshots();
   }
 
   @override

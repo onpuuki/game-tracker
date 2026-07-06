@@ -33,7 +33,9 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       initialTime: TimeOfDay.now(),
     );
     if (picked != null) {
-      if (_selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute)) {
+      if (_selectedTimes.any(
+        (t) => t.hour == picked.hour && t.minute == picked.minute,
+      )) {
         if (mounted) {
           scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に追加されています')),
@@ -58,9 +60,14 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       initialTime: _selectedTimes[index],
     );
     if (picked != null) {
-      if (_selectedTimes.asMap().entries.any((entry) => entry.key != index && entry.value.hour == picked.hour && entry.value.minute == picked.minute)) {
+      if (_selectedTimes.asMap().entries.any(
+        (entry) =>
+            entry.key != index &&
+            entry.value.hour == picked.hour &&
+            entry.value.minute == picked.minute,
+      )) {
         if (mounted) {
-           scaffoldMessenger.showSnackBar(
+          scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('この時刻は既に存在します')),
           );
         }
@@ -98,15 +105,15 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       }, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('設定を保存しました')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('設定を保存しました')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存に失敗しました: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
       }
     } finally {
       if (mounted) {
@@ -120,16 +127,15 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('自動スキャン時刻設定'),
-      ),
+      appBar: AppBar(title: const Text('自動スキャン時刻設定')),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _configStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('エラーが発生しました: ${snapshot.error}'));
           }
-          if (snapshot.connectionState == ConnectionState.waiting && !_initialized) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !_initialized) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -195,7 +201,10 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                     const SizedBox(height: 8),
                     const Text(
                       '実行時刻',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Expanded(
@@ -212,13 +221,18 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                               itemBuilder: (context, index) {
                                 final time = _selectedTimes[index];
                                 return Card(
-                                  margin: const EdgeInsets.symmetric(vertical: 8),
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
                                   elevation: 2,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
                                     title: Text(
                                       '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
                                       style: const TextStyle(
@@ -230,12 +244,19 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.edit, color: Colors.blue),
-                                          onPressed: () => _editTime(context, index),
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            color: Colors.blue,
+                                          ),
+                                          onPressed: () =>
+                                              _editTime(context, index),
                                           tooltip: '編集',
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.red),
+                                          icon: const Icon(
+                                            Icons.delete,
+                                            color: Colors.red,
+                                          ),
                                           onPressed: () {
                                             setState(() {
                                               _selectedTimes.removeAt(index);
@@ -266,11 +287,16 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                             ? const SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text(
                                 '設定を保存',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                       ),
                     ),

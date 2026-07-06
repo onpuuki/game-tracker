@@ -236,11 +236,14 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
             tooltip: 'Copy Prompts',
             onPressed: () async {
               final scaffoldMessenger = ScaffoldMessenger.of(context);
-              final combinedText = '--- スクレイパー用プロンプト ---\n${_scraperController.text}\n\n--- オーディター用プロンプト ---\n${_auditorController.text}';
+              final combinedText =
+                  '--- スクレイパー用プロンプト ---\n${_scraperController.text}\n\n--- オーディター用プロンプト ---\n${_auditorController.text}';
               await Clipboard.setData(ClipboardData(text: combinedText));
               if (mounted) {
                 scaffoldMessenger.showSnackBar(
-                  const SnackBar(content: Text('Copied both prompts to clipboard')),
+                  const SnackBar(
+                    content: Text('Copied both prompts to clipboard'),
+                  ),
                 );
               }
             },

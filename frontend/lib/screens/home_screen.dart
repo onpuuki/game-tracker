@@ -2018,7 +2018,7 @@ class _EventCardItemState extends State<_EventCardItem> {
           Padding(
             padding: const EdgeInsets.only(left: 12.0, bottom: 8.0, right: 8.0),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Column(
@@ -2176,56 +2176,92 @@ class _EventCardItemState extends State<_EventCardItem> {
                           ],
                     ),
                     if (showAutoFillButton)
-                      ElevatedButton.icon(
-                        onPressed: widget.isChecked
-                            ? null
-                            : () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                await Clipboard.setData(
-                                  ClipboardData(text: widget.redeemCode!),
-                                );
-                                messenger.showSnackBar(
-                                  const SnackBar(
-                                    content: Text('コードをコピーしました'),
-                                    duration: Duration(seconds: 1),
-                                  ),
-                                );
-
-                                if (widget.hasValidCodeUrl) {
-                                  final urlToLaunch = widget.gameCodeUrl!
-                                      .replaceAll('（コード）', widget.redeemCode!)
-                                      .replaceAll('(コード)', widget.redeemCode!);
-                                  final uri = Uri.parse(urlToLaunch);
-                                  if (await canLaunchUrl(uri)) {
-                                    await launchUrl(
-                                      uri,
-                                      mode: LaunchMode.externalApplication,
+                      Container(
+                        width: 70,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: widget.isChecked
+                              ? Colors.grey.shade400
+                              : (widget.hasValidCodeUrl
+                                    ? Theme.of(context).primaryColor
+                                    : Colors.blueGrey),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: widget.isChecked
+                                ? null
+                                : () async {
+                                    final messenger = ScaffoldMessenger.of(
+                                      context,
                                     );
-                                  } else {
+                                    await Clipboard.setData(
+                                      ClipboardData(text: widget.redeemCode!),
+                                    );
                                     messenger.showSnackBar(
                                       const SnackBar(
-                                        content: Text('Could not launch URL'),
+                                        content: Text('コードをコピーしました'),
+                                        duration: Duration(seconds: 1),
                                       ),
                                     );
-                                  }
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: widget.hasValidCodeUrl
-                              ? Theme.of(context).primaryColor
-                              : Colors.blueGrey,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                        ),
-                        icon: Icon(
-                          widget.hasValidCodeUrl
-                              ? Icons.open_in_browser
-                              : Icons.copy,
-                          size: 16,
-                        ),
-                        label: Text(
-                          widget.hasValidCodeUrl ? '自動入力' : 'コピー',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+
+                                    if (widget.hasValidCodeUrl) {
+                                      final urlToLaunch = widget.gameCodeUrl!
+                                          .replaceAll(
+                                            '（コード）',
+                                            widget.redeemCode!,
+                                          )
+                                          .replaceAll(
+                                            '(コード)',
+                                            widget.redeemCode!,
+                                          );
+                                      final uri = Uri.parse(urlToLaunch);
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      } else {
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Could not launch URL',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4.0,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    widget.hasValidCodeUrl
+                                        ? Icons.open_in_browser
+                                        : Icons.copy,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.hasValidCodeUrl ? '自動\n入力' : 'コピー',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                   ],

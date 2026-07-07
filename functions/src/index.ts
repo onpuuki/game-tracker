@@ -22,6 +22,22 @@ dayjs.tz.setDefault("Asia/Tokyo");
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
 
+function countJapaneseChars(str: string): number {
+    if (!str) return 0;
+    const match = str.match(/[ぁ-んァ-ン一-龯]/g);
+    return match ? match.length : 0;
+}
+
+function selectBetterTitle(t1: string, t2: string): string {
+    if (!t1) return t2 || '';
+    if (!t2) return t1 || '';
+    const count1 = countJapaneseChars(t1);
+    const count2 = countJapaneseChars(t2);
+    if (count1 > count2) return t1;
+    if (count2 > count1) return t2;
+    return t1.length >= t2.length ? t1 : t2; // 日本語文字数が同じなら長い方を残す
+}
+
 async function writeDebugLog(traceId: string, message: string, detailObj: any = ''): Promise<void> {
     try {
         const detailStr = typeof detailObj === 'string' ? detailObj : JSON.stringify(detailObj, null, 2);
@@ -100,6 +116,13 @@ async function cleanupDuplicateEvents(eventsList: any[], firestoreDb: admin.fire
                 if (isDuplicate) {
                     const updateData: any = {};
                     let hasUpdate = false;
+
+                    const betterTitle = selectBetterTitle(e1.data.title, e2.data.title);
+                    if (betterTitle !== e1.data.title) {
+                        updateData.title = betterTitle;
+                        hasUpdate = true;
+                        e1.data.title = betterTitle;
+                    }
 
                     if (!e1.data.eventUrl && e2.data.eventUrl) { updateData.eventUrl = e2.data.eventUrl; hasUpdate = true; e1.data.eventUrl = e2.data.eventUrl; }
                     if (!e1.data.redeemCode && e2.data.redeemCode) { updateData.redeemCode = e2.data.redeemCode; hasUpdate = true; e1.data.redeemCode = e2.data.redeemCode; }
@@ -352,13 +375,14 @@ ${existingMiniList || 'なし'}
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
-1. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、ギフトコードを最新のウェブ検索結果から広く調査してください。
-2. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
-3. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
-4. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
-5. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
-6. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
-7. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
+1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください（検索クエリに lang:ja 等の演算子を含めて意図的に絞り込むこと）。英語や他言語のサイトは検索対象外です。
+2. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、ギフトコードを最新のウェブ検索結果から広く調査してください。
+3. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
+4. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
+5. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
+6. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
+7. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
+8. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -450,6 +474,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 } else {
                     // すでに配列内にある場合、情報（URLや終了日）を補完してマージする
                     const existing = uniqueExtractedEvents[duplicateIdx];
+
+                    const betterTitle = selectBetterTitle(existing.title, event.title);
+                    if (betterTitle) existing.title = betterTitle;
+
                     if (!existing.eventUrl && event.eventUrl) existing.eventUrl = event.eventUrl;
                     if ((!existing.endDate || existing.endDate === 'UNKNOWN') && event.endDate && event.endDate !== 'UNKNOWN') {
                         existing.endDate = event.endDate;
@@ -516,8 +544,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
                     const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
 
+                    const newTitle = selectBetterTitle(event.title, eData.title);
+
                     let changes: string[] = [];
-                    if (event.title && eData.title !== event.title) changes.push('タイトル');
+                    if (newTitle && eData.title !== newTitle) changes.push('タイトル');
                     if (event.summary && eData.summary !== event.summary) changes.push('概要');
                     if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
                     if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
@@ -533,7 +563,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
 
                     const updateData: any = {
-                        title: event.title || eData.title,
+                        title: newTitle,
                         summary: event.summary || eData.summary,
                         startDate: formattedStart || null,
                         endDate: formattedEnd || null,
@@ -568,8 +598,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
                         const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
 
+                        const newTitle = selectBetterTitle(event.title, eData.title);
+
                         let changes: string[] = [];
-                        if (event.title && eData.title !== event.title) changes.push('タイトル');
+                        if (newTitle && eData.title !== newTitle) changes.push('タイトル');
                         if (event.summary && eData.summary !== event.summary) changes.push('概要');
                         if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
                         if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
@@ -585,7 +617,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
 
                         const updateData: any = {
-                            title: event.title || eData.title,
+                            title: newTitle,
                             summary: event.summary || eData.summary,
                             startDate: formattedStart || null,
                             endDate: formattedEnd || null,

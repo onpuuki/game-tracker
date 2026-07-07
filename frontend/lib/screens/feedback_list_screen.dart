@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../utils/debug_log_manager.dart';
@@ -220,19 +221,27 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
     if (!mounted) return;
 
     try {
-      var batch = FirebaseFirestore.instance.batch();
+      var batch = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).batch();
       int count = 0;
 
       for (final id in targetIds) {
         batch.delete(
-          FirebaseFirestore.instance.collection('feedbacks').doc(id),
+          FirebaseFirestore.instanceFor(
+            app: Firebase.app(),
+            databaseId: 'default',
+          ).collection('feedbacks').doc(id),
         );
         count++;
         // WriteBatch limit is 500
         if (count == 500) {
           await batch.commit();
-          batch = FirebaseFirestore.instance
-              .batch(); // Re-initialize the batch for next items
+          batch = FirebaseFirestore.instanceFor(
+            app: Firebase.app(),
+            databaseId: 'default',
+          ).batch(); // Re-initialize the batch for next items
           count = 0;
         }
       }
@@ -301,11 +310,15 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('feedbacks')
-          .orderBy('createdAt', descending: true)
-          .limit(200)
-          .snapshots(),
+      stream:
+          FirebaseFirestore.instanceFor(
+                app: Firebase.app(),
+                databaseId: 'default',
+              )
+              .collection('feedbacks')
+              .orderBy('createdAt', descending: true)
+              .limit(200)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Scaffold(

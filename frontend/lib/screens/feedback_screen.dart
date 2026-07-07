@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback_success_screen.dart';
 import '../utils/debug_log_manager.dart';
@@ -60,7 +61,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    FirebaseFirestore.instance
+    FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
         .collection('feedbacks')
         .add({
           'title': _titleController.text.trim(),

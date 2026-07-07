@@ -90,42 +90,43 @@ jobs:
           const drive = google.drive({ version: 'v3', auth });
           const FOLDER_ID = '1jHDT34dWhHOqNLrBa2_n-8vyCNJOlhYr';
 
-          async function uploadFile(filePath, fileName, mimeType) {
-            if (!fs.existsSync(filePath)) {
-              console.log(`Skip: ${filePath} does not exist.`);
-              return;
-            }
-            console.log(`Uploading ${fileName}...`);
-
-            // 既存ファイルの検索（共有ドライブ対応のパラメータを完全指定）
-            const res = await drive.files.list({
-              q: `'${FOLDER_ID}' in parents and name='${fileName}' and trashed=false`,
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true
-            });
-
-            const files = res.data.files;
-            if (!files || files.length === 0) {
-              throw new Error(`Dummy file '${fileName}' not found in Drive. Please create it manually first!`);
-            }
-
-            const fileId = files[0].id;
-            console.log(`Found existing dummy file (${fileId}), updating...`);
-
-            // 上書き（Update）のみを実行
-            await drive.files.update({
-              fileId: fileId,
-              media: { mimeType: mimeType, body: fs.createReadStream(filePath) },
-              supportsAllDrives: true
-            });
-            console.log(`Successfully updated ${fileName}`);
-          }
-
           async function main() {
             try {
-              await uploadFile('SourceCode.txt', 'SourceCode.txt', 'text/plain');
-              await uploadFile('frontend/build/app/outputs/flutter-apk/app-admin-release.apk', 'app-admin-release.apk', 'application/vnd.android.package-archive');
-              await uploadFile('frontend/build/app/outputs/flutter-apk/app-user-release.apk', 'app-user-release.apk', 'application/vnd.android.package-archive');
+              console.log("Fetching files in Drive folder...");
+              const res = await drive.files.list({
+                q: `'${FOLDER_ID}' in parents and trashed=false`,
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true,
+                fields: 'files(id, name)'
+              });
+
+              const driveFiles = res.data.files || [];
+              console.log("Files seen by Service Account in Drive:", driveFiles.map(f => f.name));
+
+              async function updateFile(localPath, keyword, mimeType) {
+                if (!fs.existsSync(localPath)) {
+                  console.log(`Skip: ${localPath} does not exist.`);
+                  return;
+                }
+
+                const target = driveFiles.find(f => f.name.toLowerCase().includes(keyword.toLowerCase()));
+                if (!target) {
+                  throw new Error(`Could not find any file containing '${keyword}' in Drive folder.`);
+                }
+
+                console.log(`Updating Drive file '${target.name}' (${target.id}) with local ${localPath}...`);
+                await drive.files.update({
+                  fileId: target.id,
+                  media: { mimeType: mimeType, body: fs.createReadStream(localPath) },
+                  supportsAllDrives: true
+                });
+                console.log(`Successfully updated ${target.name}`);
+              }
+
+              await updateFile('SourceCode.txt', 'SourceCode', 'text/plain');
+              await updateFile('frontend/build/app/outputs/flutter-apk/app-admin-release.apk', 'app-admin', 'application/vnd.android.package-archive');
+              await updateFile('frontend/build/app/outputs/flutter-apk/app-user-release.apk', 'app-user', 'application/vnd.android.package-archive');
+
             } catch (e) {
               console.error(e);
               process.exit(1);

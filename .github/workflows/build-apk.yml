@@ -124,13 +124,13 @@ jobs:
               });
             } else {
               console.log(`Creating new file: ${fileName}`);
-              await drive.files.create({
+              const createRes = await drive.files.create({
                 requestBody: {
                   name: fileName,
-                  parents: ['1jHDT34dWhHOqNLrBa2_n-8vyCNJOlhYr'],
+                  parents: ['1jHDT34dWhHOqNLrBa2_n-8vyCNJOlhYr']
                 },
                 media: media,
-                supportsAllDrives: true,
+                supportsAllDrives: true
               });
             }
             console.log(`Successfully uploaded ${fileName}`);

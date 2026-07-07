@@ -56,6 +56,79 @@ function getSafeDateObj(val: any): Date | null {
     return null;
 }
 
+async function cleanupDuplicateEvents(eventsList: any[], firestoreDb: admin.firestore.Firestore): Promise<any[]> {
+    const toDelete = new Set<string>();
+    let batch = firestoreDb.batch();
+    let batchCount = 0;
+
+    const commitIfNeeded = async () => {
+        if (batchCount >= 450) {
+            await batch.commit();
+            batch = firestoreDb.batch();
+            batchCount = 0;
+        }
+    };
+
+    const gameGroups = new Map<string, any[]>();
+    for (const e of eventsList) {
+        const game = e.data.gameName || 'unknown';
+        if (!gameGroups.has(game)) gameGroups.set(game, []);
+        gameGroups.get(game)!.push(e);
+    }
+
+    for (const group of gameGroups.values()) {
+        for (let i = 0; i < group.length; i++) {
+            const e1 = group[i];
+            if (toDelete.has(e1.docId)) continue;
+
+            for (let j = i + 1; j < group.length; j++) {
+                const e2 = group[j];
+                if (toDelete.has(e2.docId)) continue;
+
+                let isDuplicate = false;
+
+                if (e1.data.tag === 'コード' || e2.data.tag === 'コード') {
+                    if (e1.data.redeemCode && e2.data.redeemCode && e1.data.redeemCode.toUpperCase() === e2.data.redeemCode.toUpperCase()) {
+                        isDuplicate = true;
+                    }
+                } else if (e1.data.eventUrl && e2.data.eventUrl && e1.data.eventUrl === e2.data.eventUrl) {
+                    isDuplicate = true;
+                } else if (e1.data.title && e2.data.title && calculateSimilarity(e1.data.title, e2.data.title) >= 0.85) {
+                    isDuplicate = true;
+                }
+
+                if (isDuplicate) {
+                    const updateData: any = {};
+                    let hasUpdate = false;
+
+                    if (!e1.data.eventUrl && e2.data.eventUrl) { updateData.eventUrl = e2.data.eventUrl; hasUpdate = true; e1.data.eventUrl = e2.data.eventUrl; }
+                    if (!e1.data.redeemCode && e2.data.redeemCode) { updateData.redeemCode = e2.data.redeemCode; hasUpdate = true; e1.data.redeemCode = e2.data.redeemCode; }
+                    if (!e1.data.startDate && e2.data.startDate) { updateData.startDate = e2.data.startDate; hasUpdate = true; e1.data.startDate = e2.data.startDate; }
+                    if (!e1.data.endDate && e2.data.endDate) { updateData.endDate = e2.data.endDate; hasUpdate = true; e1.data.endDate = e2.data.endDate; }
+
+                    if (hasUpdate) {
+                        batch.update(e1.ref, updateData);
+                        batchCount++;
+                        await commitIfNeeded();
+                    }
+
+                    batch.delete(e2.ref);
+                    batchCount++;
+                    await commitIfNeeded();
+
+                    toDelete.add(e2.docId);
+                }
+            }
+        }
+    }
+
+    if (batchCount > 0) {
+        await batch.commit();
+    }
+
+    return eventsList.filter(e => !toDelete.has(e.docId));
+}
+
 function calculateSimilarity(s1: string, s2: string): number {
     let longer = s1.toLowerCase().replace(/[\s　]+/g, '');
     let shorter = s2.toLowerCase().replace(/[\s　]+/g, '');
@@ -80,7 +153,7 @@ function calculateSimilarity(s1: string, s2: string): number {
         }
     }
     const lcsLength = dp[longerLength][shorterLength];
-    if (lcsLength / shorterLength >= 0.8) {
+    if (shorterLength >= 5 && (lcsLength / shorterLength) >= 0.8) {
         return 0.85; // Meets the 80% partial match criteria
     }
 
@@ -243,9 +316,9 @@ export const syncSingleGameTask = onTaskDispatched({
         const eventsCollection = db.collection(`games/${gameName}/events`);
         const currentEventsSnapshot = await eventsCollection.get();
 
-        const currentEventsMap = new Map();
-        currentEventsSnapshot.forEach(doc => currentEventsMap.set(doc.data().title, { docId: doc.id, data: doc.data() }));
-        const currentEventsList = Array.from(currentEventsMap.values());
+        let currentEventsList = currentEventsSnapshot.docs.map(doc => ({ docId: doc.id, data: doc.data(), ref: doc.ref }));
+
+        currentEventsList = await cleanupDuplicateEvents(currentEventsList, db);
 
         const existingMiniList = currentEventsList.map(e => {
             const d = e.data;
@@ -255,7 +328,8 @@ export const syncSingleGameTask = onTaskDispatched({
             } else if (typeof d.endDate === 'string') {
                 endStr = d.endDate;
             }
-            return `[ID: ${e.docId}] ${d.title} (期限: ${endStr})`;
+            const codeStr = d.redeemCode ? ` (コード: ${d.redeemCode})` : '';
+            return `[ID: ${e.docId}] ${d.title}${codeStr} (期限: ${endStr})`;
         }).join('\n');
 
         const cycleEventTitles: string[] = [];
@@ -421,6 +495,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 if (!existingEvent) {
                     existingEvent = currentEventsList.find(e => {
                         if (event.eventUrl && e.data.eventUrl === event.eventUrl) return true;
+                        // コードの場合はタイトル類似度を無視し、コードの一致のみで判定する
+                        if (event.tag === 'コード' || e.data.tag === 'コード') {
+                            return event.redeemCode && e.data.redeemCode && event.redeemCode.toUpperCase() === e.data.redeemCode.toUpperCase();
+                        }
                         if (e.data.title && event.title && calculateSimilarity(e.data.title, event.title) >= 0.85) return true;
                         return false;
                     });
@@ -1049,6 +1127,9 @@ async function runCycleResetLogic(traceId: string) {
             return;
         }
 
+        let currentEventsList = eventsSnapshot.docs.map(doc => ({ docId: doc.id, data: doc.data(), ref: doc.ref }));
+        currentEventsList = await cleanupDuplicateEvents(currentEventsList, db);
+
         const now = dayjs().tz('Asia/Tokyo');
 
         const batches: Promise<any>[] = [];
@@ -1057,8 +1138,9 @@ async function runCycleResetLogic(traceId: string) {
         let totalUpdated = 0;
         let totalDeleted = 0;
 
-        for (const doc of eventsSnapshot.docs) {
-            const data = doc.data();
+        for (const event of currentEventsList) {
+            const doc = event.ref;
+            const data = event.data;
             const endDateUTC = getSafeDateObj(data.endDate);
             if (!endDateUTC) continue;
 
@@ -1108,7 +1190,7 @@ async function runCycleResetLogic(traceId: string) {
                     const tasks = data.tasks || [];
                     const updatedTasks = tasks.map((task: any) => ({ ...task, isCompleted: false }));
 
-                    currentBatch.update(doc.ref, {
+                    currentBatch.update(doc, {
                         startDate: admin.firestore.Timestamp.fromDate(endDateUTC),
                         endDate: admin.firestore.Timestamp.fromDate(nextEndDateObj),
                         tasks: updatedTasks,
@@ -1121,7 +1203,7 @@ async function runCycleResetLogic(traceId: string) {
                     totalUpdated++;
                 } else {
                     // Normal event that has expired
-                    currentBatch.delete(doc.ref);
+                    currentBatch.delete(doc);
                     opCount++;
                     totalDeleted++;
                 }

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 
@@ -54,6 +55,35 @@ Future<void> _initializeFirebase() async {
       final userCredential = await FirebaseAuth.instance.signInAnonymously();
       debugPrint('Anonymous Login Success: ${userCredential.user?.uid}');
     }
+
+    // --- ここからRBAC(管理者権限)の自動付与処理を追加 ---
+    const bool isAdminApp = bool.fromEnvironment(
+      'IS_ADMIN',
+      defaultValue: false,
+    );
+    if (isAdminApp) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final idTokenResult = await user.getIdTokenResult();
+        final isAdminClaim = idTokenResult.claims?['admin'] == true;
+
+        if (!isAdminClaim) {
+          debugPrint('Requesting admin role...');
+          final callable = FirebaseFunctions.instanceFor(
+            region: 'asia-northeast1',
+          ).httpsCallable('setAdminRole');
+          const adminSecret = String.fromEnvironment('ADMIN_SECRET');
+          await callable.call({'secret': adminSecret});
+
+          // クレーム付与後、強制的にトークンをリフレッシュして最新状態にする
+          await user.getIdToken(true);
+          debugPrint('Admin role granted and token refreshed.');
+        } else {
+          debugPrint('Already has admin role.');
+        }
+      }
+    }
+    // --- ここまで ---
   } catch (e) {
     debugPrint('Failed to sign in anonymously: $e');
   }

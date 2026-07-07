@@ -1315,3 +1315,28 @@ export const manualResetCycleEvents = functions.region('asia-northeast1').runWit
         throw new functions.https.HttpsError('internal', 'Error executing manual cycle reset', error.message);
     }
 });
+
+export const setAdminRole = functions.region('asia-northeast1').https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    // フロントエンドから送られてくる秘密鍵
+    const secret = data.secret;
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'GT_ADMIN_SECRET_2026';
+
+    if (secret !== ADMIN_SECRET) {
+        functions.logger.warn(`Failed admin role attempt for UID: ${context.auth.uid}`);
+        throw new functions.https.HttpsError('permission-denied', 'Invalid admin secret.');
+    }
+
+    // すでに付与されている場合はスキップ
+    if (context.auth.token.admin === true) {
+        return { success: true, message: 'Already admin.' };
+    }
+
+    await admin.auth().setCustomUserClaims(context.auth.uid, { admin: true });
+    functions.logger.info(`Admin role granted to UID: ${context.auth.uid}`);
+
+    return { success: true, message: 'Admin role granted. Please refresh token.' };
+});

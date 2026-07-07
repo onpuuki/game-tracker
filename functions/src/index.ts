@@ -58,7 +58,8 @@ function getSafeDateObj(val: any): Date | null {
     if (typeof val === 'string') {
         // AIの出力揺れ（JST等の文字列）を除去
         const cleanVal = val.replace(/JST|UTC|GMT/gi, '').trim();
-        const d = dayjs(cleanVal).tz('Asia/Tokyo');
+        // TypeScriptの型エラーを避けるため any キャストして tz を呼び出す
+        const d = (dayjs as any).tz(cleanVal, 'Asia/Tokyo');
 
         if (d.isValid()) {
             // 時間指定がなく日付（YYYY-MM-DDやYYYY/MM/DD）のみの場合は、その日の23:59:59に設定
@@ -496,8 +497,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 if (event.endDate === 'UNKNOWN') event.endDate = null;
 
                 if (event.endDate) {
-                    const endMs = new Date(event.endDate).getTime();
-                    if (!isNaN(endMs) && endMs < nowMs) {
+                    const endDateObj = getSafeDateObj(event.endDate);
+                    if (endDateObj && endDateObj.getTime() < nowMs) {
                         functions.logger.info(`[${traceId}] Skipping past event: ${event.title} (endDate: ${event.endDate})`);
                         continue;
                     }

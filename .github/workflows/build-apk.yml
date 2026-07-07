@@ -127,7 +127,7 @@ jobs:
               await drive.files.create({
                 requestBody: {
                   name: fileName,
-                  parents: [folderId],
+                  parents: ['1jHDT34dWhHOqNLrBa2_n-8vyCNJOlhYr'],
                 },
                 media: media,
                 supportsAllDrives: true,

@@ -57,17 +57,27 @@ function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
     if (val.toDate && typeof val.toDate === 'function') return val.toDate();
     if (typeof val === 'string') {
-        // AIの出力揺れ（JST等の文字列）を除去
-        const cleanVal = val.replace(/JST|UTC|GMT/gi, '').trim();
-        // TypeScriptの型エラーを避けるため any キャストして tz を呼び出す
-        const d = (dayjs as any).tz(cleanVal, 'Asia/Tokyo');
+        let cleanVal = val.replace(/JST|UTC|GMT/gi, '').trim();
+        if (!cleanVal) return null;
 
-        if (d.isValid()) {
-            // 時間指定がなく日付（YYYY-MM-DDやYYYY/MM/DD）のみの場合は、その日の23:59:59に設定
-            if (!cleanVal.includes(' ') && !cleanVal.includes('T')) {
-                return d.hour(23).minute(59).second(59).toDate();
+        // YYYY/MM/DD のような表記を YYYY-MM-DD に統一
+        cleanVal = cleanVal.replace(/\//g, '-');
+
+        // タイムゾーン情報（+09:00 や Z など）が含まれていない場合、強制的にJSTオフセットを付与する
+        if (!cleanVal.includes('+') && !cleanVal.includes('-0') && !cleanVal.endsWith('Z')) {
+            if (cleanVal.includes(' ')) {
+                cleanVal = cleanVal.replace(' ', 'T') + '+09:00';
+            } else if (cleanVal.includes('T')) {
+                cleanVal = cleanVal + '+09:00';
+            } else {
+                // 日付のみ ('YYYY-MM-DD') の場合はその日の終わり (23:59:59) に設定
+                cleanVal = cleanVal + 'T23:59:59+09:00';
             }
-            return d.toDate();
+        }
+
+        const d = new Date(cleanVal);
+        if (!isNaN(d.getTime())) {
+            return d;
         }
         return null;
     }
@@ -359,7 +369,6 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const cycleEventTitles: string[] = [];
 
-        const now = new Date();
 
         currentEventsSnapshot.docs.forEach(doc => {
             const data = doc.data();
@@ -666,7 +675,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
                     if (eData.endDate) {
                         const endDateObj = getSafeDateObj(eData.endDate);
-                        if (endDateObj && endDateObj < now) {
+                        if (endDateObj && endDateObj.getTime() < nowMs) {
                             batch.delete(eventsCollection.doc(existingEvent.docId));
                             batchCount++;
                             deletedCount++;

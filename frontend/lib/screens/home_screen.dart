@@ -926,20 +926,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 4.0),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _showSortDialog();
-                },
-                icon: const Icon(Icons.sort, size: 18),
-                label: const Text('並び替え'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Theme.of(context).primaryColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
+            Builder(
+              builder: (context) {
+                final tabController = DefaultTabController.of(context);
+                return ListenableBuilder(
+                  listenable: tabController,
+                  builder: (context, child) {
+                    if (tabController.index != 0) {
+                      return const SizedBox.shrink(); // タイムラインタブでは非表示
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 4.0),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _showSortDialog();
+                        },
+                        icon: const Icon(Icons.sort, size: 18),
+                        label: const Text('並び替え'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Theme.of(context).primaryColor,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
             IconButton(
               icon: const Icon(Icons.settings),
@@ -1507,11 +1520,21 @@ class _EventCardItemState extends State<_EventCardItem> {
   String? _selectedSubTag;
   bool _isUpdateLocked = false;
   bool _isHistoryExpanded = false;
+  late bool _localIsChecked;
 
   @override
   void initState() {
     super.initState();
+    _localIsChecked = widget.isChecked;
     _initEditFields();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventCardItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isChecked != widget.isChecked) {
+      _localIsChecked = widget.isChecked;
+    }
   }
 
   void _initEditFields() {
@@ -1745,7 +1768,7 @@ class _EventCardItemState extends State<_EventCardItem> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: widget.isChecked
+      color: _localIsChecked
           ? (widget.isDarkMode ? Colors.grey[850] : Colors.grey.shade200)
           : null,
       clipBehavior: Clip.antiAlias,
@@ -1757,7 +1780,7 @@ class _EventCardItemState extends State<_EventCardItem> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 InkWell(
-                  onTap: widget.isChecked
+                  onTap: _localIsChecked
                       ? null
                       : () async {
                           if (widget.tag == 'コード') {
@@ -1797,7 +1820,12 @@ class _EventCardItemState extends State<_EventCardItem> {
                             }
                           }
                         },
-                  onLongPress: widget.onCheckedToggle,
+                  onLongPress: () {
+                    setState(() {
+                      _localIsChecked = !_localIsChecked;
+                    });
+                    widget.onCheckedToggle(); // 親の状態もバックグラウンドで更新
+                  },
                   child: Stack(
                     children: [
                       Padding(
@@ -1866,7 +1894,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                 ),
                                 if (widget.trailingWidget != null) ...[
                                   const SizedBox(width: 8),
-                                  widget.isChecked
+                                  _localIsChecked
                                       ? Opacity(
                                           opacity: 0.5,
                                           child: widget.trailingWidget,
@@ -1921,10 +1949,10 @@ class _EventCardItemState extends State<_EventCardItem> {
                                       widget.title,
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        decoration: widget.isChecked
+                                        decoration: _localIsChecked
                                             ? TextDecoration.lineThrough
                                             : null,
-                                        color: widget.isChecked
+                                        color: _localIsChecked
                                             ? Colors.grey
                                             : null,
                                       ),
@@ -1936,7 +1964,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                   widget.period,
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: widget.isChecked
+                                    color: _localIsChecked
                                         ? Colors.grey
                                         : Colors.blueGrey,
                                   ),
@@ -1949,7 +1977,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: widget.isChecked
+                                      color: _localIsChecked
                                           ? Colors.grey
                                           : null,
                                     ),
@@ -2037,7 +2065,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                           ],
                         ),
                       ),
-                      if (widget.isChecked)
+                      if (_localIsChecked)
                         Positioned.fill(
                           child: Center(
                             child: Transform.rotate(
@@ -2073,7 +2101,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                   'IS_ADMIN',
                                   defaultValue: false,
                                 ) &&
-                                !widget.isChecked &&
+                                !_localIsChecked &&
                                 !_isEditing)
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2245,7 +2273,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                     topRight: Radius.circular(12),
                     bottomRight: Radius.circular(12),
                   ),
-                  color: widget.isChecked
+                  color: _localIsChecked
                       ? Colors.grey.shade400
                       : (widget.hasValidCodeUrl
                             ? Theme.of(context).primaryColor
@@ -2258,7 +2286,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                       topRight: Radius.circular(12),
                       bottomRight: Radius.circular(12),
                     ),
-                    onTap: widget.isChecked
+                    onTap: _localIsChecked
                         ? null
                         : () async {
                             final messenger = ScaffoldMessenger.of(context);

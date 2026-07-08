@@ -20,8 +20,8 @@ class TimelineView extends StatefulWidget {
 
 class _TimelineViewState extends State<TimelineView> {
   List<String> games = [];
-  List<DateTime> hours = [];
-  Map<String, Map<int, List<ParsedEvent>>> eventMap = {};
+  List<DateTime?> displayRows = []; // hours を廃止し、ギャップ(null)を含む行データへ変更
+  Map<String, Map<DateTime, List<ParsedEvent>>> eventMap = {}; // 内側のキーを int から DateTime に変更
   Map<String, String> _abbreviations = {};
   bool _isLoadingAbbreviations = true;
 
@@ -96,46 +96,44 @@ class _TimelineViewState extends State<TimelineView> {
     games = widget.events.map((e) => e.gameName).toSet().toList();
     games.sort();
 
-    DateTime now = DateTime.now();
-    DateTime startHour = DateTime(now.year, now.month, now.day, now.hour);
-    // 3 days ahead
-    DateTime endHour = startHour.add(const Duration(days: 3));
+    // イベントが存在する時間を一意に抽出
+    Set<DateTime> uniqueHours = {};
+    for (var event in widget.events) {
+      if (event.endDate != null) {
+        final d = event.endDate!;
+        uniqueHours.add(DateTime(d.year, d.month, d.day, d.hour));
+      }
+    }
 
-    hours = [];
-    DateTime current = startHour;
-    while (current.isBefore(endHour) || current.isAtSameMomentAs(endHour)) {
-      hours.add(current);
-      current = current.add(const Duration(hours: 1));
+    List<DateTime> sortedHours = uniqueHours.toList()..sort();
+
+    // 行データの構築（時間が1時間以上飛んでいる場合は null を挟む）
+    displayRows = [];
+    for (int i = 0; i < sortedHours.length; i++) {
+      displayRows.add(sortedHours[i]);
+      if (i < sortedHours.length - 1) {
+        if (sortedHours[i + 1].difference(sortedHours[i]).inHours > 1) {
+          displayRows.add(null); // 省略ギャップ
+        }
+      }
     }
 
     eventMap = {};
     for (var game in games) {
       eventMap[game] = {};
-      for (int i = 0; i < hours.length; i++) {
-        eventMap[game]![i] = [];
-      }
     }
 
+    // イベントの紐付け
     for (var event in widget.events) {
       if (event.endDate == null) continue;
+      final d = event.endDate!;
+      DateTime hourKey = DateTime(d.year, d.month, d.day, d.hour);
 
-      String gameName = event.gameName;
-      DateTime endDate = event.endDate!;
-
-      // Find the slot
-      for (int i = 0; i < hours.length; i++) {
-        DateTime slotStart = hours[i];
-        DateTime slotEnd = slotStart.add(const Duration(hours: 1));
-
-        // If end date falls in this hour slot
-        if ((endDate.isAfter(slotStart) ||
-                endDate.isAtSameMomentAs(slotStart)) &&
-            endDate.isBefore(slotEnd)) {
-          if (eventMap.containsKey(gameName)) {
-            eventMap[gameName]![i]!.add(event);
-          }
-          break;
+      if (eventMap[event.gameName] != null) {
+        if (eventMap[event.gameName]![hourKey] == null) {
+          eventMap[event.gameName]![hourKey] = [];
         }
+        eventMap[event.gameName]![hourKey]!.add(event);
       }
     }
   }
@@ -184,7 +182,7 @@ class _TimelineViewState extends State<TimelineView> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (games.isEmpty || hours.isEmpty) {
+    if (games.isEmpty || displayRows.isEmpty) {
       return const Center(child: Text('タイムラインデータがありません'));
     }
 
@@ -192,7 +190,7 @@ class _TimelineViewState extends State<TimelineView> {
       pinnedColumnCount: 1,
       pinnedRowCount: 1,
       columnCount: games.length + 1,
-      rowCount: hours.length + 1,
+      rowCount: displayRows.length + 1,
       columnBuilder: _buildColumnSpan,
       rowBuilder: _buildRowSpan,
       cellBuilder: (BuildContext context, TableVicinity vicinity) {
@@ -223,83 +221,111 @@ class _TimelineViewState extends State<TimelineView> {
               ),
             ),
           );
-        } else if (vicinity.column == 0) {
-          final h = hours[vicinity.row - 1];
-          return TableViewCell(
-            child: Center(
-              child: Text(
-                '${h.month}/${h.day} ${h.hour.toString().padLeft(2, '0')}:00',
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-              ),
-            ),
-          );
         }
 
-        final gameName = games[vicinity.column - 1];
-        final hIndex = vicinity.row - 1;
-        final cellEvents = eventMap[gameName]?[hIndex] ?? [];
+        if (vicinity.row > 0) {
+          final rowData = displayRows[vicinity.row - 1];
 
-        if (cellEvents.isEmpty) {
-          return TableViewCell(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
+          if (vicinity.column == 0) {
+            if (rowData == null) {
+              return const TableViewCell(
+                child: Center(
+                  child: Text('⋮', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              );
+            }
+            return TableViewCell(
+              child: Center(
+                child: Text(
+                  '${rowData.month}/${rowData.day} ${rowData.hour.toString().padLeft(2, '0')}:00',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                ),
               ),
-            ),
-          );
-        }
+            );
+          }
 
-        DateTime now = DateTime.now();
-        bool hasWarning = false;
-        bool hasDanger = false;
+          final gameName = games[vicinity.column - 1];
 
-        if (cellEvents.length >= 3) {
-          hasDanger = true;
-        } else {
-          for (var ev in cellEvents) {
-            if (ev.endDate != null &&
-                ev.endDate!.difference(now).inHours < 24) {
-              hasWarning = true;
+          if (rowData == null) {
+            return TableViewCell(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.withAlpha(20),
+                  border: Border(
+                    left: BorderSide(color: Colors.grey.shade300),
+                    right: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final cellEvents = eventMap[gameName]?[rowData] ?? [];
+
+          if (cellEvents.isEmpty) {
+            return TableViewCell(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+              ),
+            );
+          }
+
+          DateTime now = DateTime.now();
+          bool hasWarning = false;
+          bool hasDanger = false;
+
+          if (cellEvents.length >= 3) {
+            hasDanger = true;
+          } else {
+            for (var ev in cellEvents) {
+              if (ev.endDate != null &&
+                  ev.endDate!.difference(now).inHours < 24) {
+                hasWarning = true;
+              }
             }
           }
-        }
 
-        Color bgColor = Colors.blue.shade100;
-        if (hasDanger) {
-          bgColor = Colors.red.shade300;
-        } else if (hasWarning) {
-          bgColor = Colors.yellow.shade300;
-        }
+          Color bgColor = Colors.blue.shade100;
+          if (hasDanger) {
+            bgColor = Colors.red.shade300;
+          } else if (hasWarning) {
+            bgColor = Colors.yellow.shade300;
+          }
 
-        return TableViewCell(
-          child: InkWell(
-            onTap: () =>
-                _showEventDetails(context, gameName, hours[hIndex], cellEvents),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Center(
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: bgColor,
-                  ),
-                  child: Center(
-                    child: Text(
-                      cellEvents.length.toString(),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+          return TableViewCell(
+            child: InkWell(
+              onTap: () =>
+                  _showEventDetails(context, gameName, rowData, cellEvents),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: bgColor,
+                    ),
+                    child: Center(
+                      child: Text(
+                        cellEvents.length.toString(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
+          );
+        }
+
+        return const TableViewCell(child: SizedBox());
       },
     );
   }
@@ -315,6 +341,9 @@ class _TimelineViewState extends State<TimelineView> {
     if (index == 0) {
       return const TableSpan(extent: FixedTableSpanExtent(100.0));
     }
-    return const TableSpan(extent: FixedTableSpanExtent(45.0));
+    if (displayRows[index - 1] == null) {
+      return const TableSpan(extent: FixedTableSpanExtent(24.0)); // ギャップ行の高さ
+    }
+    return const TableSpan(extent: FixedTableSpanExtent(45.0)); // 通常行
   }
 }

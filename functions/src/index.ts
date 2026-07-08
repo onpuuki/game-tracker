@@ -5,6 +5,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { getFunctions } from "firebase-admin/functions";
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import * as messaging from 'firebase-admin/messaging';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
 import { GoogleGenAI } from '@google/genai';
@@ -1374,4 +1375,85 @@ export const setAdminRole = functions.region('asia-northeast1').https.onCall(asy
     functions.logger.info(`Admin role granted to UID: ${context.auth.uid}`);
 
     return { success: true, message: 'Admin role granted. Please refresh token.' };
+});
+
+export const sendScheduledNotifications = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
+    const now = dayjs().tz('Asia/Tokyo');
+    const currentHour = now.hour();
+
+    try {
+        // Find users who have notifications enabled for this hour
+        const usersSnapshot = await db.collection('users').get();
+        const targetUsers = usersSnapshot.docs.filter(doc => {
+            const data = doc.data();
+            const settings = data.settings;
+            return settings &&
+                   settings.notificationEnabled === true &&
+                   settings.notificationHour === currentHour &&
+                   data.fcmToken;
+        });
+
+        if (targetUsers.length === 0) {
+            functions.logger.info(`No users configured for notifications at hour ${currentHour}`);
+            return;
+        }
+
+        // Fetch all events
+        const eventsSnapshot = await db.collection('events').get();
+        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+        // Identify events that end today
+        const endOfTodayMs = now.endOf('day').valueOf();
+
+        const todayDueEvents = allEvents.filter((event: any) => {
+            if (event.isCompleted) return false;
+            if (!event.endDate) return false;
+
+            const endDateObj = getSafeDateObj(event.endDate);
+            if (!endDateObj) return false;
+            const endDateMs = endDateObj.getTime();
+
+            // Due today if endDate falls within today, or is already past but wasn't completed
+            return endDateMs <= endOfTodayMs;
+        });
+
+        if (todayDueEvents.length === 0) {
+            functions.logger.info(`No uncompleted events due today.`);
+            return;
+        }
+
+        // Send notifications
+        const messages: messaging.Message[] = [];
+
+        for (const userDoc of targetUsers) {
+            const userData = userDoc.data();
+            const checkedEvents: string[] = userData.checkedEvents || [];
+
+            // Filter to only events the user hasn't checked off
+            const userUncompletedEvents = todayDueEvents.filter(e => !checkedEvents.includes(e.id));
+
+            if (userUncompletedEvents.length > 0) {
+                messages.push({
+                    token: userData.fcmToken,
+                    notification: {
+                        title: '未完了のイベントがあります',
+                        body: `本日期限の未完了イベントが${userUncompletedEvents.length}件あります。`
+                    }
+                });
+            }
+        }
+
+        if (messages.length > 0) {
+            const batchResponses = await Promise.all(messages.map(msg => admin.messaging().send(msg).catch(e => {
+                functions.logger.error('Failed to send message:', e);
+                return null;
+            })));
+            const successfulCount = batchResponses.filter(r => r !== null).length;
+            functions.logger.info(`Sent ${successfulCount}/${messages.length} notifications successfully.`);
+        } else {
+            functions.logger.info(`No targeted users had uncompleted events.`);
+        }
+    } catch (error) {
+        functions.logger.error('Error in sendScheduledNotifications', error);
+    }
 });

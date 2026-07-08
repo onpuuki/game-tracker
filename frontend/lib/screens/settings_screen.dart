@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../main.dart'; // Import themeNotifier
 import 'feedback_screen.dart';
 
@@ -16,6 +20,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _rotationLock = false;
   bool _isLoading = true;
 
+  bool _notificationEnabled = false;
+  int _notificationHour = 21;
+
   @override
   void initState() {
     super.initState();
@@ -24,11 +31,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Load FCM settings from Firestore
+    bool notificationEnabled = false;
+    int notificationHour = 21;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).get();
+
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data.containsKey('settings')) {
+            final settings = data['settings'] as Map<String, dynamic>;
+            notificationEnabled = settings['notificationEnabled'] ?? false;
+            notificationHour = settings['notificationHour'] ?? 21;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading user settings: $e');
+      }
+    }
+
     setState(() {
       _selectedTheme = prefs.getString('theme') ?? 'system';
       _rotationLock = prefs.getBool('rotationLock') ?? false;
+      _notificationEnabled = notificationEnabled;
+      _notificationHour = notificationHour;
       _isLoading = false;
     });
+  }
+
+  Future<void> _syncNotificationSettings() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set({
+          'settings': {
+            'notificationEnabled': _notificationEnabled,
+            'notificationHour': _notificationHour,
+          },
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Error syncing user settings: $e');
+      }
+    }
+  }
+
+  Future<void> _updateNotificationEnabled(bool enabled) async {
+    bool finalEnabled = enabled;
+    if (enabled) {
+      final settings = await FirebaseMessaging.instance.requestPermission();
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        finalEnabled = false;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('通知の権限が拒否されました。設定から許可してください。')),
+          );
+        }
+      }
+    }
+
+    setState(() {
+      _notificationEnabled = finalEnabled;
+    });
+    await _syncNotificationSettings();
+  }
+
+  Future<void> _updateNotificationHour(int? hour) async {
+    if (hour != null) {
+      setState(() {
+        _notificationHour = hour;
+      });
+      await _syncNotificationSettings();
+    }
   }
 
   Future<void> _updateTheme(String theme) async {
@@ -95,6 +178,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onSelectionChanged: (Set<String> newSelection) {
               _updateTheme(newSelection.first);
             },
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              '通知設定',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('未完了イベントの通知を有効にする'),
+            value: _notificationEnabled,
+            onChanged: _updateNotificationEnabled,
+          ),
+          ListTile(
+            title: const Text('通知時間'),
+            trailing: DropdownButton<int>(
+              value: _notificationHour,
+              items: List.generate(24, (index) {
+                return DropdownMenuItem(value: index, child: Text('$index:00'));
+              }),
+              onChanged: _notificationEnabled ? _updateNotificationHour : null,
+            ),
           ),
           const Divider(),
           const Padding(

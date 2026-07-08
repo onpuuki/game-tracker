@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -417,6 +418,20 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('excludeChecked', _excludeChecked);
     await prefs.setBool('ongoingOnly', _ongoingOnly);
     await prefs.setStringList('checkedEventIds', _checkedEventIds);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set({
+          'checkedEvents': _checkedEventIds,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to sync checked events: $e');
+      }
+    }
 
     await prefs.setString('primarySortField', _primarySortField);
     await prefs.setString('primarySortOrder', _primarySortOrder);

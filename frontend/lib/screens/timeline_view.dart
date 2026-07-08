@@ -146,30 +146,43 @@ class _TimelineViewState extends State<TimelineView> {
   ) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$gameName - ${hour.month}/${hour.day} ${hour.hour}:00',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    '$gameName - ${hour.month}/${hour.day} ${hour.hour}:00',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              ListView.builder(
-                shrinkWrap: true,
-                itemCount: cellEvents.length,
-                itemBuilder: (context, index) {
-                  final ev = cellEvents[index];
-                  return widget.buildEventCard(ev);
-                },
-              ),
-            ],
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: cellEvents.length,
+                    itemBuilder: (context, index) {
+                      final ev = cellEvents[index];
+                      return widget.buildEventCard(ev);
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },

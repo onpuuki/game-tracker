@@ -1,3 +1,4 @@
+import 'timeline_view.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -24,14 +25,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _ParsedEvent {
+class ParsedEvent {
   final QueryDocumentSnapshot doc;
   final Map<String, dynamic> data;
   final String gameName;
   final DateTime? startDate;
   final DateTime? endDate;
 
-  _ParsedEvent({
+  ParsedEvent({
     required this.doc,
     required this.data,
     required this.gameName,
@@ -85,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  bool _matchesKeyword(String keyword, _ParsedEvent event) {
+  bool _matchesKeyword(String keyword, ParsedEvent event) {
     if (keyword.trim().isEmpty) return true;
 
     final title = event.data['title']?.toString() ?? '';
@@ -731,10 +732,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'リスト'),
+              Tab(text: 'タイムライン'),
+            ],
+          ),
         actions: [
           if (isAdmin)
             Padding(
@@ -1049,7 +1058,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: Text('No events found.'));
               }
 
-              List<_ParsedEvent> parsedEvents = docs.map((doc) {
+              List<ParsedEvent> parsedEvents = docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final startDateData = data['startDate'];
                 final endDateData = data['endDate'];
@@ -1057,7 +1066,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 DateTime? startDate = _parseEventDate(startDateData);
                 DateTime? endDate = _parseEventDate(endDateData);
 
-                return _ParsedEvent(
+                return ParsedEvent(
                   doc: doc,
                   data: data,
                   gameName: data['gameName']?.toString() ?? 'Unknown Game',
@@ -1080,7 +1089,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               });
 
-              List<_ParsedEvent> events = parsedEvents.where((event) {
+              List<ParsedEvent> events = parsedEvents.where((event) {
                 // Ignore logically deleted events
                 if (event.data['isDeleted'] == true) {
                   return false;
@@ -1196,7 +1205,7 @@ class _HomeScreenState extends State<HomeScreen> {
               events.sort((a, b) {
                 final distantFuture = DateTime(9999, 12, 31);
 
-                dynamic getFieldValue(_ParsedEvent event, String field) {
+                dynamic getFieldValue(ParsedEvent event, String field) {
                   switch (field) {
                     case 'gameName':
                       return event.gameName;
@@ -1236,8 +1245,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: Text('No events matching filters.'));
               }
 
-              return ListView.builder(
-                itemCount: events.length,
+              return TabBarView(
+                children: [
+                  ListView.builder(
+                    itemCount: events.length,
                 itemBuilder: (context, index) {
                   try {
                     final parsedEvent = events[index];
@@ -1405,17 +1416,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     return const SizedBox.shrink();
                   }
                 },
-              );
+              ),
+              TimelineView(events: events),
+            ],
+          );
             },
           );
         },
+      ),
       ),
     );
   }
 }
 
 class _EventCardItem extends StatefulWidget {
-  final _ParsedEvent parsedEvent;
+  final ParsedEvent parsedEvent;
   final Map<String, dynamic> eventData;
   final String eventGameName;
   final String title;

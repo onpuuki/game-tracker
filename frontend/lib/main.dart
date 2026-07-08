@@ -6,8 +6,15 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('Handling a background message: ${message.messageId}');
+}
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 
@@ -84,6 +91,38 @@ Future<void> _initializeFirebase() async {
       }
     }
     // --- ここまで ---
+
+    // FCM Permissions & Token registration
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseMessaging.instance.requestPermission();
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+
+      final String? fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set({
+          'fcmToken': fcmToken,
+        }, SetOptions(merge: true));
+      }
+
+      FirebaseMessaging.instance.onTokenRefresh
+          .listen((fcmToken) {
+            FirebaseFirestore.instanceFor(
+              app: Firebase.app(),
+              databaseId: 'default',
+            ).collection('users').doc(user.uid).set({
+              'fcmToken': fcmToken,
+            }, SetOptions(merge: true));
+          })
+          .onError((err) {
+            debugPrint('Token Refresh Error: $err');
+          });
+    }
   } catch (e) {
     debugPrint('Failed to sign in anonymously: $e');
   }

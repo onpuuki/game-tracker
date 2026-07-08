@@ -6,8 +6,13 @@ import 'home_screen.dart' show ParsedEvent;
 
 class TimelineView extends StatefulWidget {
   final List<ParsedEvent> events;
+  final Widget Function(ParsedEvent) buildEventCard;
 
-  const TimelineView({super.key, required this.events});
+  const TimelineView({
+    super.key,
+    required this.events,
+    required this.buildEventCard,
+  });
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -163,16 +168,7 @@ class _TimelineViewState extends State<TimelineView> {
                 itemCount: cellEvents.length,
                 itemBuilder: (context, index) {
                   final ev = cellEvents[index];
-                  final title = ev.data['title']?.toString() ?? 'No Title';
-                  final endDate = ev.endDate;
-                  final endDateStr = endDate != null
-                      ? '${endDate.year}/${endDate.month.toString().padLeft(2, '0')}/${endDate.day.toString().padLeft(2, '0')} ${endDate.hour.toString().padLeft(2, '0')}:${endDate.minute.toString().padLeft(2, '0')}'
-                      : 'Unknown';
-
-                  return ListTile(
-                    title: Text(title),
-                    subtitle: Text('終了: $endDateStr'),
-                  );
+                  return widget.buildEventCard(ev);
                 },
               ),
             ],
@@ -310,7 +306,7 @@ class _TimelineViewState extends State<TimelineView> {
 
   TableSpan _buildColumnSpan(int index) {
     if (index == 0) {
-      return const TableSpan(extent: FixedTableSpanExtent(70.0));
+      return const TableSpan(extent: FixedTableSpanExtent(85.0));
     }
     return const TableSpan(extent: FixedTableSpanExtent(45.0));
   }

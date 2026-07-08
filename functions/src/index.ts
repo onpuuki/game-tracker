@@ -1,3 +1,4 @@
+import { PassThrough } from 'stream';
 import * as functions from 'firebase-functions';
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -947,6 +948,7 @@ export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSecond
 });
 
 // Google Driveへのエクスポート処理
+// Google Driveへのエクスポート処理
 export const exportToDrive = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     const traceId = 'export-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
     const folderId = data.folderId;
@@ -959,37 +961,57 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
     await writeDebugLog(traceId, `Starting export to Google Drive. Folder ID: ${folderId}`);
 
     try {
-        // FirestoreのcollectionGroup('events')から全データを取得
-        const eventsSnapshot = await db.collectionGroup('events').get();
-        const events = eventsSnapshot.docs.map(doc => {
-            const data = doc.data();
-            // AIに調査・補完してほしい項目は、欠落していても明示的に null として出力する
-            // トークンを消費する createdAt, updatedAt, imageUrl は含めない
-            return {
-                id: doc.id,
-                gameName: data.gameName ?? null,
-                title: data.title ?? null,
-                summary: data.summary ?? null,
-                tag: data.tag ?? null,
-                subTag: data.subTag ?? null,
-                startDate: data.startDate ?? null,
-                endDate: data.endDate ?? null,
-                eventUrl: data.eventUrl ?? null,
-                redeemCode: data.redeemCode ?? null,
-                isLocked: data.isLocked ?? false
-            };
-        });
-
-        const jsonString = JSON.stringify(events, null, 2);
         const fileName = 'events_export.json';
+        const passThrough = new PassThrough();
+        let exportedCount = 0;
 
-        // GoogleAuthでデフォルト認証を取得 (ADC)
+        (async () => {
+            try {
+                passThrough.write('[\n');
+                let isFirst = true;
+                const stream = db.collectionGroup('events').stream();
+
+                for await (const doc of stream) {
+                    const data = (doc as unknown as admin.firestore.QueryDocumentSnapshot).data();
+                    const eventData = {
+                        id: (doc as unknown as admin.firestore.QueryDocumentSnapshot).id,
+                        gameName: data.gameName ?? null,
+                        title: data.title ?? null,
+                        summary: data.summary ?? null,
+                        tag: data.tag ?? null,
+                        subTag: data.subTag ?? null,
+                        startDate: data.startDate ?? null,
+                        endDate: data.endDate ?? null,
+                        eventUrl: data.eventUrl ?? null,
+                        redeemCode: data.redeemCode ?? null,
+                        isLocked: data.isLocked ?? false
+                    };
+
+                    if (!isFirst) {
+                        passThrough.write(',\n');
+                    }
+                    passThrough.write(JSON.stringify(eventData, null, 2));
+                    isFirst = false;
+                    exportedCount++;
+                }
+                passThrough.write('\n]');
+                passThrough.end();
+            } catch (err) {
+                functions.logger.error(`[${traceId}] Stream error in exportToDrive`, err);
+                passThrough.destroy(err as Error);
+            }
+        })();
+
+        const media = {
+            mimeType: 'application/json',
+            body: passThrough
+        };
+
         const auth = new google.auth.GoogleAuth({
             scopes: ['https://www.googleapis.com/auth/drive']
         });
         const drive = google.drive({ version: 'v3', auth });
 
-        // 指定されたfolderId配下のすべてのファイルを取得（名前で絞り込まない）
         const query = `'${folderId}' in parents and trashed=false`;
         const res = await drive.files.list({
             q: query,
@@ -1000,18 +1022,10 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
         });
 
         const allFiles = res.data.files || [];
-        await writeDebugLog(traceId, `Drive API recognized files in folder:`, allFiles);
-
         const existingFile = allFiles.find(f => f.name === fileName);
-
-        const media = {
-            mimeType: 'application/json',
-            body: jsonString
-        };
 
         let driveFile;
         if (existingFile) {
-            // 上書き更新
             const fileId = existingFile.id!;
             functions.logger.info(`[${traceId}] Updating existing file: ${fileId}`);
             const updateRes = await drive.files.update({
@@ -1021,11 +1035,10 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
             driveFile = updateRes.data;
             await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
         } else {
-            // Quotaエラーを防ぐため、新規作成せずにエラーで終了する
             const errorMsg = `Target file '${fileName}' not found. Recognized files: ${JSON.stringify(allFiles)}`;
             functions.logger.error(`[${traceId}] ${errorMsg}`);
             await writeDebugLog(traceId, errorMsg);
-            throw new functions.https.HttpsError('not-found', `ダミーファイルが見つかりません。ログを確認してください。認識されたファイル数: ${allFiles.length}`);
+            throw new functions.https.HttpsError('not-found', `ダミーファイル(${fileName})が見つかりません。ドライブに空のファイルを手動で作成してください。`);
         }
 
         functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);
@@ -1033,9 +1046,8 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
             success: true,
             message: 'Export successful',
             fileId: driveFile.id,
-            exportedCount: events.length
+            exportedCount: exportedCount
         };
-
     } catch (error: any) {
          functions.logger.error(`[${traceId}] Export failed: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
          await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));
@@ -1057,38 +1069,64 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
 
         functions.logger.info(`[${traceId}] Starting exportFeedbacksToDrive to folder: ${folderId}`);
         await writeDebugLog(traceId, `Starting feedback export to Google Drive. Folder ID: ${folderId}`);
-        let feedbacksSnapshot;
+
         const feedbacksRef = db.collection('feedbacks');
-
-        if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
-            // Fetch all and filter in memory to avoid query chunking limits
-            const allDocs = await feedbacksRef.get();
-            feedbacksSnapshot = {
-                docs: allDocs.docs.filter(doc => targetIds.includes(doc.id))
-            };
-        } else {
-            feedbacksSnapshot = await feedbacksRef.get();
-        }
-
-        const feedbacks = feedbacksSnapshot.docs.map(doc => {
-            const docData = doc.data();
-            let createdAt = null;
-            if (docData.createdAt && docData.createdAt.toDate) {
-                createdAt = docData.createdAt.toDate().toISOString();
-            }
-
-            return {
-                id: doc.id,
-                title: docData.title ?? null,
-                body: docData.body ?? null,
-                tag: docData.tag ?? null,
-                status: docData.status ?? null,
-                createdAt: createdAt
-            };
-        });
-
-        const jsonString = JSON.stringify(feedbacks, null, 2);
         const fileName = 'feedback.json';
+        const passThrough = new PassThrough();
+        let exportedCount = 0;
+
+        (async () => {
+            try {
+                passThrough.write('[\n');
+                let isFirst = true;
+
+                const processDoc = (doc: any) => {
+                    const docData = doc.data();
+                    if (!docData) return;
+                    let createdAt = null;
+                    if (docData.createdAt && docData.createdAt.toDate) {
+                        createdAt = docData.createdAt.toDate().toISOString();
+                    }
+                    const feedbackData = {
+                        id: (doc as unknown as admin.firestore.QueryDocumentSnapshot).id,
+                        title: docData.title ?? null,
+                        body: docData.body ?? null,
+                        tag: docData.tag ?? null,
+                        status: docData.status ?? null,
+                        createdAt: createdAt
+                    };
+                    if (!isFirst) {
+                        passThrough.write(',\n');
+                    }
+                    passThrough.write(JSON.stringify(feedbackData, null, 2));
+                    isFirst = false;
+                    exportedCount++;
+                };
+
+                if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
+                    for (const id of targetIds) {
+                        const doc = await feedbacksRef.doc(id).get();
+                        if (doc.exists) processDoc(doc);
+                    }
+                } else {
+                    const stream = feedbacksRef.stream();
+                    for await (const doc of stream) {
+                        processDoc(doc);
+                    }
+                }
+
+                passThrough.write('\n]');
+                passThrough.end();
+            } catch (err) {
+                functions.logger.error(`[${traceId}] Stream error in exportFeedbacksToDrive`, err);
+                passThrough.destroy(err as Error);
+            }
+        })();
+
+        const media = {
+            mimeType: 'application/json',
+            body: passThrough
+        };
 
         const auth = new google.auth.GoogleAuth({
             scopes: ['https://www.googleapis.com/auth/drive']
@@ -1107,11 +1145,6 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
         const allFiles = res.data.files || [];
         const existingFile = allFiles.find(f => f.name === fileName);
 
-        const media = {
-            mimeType: 'application/json',
-            body: jsonString
-        };
-
         let driveFile;
         if (existingFile) {
             const fileId = existingFile.id!;
@@ -1123,17 +1156,10 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
             driveFile = updateRes.data;
             await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
         } else {
-            functions.logger.info(`[${traceId}] Creating new file: ${fileName}`);
-            const createRes = await drive.files.create({
-                requestBody: {
-                    name: fileName,
-                    parents: [folderId]
-                },
-                media: media,
-                supportsAllDrives: true
-            });
-            driveFile = createRes.data;
-            await writeDebugLog(traceId, `Created new file in Drive. File ID: ${driveFile.id}`);
+            const errorMsg = `Target file '${fileName}' not found. Recognized files: ${JSON.stringify(allFiles)}`;
+            functions.logger.error(`[${traceId}] ${errorMsg}`);
+            await writeDebugLog(traceId, errorMsg);
+            throw new functions.https.HttpsError('not-found', `ダミーファイル(${fileName})が見つかりません。ドライブに空のファイルを手動で作成してください。`);
         }
 
         functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);
@@ -1141,9 +1167,8 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
             success: true,
             message: 'Export successful',
             fileId: driveFile.id,
-            exportedCount: feedbacks.length
+            exportedCount: exportedCount
         };
-
     } catch (error: any) {
          functions.logger.error(`[${traceId}] Export failed: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
          await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));

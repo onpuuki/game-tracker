@@ -56,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _excludeChecked = false;
   bool _ongoingOnly = false;
   List<String> _checkedEventIds = [];
+  Map<String, String> _codeUrls = {};
 
   // Sort State
   String _primarySortField = 'gameName';
@@ -159,6 +160,154 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late Stream<DocumentSnapshot> _configStream;
   late Stream<QuerySnapshot> _eventsStream;
+
+  Widget _buildEventCard(ParsedEvent parsedEvent) {
+    try {
+      final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+      final eventData = parsedEvent.data;
+      final eventGameName = parsedEvent.gameName;
+      final title = eventData['title']?.toString() ?? 'No Title';
+      final tag = eventData['tag']?.toString();
+      final subTag = eventData['subTag']?.toString();
+      final redeemCode = eventData['redeemCode']?.toString();
+      final eventUrl = eventData['eventUrl']?.toString();
+
+      final startDateData = eventData['startDate'];
+      final endDateData = eventData['endDate'];
+      final startDisplay = _formatDateString(startDateData);
+      final endDisplay = _formatDateString(endDateData);
+      final period = '$startDisplay ~ $endDisplay';
+
+      final summary = eventData['summary']?.toString() ?? '';
+      final imageUrl = eventData['imageUrl']?.toString();
+
+      final startDate = parsedEvent.startDate;
+      final endDate = parsedEvent.endDate;
+
+      final gameCodeUrl = _codeUrls[eventGameName];
+      final hasValidCodeUrl = gameCodeUrl != null && gameCodeUrl.isNotEmpty;
+
+      bool isUpcoming = false;
+      int? daysUntilStart;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      if (startDate != null) {
+        final start = DateTime(startDate.year, startDate.month, startDate.day);
+        if (start.isAfter(today)) {
+          isUpcoming = true;
+          daysUntilStart = start.difference(today).inDays;
+        }
+      }
+
+      int? remainingDays;
+      if (endDate != null) {
+        final end = DateTime(endDate.year, endDate.month, endDate.day);
+        remainingDays = end.difference(today).inDays;
+      }
+
+      Widget? trailingWidget;
+      if (isUpcoming && daysUntilStart != null) {
+        trailingWidget = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.green.withAlpha(26),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green),
+          ),
+          child: Text(
+            '開催まで$daysUntilStart日',
+            style: const TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        );
+      } else if (remainingDays != null && remainingDays >= 0) {
+        trailingWidget = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.red.withAlpha(26),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red),
+          ),
+          child: Text(
+            '終了まで$remainingDays日',
+            style: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        );
+      }
+
+      final eventId = parsedEvent.doc.id;
+      final isCycleEvent = eventData['isCycleEvent'] == true;
+      final eventIsCompletedDoc = eventData['isCompleted'] == true;
+      final isChecked =
+          _checkedEventIds.contains(eventId) || eventIsCompletedDoc;
+
+      Color tagColor = Colors.orange;
+      if (tag == 'ゲーム内') {
+        tagColor = Colors.blue;
+      } else if (tag == 'コード') {
+        tagColor = Colors.purple;
+      }
+
+      final timestamp =
+          (eventData['updatedAt'] ?? eventData['createdAt']) as Timestamp?;
+      String dateStr = '';
+      if (timestamp != null) {
+        final d = timestamp.toDate();
+        dateStr =
+            '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      }
+
+      return _EventCardItem(
+        parsedEvent: parsedEvent,
+        eventData: eventData,
+        eventGameName: eventGameName,
+        title: title,
+        tag: tag,
+        subTag: subTag,
+        redeemCode: redeemCode,
+        eventUrl: eventUrl,
+        startDateStr: startDateData?.toString(),
+        endDateStr: endDateData?.toString(),
+        startDisplay: startDisplay,
+        endDisplay: endDisplay,
+        period: period,
+        summary: summary,
+        imageUrl: imageUrl,
+        startDate: startDate,
+        endDate: endDate,
+        gameCodeUrl: gameCodeUrl,
+        hasValidCodeUrl: hasValidCodeUrl,
+        trailingWidget: trailingWidget,
+        eventId: eventId,
+        isCycleEvent: isCycleEvent,
+        eventIsCompletedDoc: eventIsCompletedDoc,
+        isChecked: isChecked,
+        tagColor: tagColor,
+        isDarkMode: isDarkMode,
+        dateStr: dateStr,
+        onCheckedToggle: () {
+          setState(() {
+            if (isChecked) {
+              _checkedEventIds.remove(eventId);
+            } else {
+              _checkedEventIds.add(eventId);
+            }
+          });
+          _savePreferences();
+        },
+      );
+    } catch (e) {
+      return const SizedBox.shrink();
+    }
+  }
 
   @override
   void initState() {
@@ -744,686 +893,537 @@ class _HomeScreenState extends State<HomeScreen> {
               Tab(text: 'タイムライン'),
             ],
           ),
-        actions: [
-          if (isAdmin)
+          actions: [
+            if (isAdmin)
+              Padding(
+                padding: const EdgeInsets.only(right: 4.0),
+                child: TextButton.icon(
+                  onPressed: () {
+                    _scaffoldKey.currentState?.openDrawer();
+                  },
+                  icon: const Icon(Icons.admin_panel_settings, size: 18),
+                  label: const Text('管理者メニュー'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDarkMode
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(right: 4.0),
-              child: TextButton.icon(
+              child: ElevatedButton.icon(
                 onPressed: () {
-                  _scaffoldKey.currentState?.openDrawer();
+                  _showFilterBottomSheet(_latestAllGameNames);
                 },
-                icon: const Icon(Icons.admin_panel_settings, size: 18),
-                label: const Text('管理者メニュー'),
-                style: TextButton.styleFrom(
-                  foregroundColor: isDarkMode
-                      ? Colors.white
-                      : Theme.of(context).colorScheme.primary,
+                icon: const Icon(Icons.filter_list, size: 18),
+                label: const Text('絞り込み'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).primaryColor,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4.0),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                _showFilterBottomSheet(_latestAllGameNames);
-              },
-              icon: const Icon(Icons.filter_list, size: 18),
-              label: const Text('絞り込み'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Theme.of(context).primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+            Padding(
+              padding: const EdgeInsets.only(right: 4.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _showSortDialog();
+                },
+                icon: const Icon(Icons.sort, size: 18),
+                label: const Text('並び替え'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).primaryColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4.0),
-            child: ElevatedButton.icon(
+            IconButton(
+              icon: const Icon(Icons.settings),
               onPressed: () {
-                _showSortDialog();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
               },
-              icon: const Icon(Icons.sort, size: 18),
-              label: const Text('並び替え'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Theme.of(context).primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 8.0),
-        ],
-      ),
-      drawer: isAdmin
-          ? Drawer(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  const DrawerHeader(
-                    decoration: BoxDecoration(color: Colors.deepPurple),
-                    child: Text(
-                      'Game Tracker Admin',
-                      style: TextStyle(color: Colors.white, fontSize: 24),
+            const SizedBox(width: 8.0),
+          ],
+        ),
+        drawer: isAdmin
+            ? Drawer(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    const DrawerHeader(
+                      decoration: BoxDecoration(color: Colors.deepPurple),
+                      child: Text(
+                        'Game Tracker Admin',
+                        style: TextStyle(color: Colors.white, fontSize: 24),
+                      ),
                     ),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.edit_document),
-                    title: const Text('プロンプトエディタ'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PromptEditorScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.feedback),
-                    title: const Text('フィードバック一覧'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const FeedbackListScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.bug_report),
-                    title: const Text('デバッグログ'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DebugLogScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.access_time),
-                    title: const Text('自動スキャン時刻'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const TimerSettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.sync),
-                    title: const Text('手動スキャン実行'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SyncStatusScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.add),
-                    title: const Text('イベント追加'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddEventScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                    ListTile(
+                      leading: const Icon(Icons.edit_document),
+                      title: const Text('プロンプトエディタ'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PromptEditorScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.feedback),
+                      title: const Text('フィードバック一覧'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const FeedbackListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.bug_report),
+                      title: const Text('デバッグログ'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DebugLogScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.access_time),
+                      title: const Text('自動スキャン時刻'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TimerSettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.sync),
+                      title: const Text('手動スキャン実行'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SyncStatusScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.add),
+                      title: const Text('イベント追加'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AddEventScreen(),
+                          ),
+                        );
+                      },
+                    ),
 
-                  ListTile(
-                    leading: const Icon(Icons.delete),
-                    title: _isClearingEvents
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('全イベント削除'),
-                    onTap: _isClearingEvents
-                        ? null
-                        : () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Confirmation'),
-                                content: const Text('本当に削除しますか？'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('キャンセル'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('はい'),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true) {
-                              setState(() {
-                                _isClearingEvents = true;
-                              });
-
-                              try {
-                                final callable = FirebaseFunctions.instance
-                                    .httpsCallable(
-                                      'clearAllEvents',
-                                      options: HttpsCallableOptions(
-                                        timeout: const Duration(minutes: 5),
-                                      ),
-                                    );
-                                await callable.call();
-
-                                if (!context.mounted) return;
-                                Navigator.pop(context); // Close drawer
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Events cleared successfully',
+                    ListTile(
+                      leading: const Icon(Icons.delete),
+                      title: _isClearingEvents
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('全イベント削除'),
+                      onTap: _isClearingEvents
+                          ? null
+                          : () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Confirmation'),
+                                  content: const Text('本当に削除しますか？'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('キャンセル'),
                                     ),
-                                  ),
-                                );
-                              } catch (e) {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Failed to clear events: $e'),
-                                  ),
-                                );
-                              } finally {
-                                if (mounted) {
-                                  setState(() {
-                                    _isClearingEvents = false;
-                                  });
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('はい'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                setState(() {
+                                  _isClearingEvents = true;
+                                });
+
+                                try {
+                                  final callable = FirebaseFunctions.instance
+                                      .httpsCallable(
+                                        'clearAllEvents',
+                                        options: HttpsCallableOptions(
+                                          timeout: const Duration(minutes: 5),
+                                        ),
+                                      );
+                                  await callable.call();
+
+                                  if (!context.mounted) return;
+                                  Navigator.pop(context); // Close drawer
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Events cleared successfully',
+                                      ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to clear events: $e',
+                                      ),
+                                    ),
+                                  );
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isClearingEvents = false;
+                                    });
+                                  }
                                 }
                               }
-                            }
-                          },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.file_download),
-                    title: const Text('エクスポート'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ExportSettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('ウェルカムダイアログ確認'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      _showWelcomeDialog();
-                    },
-                  ),
-                ],
-              ),
-            )
-          : null,
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: _configStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final data = snapshot.data?.data() as Map<String, dynamic>?;
-          final targets =
-              (data?['targets'] as List<dynamic>?)
-                  ?.cast<Map<String, dynamic>>() ??
-              [];
-
-          final codeUrlsData =
-              (data?['codeUrls'] as List<dynamic>?)
-                  ?.cast<Map<String, dynamic>>() ??
-              [];
-          final codeUrls = <String, String>{};
-          for (var item in codeUrlsData) {
-            final gameName = item['gameName'] as String?;
-            final url = item['url'] as String?;
-            if (gameName != null && url != null && url.isNotEmpty) {
-              codeUrls[gameName] = url;
-            }
-          }
-
-          final siteConfig = <String, Map<String, bool>>{};
-          for (var target in targets) {
-            final gameName = target['gameName'] as String?;
-            if (gameName != null) {
-              siteConfig[gameName] = {
-                'GameWith': target['useGameWith'] as bool? ?? true,
-                'Game8': target['useGame8'] as bool? ?? true,
-                '神ゲー攻略': target['useKamigame'] as bool? ?? true,
-              };
-            }
-          }
-
-          if (targets.isEmpty) {
-            return const Center(
-              child: Text('No targets found. Add targets in URL Manager.'),
-            );
-          }
-
-          return StreamBuilder<QuerySnapshot>(
-            stream: _eventsStream,
-            builder: (context, eventSnapshot) {
-              if (eventSnapshot.hasError) {
-                return Center(
-                  child: Text('Error loading events: ${eventSnapshot.error}'),
-                );
-              }
-              if (eventSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final docs = eventSnapshot.data?.docs ?? [];
-
-              if (docs.isEmpty) {
-                return const Center(child: Text('No events found.'));
-              }
-
-              List<ParsedEvent> parsedEvents = docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final startDateData = data['startDate'];
-                final endDateData = data['endDate'];
-
-                DateTime? startDate = _parseEventDate(startDateData);
-                DateTime? endDate = _parseEventDate(endDateData);
-
-                return ParsedEvent(
-                  doc: doc,
-                  data: data,
-                  gameName: data['gameName']?.toString() ?? 'Unknown Game',
-                  startDate: startDate,
-                  endDate: endDate,
-                );
-              }).toList();
-
-              final Set<String> uniqueGamesSet = {};
-              for (var event in parsedEvents) {
-                uniqueGamesSet.add(event.gameName);
-              }
-              final List<String> allGameNames = uniqueGamesSet.toList()..sort();
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted &&
-                    _latestAllGameNames.length != allGameNames.length) {
-                  setState(() {
-                    _latestAllGameNames = allGameNames;
-                  });
-                }
-              });
-
-              List<ParsedEvent> events = parsedEvents.where((event) {
-                // Ignore logically deleted events
-                if (event.data['isDeleted'] == true) {
-                  return false;
-                }
-
-                // Keyword Filter
-                if (!_matchesKeyword(_filterKeyword, event)) {
-                  return false;
-                }
-
-                // Tag Filter
-                if (_selectedTags.isNotEmpty &&
-                    !_selectedTags.contains(event.data['tag'])) {
-                  return false;
-                }
-
-                // SubTag Filter
-                if (_selectedSubTags.isNotEmpty &&
-                    !_selectedSubTags.contains(event.data['subTag'])) {
-                  return false;
-                }
-
-                // Game Filter
-                if (_selectedGames.isNotEmpty &&
-                    !_selectedGames.contains(event.gameName)) {
-                  return false;
-                }
-
-                // Checked Filter
-                if (_excludeChecked &&
-                    _checkedEventIds.contains(event.doc.id)) {
-                  return false;
-                }
-
-                final now = DateTime.now();
-                final today = DateTime(now.year, now.month, now.day);
-
-                // Ongoing Filter
-                if (_ongoingOnly) {
-                  if (event.startDate == null) return false;
-                  final start = DateTime(
-                    event.startDate!.year,
-                    event.startDate!.month,
-                    event.startDate!.day,
-                  );
-                  if (start.isAfter(today)) return false; // Not yet started
-
-                  if (event.endDate != null) {
-                    final end = DateTime(
-                      event.endDate!.year,
-                      event.endDate!.month,
-                      event.endDate!.day,
-                    );
-                    if (end.isBefore(today)) return false; // Already ended
-                  }
-                  // If endDate is null, we assume it's ongoing once started
-                }
-
-                // Date Range Filter
-                if (_filterStartDate != null || _filterEndDate != null) {
-                  final startTarget = _filterStartDate != null
-                      ? DateTime(
-                          _filterStartDate!.year,
-                          _filterStartDate!.month,
-                          _filterStartDate!.day,
-                        )
-                      : null;
-                  final endTarget = _filterEndDate != null
-                      ? DateTime(
-                          _filterEndDate!.year,
-                          _filterEndDate!.month,
-                          _filterEndDate!.day,
-                        )
-                      : null;
-
-                  final eventStart = event.startDate != null
-                      ? DateTime(
-                          event.startDate!.year,
-                          event.startDate!.month,
-                          event.startDate!.day,
-                        )
-                      : null;
-                  final eventEnd = event.endDate != null
-                      ? DateTime(
-                          event.endDate!.year,
-                          event.endDate!.month,
-                          event.endDate!.day,
-                        )
-                      : null;
-
-                  // For the event to be visible, its active period must overlap with the target period.
-                  // Active period: [eventStart, eventEnd]
-                  // Target period: [startTarget, endTarget]
-                  // Overlap condition: eventEnd >= startTarget AND eventStart <= endTarget
-                  // Treat missing start/end as +/- infinity for overlap logic.
-
-                  if (startTarget != null &&
-                      eventEnd != null &&
-                      eventEnd.isBefore(startTarget)) {
-                    return false;
-                  }
-                  if (endTarget != null &&
-                      eventStart != null &&
-                      eventStart.isAfter(endTarget)) {
-                    return false;
-                  }
-                }
-
-                return true;
-              }).toList();
-
-              // Sort Logic
-              events.sort((a, b) {
-                final distantFuture = DateTime(9999, 12, 31);
-
-                dynamic getFieldValue(ParsedEvent event, String field) {
-                  switch (field) {
-                    case 'gameName':
-                      return event.gameName;
-                    case 'startDate':
-                      return event.startDate ?? distantFuture;
-                    case 'endDate':
-                      return event.endDate ?? distantFuture;
-                    default:
-                      return '';
-                  }
-                }
-
-                int compare(dynamic valA, dynamic valB, String order) {
-                  int result = 0;
-                  if (valA is DateTime && valB is DateTime) {
-                    result = valA.compareTo(valB);
-                  } else if (valA is String && valB is String) {
-                    result = valA.compareTo(valB);
-                  }
-                  return order == 'asc' ? result : -result;
-                }
-
-                final primaryA = getFieldValue(a, _primarySortField);
-                final primaryB = getFieldValue(b, _primarySortField);
-                int result = compare(primaryA, primaryB, _primarySortOrder);
-
-                if (result == 0) {
-                  final secondaryA = getFieldValue(a, _secondarySortField);
-                  final secondaryB = getFieldValue(b, _secondarySortField);
-                  result = compare(secondaryA, secondaryB, _secondarySortOrder);
-                }
-
-                return result;
-              });
-
-              if (events.isEmpty) {
-                return const Center(child: Text('No events matching filters.'));
-              }
-
-              return TabBarView(
-                children: [
-                  ListView.builder(
-                    itemCount: events.length,
-                itemBuilder: (context, index) {
-                  try {
-                    final parsedEvent = events[index];
-                    final eventData = parsedEvent.data;
-                    final eventGameName = parsedEvent.gameName;
-                    final title = eventData['title']?.toString() ?? 'No Title';
-                    final tag = eventData['tag']?.toString();
-                    final subTag = eventData['subTag']?.toString();
-                    final redeemCode = eventData['redeemCode']?.toString();
-                    final eventUrl = eventData['eventUrl']?.toString();
-
-                    final startDateData = eventData['startDate'];
-                    final endDateData = eventData['endDate'];
-                    final startDisplay = _formatDateString(startDateData);
-                    final endDisplay = _formatDateString(endDateData);
-                    final period = '$startDisplay ~ $endDisplay';
-
-                    final summary = eventData['summary']?.toString() ?? '';
-                    final imageUrl = eventData['imageUrl']?.toString();
-
-                    final startDate = parsedEvent.startDate;
-                    final endDate = parsedEvent.endDate;
-
-                    final gameCodeUrl = codeUrls[eventGameName];
-                    final hasValidCodeUrl =
-                        gameCodeUrl != null && gameCodeUrl.isNotEmpty;
-
-                    bool isUpcoming = false;
-                    int? daysUntilStart;
-                    final now = DateTime.now();
-                    final today = DateTime(now.year, now.month, now.day);
-
-                    if (startDate != null) {
-                      final start = DateTime(
-                        startDate.year,
-                        startDate.month,
-                        startDate.day,
-                      );
-                      if (start.isAfter(today)) {
-                        isUpcoming = true;
-                        daysUntilStart = start.difference(today).inDays;
-                      }
-                    }
-
-                    int? remainingDays;
-                    if (endDate != null) {
-                      final end = DateTime(
-                        endDate.year,
-                        endDate.month,
-                        endDate.day,
-                      );
-                      remainingDays = end.difference(today).inDays;
-                    }
-
-                    Widget? trailingWidget;
-                    if (isUpcoming && daysUntilStart != null) {
-                      trailingWidget = Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withAlpha(26),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green),
-                        ),
-                        child: Text(
-                          '開催まで$daysUntilStart日',
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                            },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.file_download),
+                      title: const Text('エクスポート'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ExportSettingsScreen(),
                           ),
-                        ),
-                      );
-                    } else if (remainingDays != null && remainingDays >= 0) {
-                      trailingWidget = Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withAlpha(26),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red),
-                        ),
-                        child: Text(
-                          '終了まで$remainingDays日',
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
-                    }
-
-                    final eventId = parsedEvent.doc.id;
-                    final isCycleEvent = eventData['isCycleEvent'] == true;
-                    final eventIsCompletedDoc =
-                        eventData['isCompleted'] == true;
-                    final isChecked =
-                        _checkedEventIds.contains(eventId) ||
-                        eventIsCompletedDoc;
-
-                    Color tagColor = Colors.orange;
-                    if (tag == 'ゲーム内') {
-                      tagColor = Colors.blue;
-                    } else if (tag == 'コード') {
-                      tagColor = Colors.purple;
-                    }
-
-                    // isDarkMode is now declared at the top of the build method
-
-                    final timestamp =
-                        (eventData['updatedAt'] ?? eventData['createdAt'])
-                            as Timestamp?;
-                    String dateStr = '';
-                    if (timestamp != null) {
-                      final d = timestamp.toDate();
-                      dateStr =
-                          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-                    }
-
-                    return _EventCardItem(
-                      parsedEvent: parsedEvent,
-                      eventData: eventData,
-                      eventGameName: eventGameName,
-                      title: title,
-                      tag: tag,
-                      subTag: subTag,
-                      redeemCode: redeemCode,
-                      eventUrl: eventUrl,
-                      startDateStr: startDateData?.toString(),
-                      endDateStr: endDateData?.toString(),
-                      startDisplay: startDisplay,
-                      endDisplay: endDisplay,
-                      period: period,
-                      summary: summary,
-                      imageUrl: imageUrl,
-                      startDate: startDate,
-                      endDate: endDate,
-                      gameCodeUrl: gameCodeUrl,
-                      hasValidCodeUrl: hasValidCodeUrl,
-                      trailingWidget: trailingWidget,
-                      eventId: eventId,
-                      isCycleEvent: isCycleEvent,
-                      eventIsCompletedDoc: eventIsCompletedDoc,
-                      isChecked: isChecked,
-                      tagColor: tagColor,
-                      isDarkMode: isDarkMode,
-                      dateStr: dateStr,
-                      onCheckedToggle: () {
-                        setState(() {
-                          if (isChecked) {
-                            _checkedEventIds.remove(eventId);
-                          } else {
-                            _checkedEventIds.add(eventId);
-                          }
-                        });
-                        _savePreferences();
+                        );
                       },
-                    );
-                  } catch (e) {
-                    return const SizedBox.shrink();
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('ウェルカムダイアログ確認'),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        _showWelcomeDialog();
+                      },
+                    ),
+                  ],
+                ),
+              )
+            : null,
+        body: StreamBuilder<DocumentSnapshot>(
+          stream: _configStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final data = snapshot.data?.data() as Map<String, dynamic>?;
+            final targets =
+                (data?['targets'] as List<dynamic>?)
+                    ?.cast<Map<String, dynamic>>() ??
+                [];
+
+            final codeUrlsData =
+                (data?['codeUrls'] as List<dynamic>?)
+                    ?.cast<Map<String, dynamic>>() ??
+                [];
+            final codeUrls = <String, String>{};
+            for (var item in codeUrlsData) {
+              final gameName = item['gameName'] as String?;
+              final url = item['url'] as String?;
+              if (gameName != null && url != null && url.isNotEmpty) {
+                codeUrls[gameName] = url;
+              }
+            }
+            _codeUrls = codeUrls;
+
+            final siteConfig = <String, Map<String, bool>>{};
+            for (var target in targets) {
+              final gameName = target['gameName'] as String?;
+              if (gameName != null) {
+                siteConfig[gameName] = {
+                  'GameWith': target['useGameWith'] as bool? ?? true,
+                  'Game8': target['useGame8'] as bool? ?? true,
+                  '神ゲー攻略': target['useKamigame'] as bool? ?? true,
+                };
+              }
+            }
+
+            if (targets.isEmpty) {
+              return const Center(
+                child: Text('No targets found. Add targets in URL Manager.'),
+              );
+            }
+
+            return StreamBuilder<QuerySnapshot>(
+              stream: _eventsStream,
+              builder: (context, eventSnapshot) {
+                if (eventSnapshot.hasError) {
+                  return Center(
+                    child: Text('Error loading events: ${eventSnapshot.error}'),
+                  );
+                }
+                if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final docs = eventSnapshot.data?.docs ?? [];
+
+                if (docs.isEmpty) {
+                  return const Center(child: Text('No events found.'));
+                }
+
+                List<ParsedEvent> parsedEvents = docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final startDateData = data['startDate'];
+                  final endDateData = data['endDate'];
+
+                  DateTime? startDate = _parseEventDate(startDateData);
+                  DateTime? endDate = _parseEventDate(endDateData);
+
+                  return ParsedEvent(
+                    doc: doc,
+                    data: data,
+                    gameName: data['gameName']?.toString() ?? 'Unknown Game',
+                    startDate: startDate,
+                    endDate: endDate,
+                  );
+                }).toList();
+
+                final Set<String> uniqueGamesSet = {};
+                for (var event in parsedEvents) {
+                  uniqueGamesSet.add(event.gameName);
+                }
+                final List<String> allGameNames = uniqueGamesSet.toList()
+                  ..sort();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted &&
+                      _latestAllGameNames.length != allGameNames.length) {
+                    setState(() {
+                      _latestAllGameNames = allGameNames;
+                    });
                   }
-                },
-              ),
-              TimelineView(events: events),
-            ],
-          );
-            },
-          );
-        },
-      ),
+                });
+
+                List<ParsedEvent> events = parsedEvents.where((event) {
+                  // Ignore logically deleted events
+                  if (event.data['isDeleted'] == true) {
+                    return false;
+                  }
+
+                  // Keyword Filter
+                  if (!_matchesKeyword(_filterKeyword, event)) {
+                    return false;
+                  }
+
+                  // Tag Filter
+                  if (_selectedTags.isNotEmpty &&
+                      !_selectedTags.contains(event.data['tag'])) {
+                    return false;
+                  }
+
+                  // SubTag Filter
+                  if (_selectedSubTags.isNotEmpty &&
+                      !_selectedSubTags.contains(event.data['subTag'])) {
+                    return false;
+                  }
+
+                  // Game Filter
+                  if (_selectedGames.isNotEmpty &&
+                      !_selectedGames.contains(event.gameName)) {
+                    return false;
+                  }
+
+                  // Checked Filter
+                  if (_excludeChecked &&
+                      _checkedEventIds.contains(event.doc.id)) {
+                    return false;
+                  }
+
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+
+                  // Ongoing Filter
+                  if (_ongoingOnly) {
+                    if (event.startDate == null) return false;
+                    final start = DateTime(
+                      event.startDate!.year,
+                      event.startDate!.month,
+                      event.startDate!.day,
+                    );
+                    if (start.isAfter(today)) return false; // Not yet started
+
+                    if (event.endDate != null) {
+                      final end = DateTime(
+                        event.endDate!.year,
+                        event.endDate!.month,
+                        event.endDate!.day,
+                      );
+                      if (end.isBefore(today)) return false; // Already ended
+                    }
+                    // If endDate is null, we assume it's ongoing once started
+                  }
+
+                  // Date Range Filter
+                  if (_filterStartDate != null || _filterEndDate != null) {
+                    final startTarget = _filterStartDate != null
+                        ? DateTime(
+                            _filterStartDate!.year,
+                            _filterStartDate!.month,
+                            _filterStartDate!.day,
+                          )
+                        : null;
+                    final endTarget = _filterEndDate != null
+                        ? DateTime(
+                            _filterEndDate!.year,
+                            _filterEndDate!.month,
+                            _filterEndDate!.day,
+                          )
+                        : null;
+
+                    final eventStart = event.startDate != null
+                        ? DateTime(
+                            event.startDate!.year,
+                            event.startDate!.month,
+                            event.startDate!.day,
+                          )
+                        : null;
+                    final eventEnd = event.endDate != null
+                        ? DateTime(
+                            event.endDate!.year,
+                            event.endDate!.month,
+                            event.endDate!.day,
+                          )
+                        : null;
+
+                    // For the event to be visible, its active period must overlap with the target period.
+                    // Active period: [eventStart, eventEnd]
+                    // Target period: [startTarget, endTarget]
+                    // Overlap condition: eventEnd >= startTarget AND eventStart <= endTarget
+                    // Treat missing start/end as +/- infinity for overlap logic.
+
+                    if (startTarget != null &&
+                        eventEnd != null &&
+                        eventEnd.isBefore(startTarget)) {
+                      return false;
+                    }
+                    if (endTarget != null &&
+                        eventStart != null &&
+                        eventStart.isAfter(endTarget)) {
+                      return false;
+                    }
+                  }
+
+                  return true;
+                }).toList();
+
+                // Sort Logic
+                events.sort((a, b) {
+                  final distantFuture = DateTime(9999, 12, 31);
+
+                  dynamic getFieldValue(ParsedEvent event, String field) {
+                    switch (field) {
+                      case 'gameName':
+                        return event.gameName;
+                      case 'startDate':
+                        return event.startDate ?? distantFuture;
+                      case 'endDate':
+                        return event.endDate ?? distantFuture;
+                      default:
+                        return '';
+                    }
+                  }
+
+                  int compare(dynamic valA, dynamic valB, String order) {
+                    int result = 0;
+                    if (valA is DateTime && valB is DateTime) {
+                      result = valA.compareTo(valB);
+                    } else if (valA is String && valB is String) {
+                      result = valA.compareTo(valB);
+                    }
+                    return order == 'asc' ? result : -result;
+                  }
+
+                  final primaryA = getFieldValue(a, _primarySortField);
+                  final primaryB = getFieldValue(b, _primarySortField);
+                  int result = compare(primaryA, primaryB, _primarySortOrder);
+
+                  if (result == 0) {
+                    final secondaryA = getFieldValue(a, _secondarySortField);
+                    final secondaryB = getFieldValue(b, _secondarySortField);
+                    result = compare(
+                      secondaryA,
+                      secondaryB,
+                      _secondarySortOrder,
+                    );
+                  }
+
+                  return result;
+                });
+
+                if (events.isEmpty) {
+                  return const Center(
+                    child: Text('No events matching filters.'),
+                  );
+                }
+
+                return TabBarView(
+                  children: [
+                    ListView.builder(
+                      itemCount: events.length,
+                      itemBuilder: (context, index) {
+                        return _buildEventCard(events[index]);
+                      },
+                    ),
+                    TimelineView(
+                      events: events,
+                      buildEventCard: _buildEventCard,
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'home_screen.dart' show ParsedEvent;
 
 class TimelineView extends StatefulWidget {
@@ -15,11 +17,66 @@ class _TimelineViewState extends State<TimelineView> {
   List<String> games = [];
   List<DateTime> hours = [];
   Map<String, Map<int, List<ParsedEvent>>> eventMap = {};
+  Map<String, String> _abbreviations = {};
+  bool _isLoadingAbbreviations = true;
 
   @override
   void initState() {
     super.initState();
+    _fetchAbbreviations();
     _processEvents();
+  }
+
+  Future<void> _fetchAbbreviations() async {
+    try {
+      final doc =
+          await FirebaseFirestore.instanceFor(
+                app: Firebase.app(),
+                databaseId: 'default',
+              )
+              .collection('settings')
+              .doc('config')
+              .get(const GetOptions(source: Source.server))
+              .timeout(const Duration(seconds: 5))
+              .catchError((_) {
+                return FirebaseFirestore.instanceFor(
+                      app: Firebase.app(),
+                      databaseId: 'default',
+                    )
+                    .collection('settings')
+                    .doc('config')
+                    .get(const GetOptions(source: Source.cache));
+              });
+
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data.containsKey('targets')) {
+          final targets = data['targets'] as List<dynamic>;
+          final abbrevs = <String, String>{};
+          for (var target in targets) {
+            if (target is Map<String, dynamic> &&
+                target.containsKey('gameName')) {
+              final gameName = target['gameName'] as String;
+              final abbrev = (target['abbreviation'] as String?) ?? '';
+              abbrevs[gameName] = abbrev;
+            }
+          }
+          if (mounted) {
+            setState(() {
+              _abbreviations = abbrevs;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Failed to load abbreviations, use defaults
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAbbreviations = false;
+        });
+      }
+    }
   }
 
   @override
@@ -66,8 +123,9 @@ class _TimelineViewState extends State<TimelineView> {
         DateTime slotEnd = slotStart.add(const Duration(hours: 1));
 
         // If end date falls in this hour slot
-        if ((endDate.isAfter(slotStart) || endDate.isAtSameMomentAs(slotStart)) &&
-             endDate.isBefore(slotEnd)) {
+        if ((endDate.isAfter(slotStart) ||
+                endDate.isAtSameMomentAs(slotStart)) &&
+            endDate.isBefore(slotEnd)) {
           if (eventMap.containsKey(gameName)) {
             eventMap[gameName]![i]!.add(event);
           }
@@ -77,7 +135,12 @@ class _TimelineViewState extends State<TimelineView> {
     }
   }
 
-  void _showEventDetails(BuildContext context, String gameName, DateTime hour, List<ParsedEvent> cellEvents) {
+  void _showEventDetails(
+    BuildContext context,
+    String gameName,
+    DateTime hour,
+    List<ParsedEvent> cellEvents,
+  ) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -89,7 +152,10 @@ class _TimelineViewState extends State<TimelineView> {
             children: [
               Text(
                 '$gameName - ${hour.month}/${hour.day} ${hour.hour}:00',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
               ListView.builder(
@@ -112,12 +178,16 @@ class _TimelineViewState extends State<TimelineView> {
             ],
           ),
         );
-      }
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingAbbreviations) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (games.isEmpty || hours.isEmpty) {
       return const Center(child: Text('タイムラインデータがありません'));
     }
@@ -131,12 +201,44 @@ class _TimelineViewState extends State<TimelineView> {
       rowBuilder: _buildRowSpan,
       cellBuilder: (BuildContext context, TableVicinity vicinity) {
         if (vicinity.column == 0 && vicinity.row == 0) {
-          return const TableViewCell(child: Center(child: Text('時間/ゲーム', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))));
+          return const TableViewCell(
+            child: Center(
+              child: Text(
+                '時間/ゲーム',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          );
         } else if (vicinity.row == 0) {
-          return TableViewCell(child: Center(child: Text(games[vicinity.column - 1], style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center,)));
+          final gameName = games[vicinity.column - 1];
+          String abbrev = _abbreviations[gameName] ?? '';
+          if (abbrev.isEmpty) {
+            abbrev = gameName.substring(
+              0,
+              gameName.length < 3 ? gameName.length : 3,
+            );
+          }
+          return TableViewCell(
+            child: Center(
+              child: Text(
+                abbrev.split('').join('\n'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         } else if (vicinity.column == 0) {
           final h = hours[vicinity.row - 1];
-          return TableViewCell(child: Center(child: Text('${h.month}/${h.day}\n${h.hour}:00', textAlign: TextAlign.center,)));
+          return TableViewCell(
+            child: Center(
+              child: Text(
+                '${h.month}/${h.day} ${h.hour.toString().padLeft(2, '0')}:00',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+              ),
+            ),
+          );
         }
 
         final gameName = games[vicinity.column - 1];
@@ -158,25 +260,27 @@ class _TimelineViewState extends State<TimelineView> {
         bool hasDanger = false;
 
         if (cellEvents.length >= 3) {
-           hasDanger = true;
+          hasDanger = true;
         } else {
-           for (var ev in cellEvents) {
-              if (ev.endDate != null && ev.endDate!.difference(now).inHours < 24) {
-                 hasWarning = true;
-              }
-           }
+          for (var ev in cellEvents) {
+            if (ev.endDate != null &&
+                ev.endDate!.difference(now).inHours < 24) {
+              hasWarning = true;
+            }
+          }
         }
 
         Color bgColor = Colors.blue.shade100;
         if (hasDanger) {
-           bgColor = Colors.red.shade300;
+          bgColor = Colors.red.shade300;
         } else if (hasWarning) {
-           bgColor = Colors.yellow.shade300;
+          bgColor = Colors.yellow.shade300;
         }
 
         return TableViewCell(
           child: InkWell(
-            onTap: () => _showEventDetails(context, gameName, hours[hIndex], cellEvents),
+            onTap: () =>
+                _showEventDetails(context, gameName, hours[hIndex], cellEvents),
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
@@ -192,7 +296,7 @@ class _TimelineViewState extends State<TimelineView> {
                   child: Center(
                     child: Text(
                       cellEvents.length.toString(),
-                      style: const TextStyle(fontWeight: FontWeight.bold)
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -206,15 +310,15 @@ class _TimelineViewState extends State<TimelineView> {
 
   TableSpan _buildColumnSpan(int index) {
     if (index == 0) {
-      return const TableSpan(extent: FixedTableSpanExtent(80));
+      return const TableSpan(extent: FixedTableSpanExtent(70.0));
     }
-    return const TableSpan(extent: FixedTableSpanExtent(100));
+    return const TableSpan(extent: FixedTableSpanExtent(45.0));
   }
 
   TableSpan _buildRowSpan(int index) {
     if (index == 0) {
-      return const TableSpan(extent: FixedTableSpanExtent(50));
+      return const TableSpan(extent: FixedTableSpanExtent(100.0));
     }
-    return const TableSpan(extent: FixedTableSpanExtent(60));
+    return const TableSpan(extent: FixedTableSpanExtent(45.0));
   }
 }

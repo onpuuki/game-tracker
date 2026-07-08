@@ -13,14 +13,20 @@ class PromptEditorScreen extends StatefulWidget {
 class _TargetItem {
   final TextEditingController gameNameController;
   final TextEditingController keywordsController;
+  final TextEditingController abbreviationController;
 
-  _TargetItem({String gameName = "", String keywords = ""})
-    : gameNameController = TextEditingController(text: gameName),
-      keywordsController = TextEditingController(text: keywords);
+  _TargetItem({
+    String gameName = "",
+    String keywords = "",
+    String abbreviation = "",
+  }) : gameNameController = TextEditingController(text: gameName),
+       keywordsController = TextEditingController(text: keywords),
+       abbreviationController = TextEditingController(text: abbreviation);
 
   void dispose() {
     gameNameController.dispose();
     keywordsController.dispose();
+    abbreviationController.dispose();
   }
 }
 
@@ -76,6 +82,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                   _TargetItem(
                     gameName: target['gameName'] as String,
                     keywords: (target['keywords'] as String?) ?? '',
+                    abbreviation: (target['abbreviation'] as String?) ?? '',
                   ),
                 );
               }
@@ -120,6 +127,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
             (item) => {
               'gameName': item.gameNameController.text.trim(),
               'keywords': item.keywordsController.text.trim(),
+              'abbreviation': item.abbreviationController.text.trim(),
             },
           )
           .toList();
@@ -332,14 +340,38 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                     Expanded(
                                       child: Column(
                                         children: [
-                                          TextField(
-                                            controller: _targetItems[index]
-                                                .gameNameController,
-                                            decoration: const InputDecoration(
-                                              border: OutlineInputBorder(),
-                                              hintText: 'Enter game name...',
-                                              isDense: true,
-                                            ),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextField(
+                                                  controller:
+                                                      _targetItems[index]
+                                                          .gameNameController,
+                                                  decoration:
+                                                      const InputDecoration(
+                                                        border:
+                                                            OutlineInputBorder(),
+                                                        hintText:
+                                                            'Enter game name...',
+                                                        isDense: true,
+                                                      ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: _targetItems[index]
+                                                      .abbreviationController,
+                                                  decoration: const InputDecoration(
+                                                    border:
+                                                        OutlineInputBorder(),
+                                                    hintText:
+                                                        'Enter abbreviation...',
+                                                    isDense: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           const SizedBox(height: 8),
                                           TextField(

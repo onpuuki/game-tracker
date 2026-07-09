@@ -6,6 +6,58 @@ import 'add_event_providers.dart';
 class TopSection extends HookConsumerWidget {
   const TopSection({super.key});
 
+  Future<void> _showImportDialog(
+    BuildContext context,
+    AddEventNotifier notifier,
+  ) async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('テキストインポート'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'フォーマットに従って入力してください。',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  maxLines: 15,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'ゲーム名: ...',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final success = notifier.importFromText(
+                  controller.text,
+                  context,
+                );
+                if (success) Navigator.pop(context);
+              },
+              child: const Text('インポート'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Only watch specific fields to avoid full rebuilds on every typing
@@ -38,6 +90,15 @@ class TopSection extends HookConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton.icon(
+              onPressed: () => _showImportDialog(context, notifier),
+              icon: const Icon(Icons.file_download),
+              label: const Text('テキストからインポート'),
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: gameNameController,
             decoration: const InputDecoration(labelText: 'ゲーム名'),

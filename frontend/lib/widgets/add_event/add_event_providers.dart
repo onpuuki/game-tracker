@@ -214,6 +214,150 @@ class AddEventNotifier extends Notifier<AddEventState> {
     state = AddEventState();
   }
 
+  bool importFromText(String text, BuildContext context) {
+    try {
+      final lines = text.split('\n');
+      String? gameName;
+      String? title;
+      String? cycle;
+      String? dayOfWeek;
+      String? startDateStr;
+      String? dayOfMonthStr;
+      String? timeStr;
+      List<String> tasks = [];
+
+      bool isParsingTasks = false;
+
+      for (var line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        if (isParsingTasks) {
+          if (trimmed.startsWith('- ')) {
+            tasks.add(trimmed.substring(2).trim());
+          } else if (trimmed.startsWith('-')) {
+            tasks.add(trimmed.substring(1).trim());
+          }
+          continue;
+        }
+
+        if (trimmed.startsWith('ゲーム名:')) {
+          gameName = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('タイトル:')) {
+          title = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('サイクル:')) {
+          cycle = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('曜日:')) {
+          dayOfWeek = trimmed.substring(3).trim();
+        } else if (trimmed.startsWith('起点日:')) {
+          startDateStr = trimmed.substring(4).trim();
+        } else if (trimmed.startsWith('日付:')) {
+          dayOfMonthStr = trimmed.substring(3).trim();
+        } else if (trimmed.startsWith('時刻:')) {
+          timeStr = trimmed.substring(3).trim();
+        } else if (trimmed.startsWith('タスク:')) {
+          isParsingTasks = true;
+        }
+      }
+
+      if (gameName == null || gameName.isEmpty) {
+        throw Exception('ゲーム名が見つかりません');
+      }
+      if (title == null || title.isEmpty) {
+        throw Exception('タイトルが見つかりません');
+      }
+      if (cycle == null || cycle.isEmpty) {
+        throw Exception('サイクルが見つかりません');
+      }
+      if (timeStr == null || timeStr.isEmpty) {
+        throw Exception('時刻が見つかりません');
+      }
+
+      final timeParts = timeStr.split(':');
+      if (timeParts.length != 2) {
+        throw Exception('時刻のフォーマットが不正です (HH:mm)');
+      }
+      final hour = int.tryParse(timeParts[0]);
+      final minute = int.tryParse(timeParts[1]);
+      if (hour == null || minute == null) {
+        throw Exception('時刻のフォーマットが不正です (HH:mm)');
+      }
+      final timeOfDay = TimeOfDay(hour: hour, minute: minute);
+
+      String cycleType;
+      List<TaskItem> taskItems = tasks.map((t) => TaskItem(id: _uuid(), text: t)).toList();
+
+      var newState = state.copyWith(
+        gameName: gameName,
+        title: title,
+      );
+
+      if (cycle == 'デイリー') {
+        cycleType = 'daily';
+        newState = newState.copyWith(
+          cycleType: cycleType,
+          dailyTime: timeOfDay,
+          dailyTasks: taskItems,
+        );
+      } else if (cycle == 'ウィークリー') {
+        cycleType = 'weekly';
+        if (dayOfWeek == null || dayOfWeek.isEmpty) {
+          throw Exception('ウィークリーの場合は曜日が必須です');
+        }
+        newState = newState.copyWith(
+          cycleType: cycleType,
+          weeklyDayOfWeek: dayOfWeek,
+          weeklyTime: timeOfDay,
+          weeklyTasks: taskItems,
+        );
+      } else if (cycle == '隔週') {
+        cycleType = 'biweekly';
+        if (startDateStr == null || startDateStr.isEmpty) {
+          throw Exception('隔週の場合は起点日が必須です');
+        }
+        final startDate = DateTime.tryParse(startDateStr);
+        if (startDate == null) {
+          throw Exception('起点日のフォーマットが不正です (YYYY-MM-DD)');
+        }
+        newState = newState.copyWith(
+          cycleType: cycleType,
+          biweeklyStartDate: startDate,
+          biweeklyTime: timeOfDay,
+          biweeklyTasks: taskItems,
+        );
+      } else if (cycle == 'マンスリー') {
+        cycleType = 'monthly';
+        if (dayOfMonthStr == null || dayOfMonthStr.isEmpty) {
+          throw Exception('マンスリーの場合は日付が必須です');
+        }
+        final dayOfMonth = int.tryParse(dayOfMonthStr);
+        if (dayOfMonth == null || dayOfMonth < 1 || dayOfMonth > 31) {
+          throw Exception('日付のフォーマットが不正です (1〜31)');
+        }
+        final now = DateTime.now();
+        var monthlyStartDate = DateTime(now.year, now.month, dayOfMonth);
+
+        newState = newState.copyWith(
+          cycleType: cycleType,
+          monthlyStartDate: monthlyStartDate,
+          monthlyTime: timeOfDay,
+          monthlyTasks: taskItems,
+        );
+      } else {
+        throw Exception('不明なサイクルです: $cycle');
+      }
+
+      state = newState;
+      return true;
+    } catch (e) {
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('インポートエラー: ${e.toString().replaceAll('Exception: ', '')}')),
+      );
+      return false;
+    }
+  }
+
   Future<void> submitData(BuildContext context, {required bool mounted}) async {
     final s = state;
     final gameName = s.gameName.trim();

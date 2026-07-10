@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'home_screen.dart' show ParsedEvent;
 
 class TimelineView extends StatefulWidget {
   final List<ParsedEvent> events;
+  final Map<String, String> abbreviations;
   final Widget Function(ParsedEvent) buildEventCard;
 
   const TimelineView({
     super.key,
     required this.events,
+    required this.abbreviations,
     required this.buildEventCard,
   });
 
@@ -21,67 +21,13 @@ class TimelineView extends StatefulWidget {
 class _TimelineViewState extends State<TimelineView> {
   List<String> games = [];
   List<DateTime?> displayRows = []; // hours を廃止し、ギャップ(null)を含む行データへ変更
-  Map<String, Map<DateTime, List<ParsedEvent>>> eventMap = {}; // 内側のキーを int から DateTime に変更
-  Map<String, String> _abbreviations = {};
-  bool _isLoadingAbbreviations = true;
+  Map<String, Map<DateTime, List<ParsedEvent>>> eventMap =
+      {}; // 内側のキーを int から DateTime に変更
 
   @override
   void initState() {
     super.initState();
-    _fetchAbbreviations();
     _processEvents();
-  }
-
-  Future<void> _fetchAbbreviations() async {
-    try {
-      final doc =
-          await FirebaseFirestore.instanceFor(
-                app: Firebase.app(),
-                databaseId: 'default',
-              )
-              .collection('settings')
-              .doc('config')
-              .get(const GetOptions(source: Source.server))
-              .timeout(const Duration(seconds: 5))
-              .catchError((_) {
-                return FirebaseFirestore.instanceFor(
-                      app: Firebase.app(),
-                      databaseId: 'default',
-                    )
-                    .collection('settings')
-                    .doc('config')
-                    .get(const GetOptions(source: Source.cache));
-              });
-
-      if (doc.exists) {
-        final data = doc.data();
-        if (data != null && data.containsKey('targets')) {
-          final targets = data['targets'] as List<dynamic>;
-          final abbrevs = <String, String>{};
-          for (var target in targets) {
-            if (target is Map<String, dynamic> &&
-                target.containsKey('gameName')) {
-              final gameName = target['gameName'] as String;
-              final abbrev = (target['abbreviation'] as String?) ?? '';
-              abbrevs[gameName] = abbrev;
-            }
-          }
-          if (mounted) {
-            setState(() {
-              _abbreviations = abbrevs;
-            });
-          }
-        }
-      }
-    } catch (e) {
-      // Failed to load abbreviations, use defaults
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingAbbreviations = false;
-        });
-      }
-    }
   }
 
   @override
@@ -191,10 +137,6 @@ class _TimelineViewState extends State<TimelineView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingAbbreviations) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     if (games.isEmpty || displayRows.isEmpty) {
       return const Center(child: Text('タイムラインデータがありません'));
     }
@@ -218,7 +160,7 @@ class _TimelineViewState extends State<TimelineView> {
           );
         } else if (vicinity.row == 0) {
           final gameName = games[vicinity.column - 1];
-          String abbrev = _abbreviations[gameName] ?? '';
+          String abbrev = widget.abbreviations[gameName] ?? '';
           if (abbrev.isEmpty) {
             abbrev = gameName.substring(
               0,
@@ -243,7 +185,14 @@ class _TimelineViewState extends State<TimelineView> {
             if (rowData == null) {
               return const TableViewCell(
                 child: Center(
-                  child: Text('⋮', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: Text(
+                    '⋮',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               );
             }

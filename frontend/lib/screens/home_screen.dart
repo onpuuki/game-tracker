@@ -1191,6 +1191,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ?.cast<Map<String, dynamic>>() ??
                 [];
 
+            final abbreviationsMap = <String, String>{};
+            for (var target in targets) {
+              final gName = target['gameName'] as String?;
+              final abbrev = target['abbreviation'] as String?;
+              if (gName != null && abbrev != null && abbrev.isNotEmpty) {
+                abbreviationsMap[gName] = abbrev;
+              }
+            }
+
             final codeUrlsData =
                 (data?['codeUrls'] as List<dynamic>?)
                     ?.cast<Map<String, dynamic>>() ??
@@ -1445,6 +1454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     TimelineView(
                       events: events,
+                      abbreviations: abbreviationsMap,
                       buildEventCard: _buildEventCard,
                     ),
                   ],

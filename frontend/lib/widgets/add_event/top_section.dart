@@ -22,21 +22,17 @@ class TopSection extends HookConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'フォーマットに従って入力してください。',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () async {
-                        const text =
-                            '''以下の【インプット情報】（ゲームのイベントや更新コンテンツ情報）を解析し、指定の【出力フォーマット】に従ってインポート用のテキストを生成してください。複数のイベントが含まれている場合は、イベントごとに分けて出力してください。コードブロックなどは使用せず、プレーンテキストで出力してください。
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final text =
+                          r'''以下の【インプット情報】（ゲームのイベントや更新コンテンツ情報）を解析し、指定の【出力フォーマット】に従ってインポート用のテキストを生成してください。複数のイベントが含まれている場合は、イベントごとに分けて出力してください。
 
 【出力フォーマット】
+（※コピー時のフォーマット欠落を防ぐため、1つのイベントにつき1つのコードブロック ```text 〜 ``` で個別に囲んで出力してください。複数ある場合はコードブロックも複数に分けてください）
+
+```text
 ゲーム名: （インプット情報から推測して記載）
 タイトル: （イベントやコンテンツの名称）
 サイクル: （デイリー / ウィークリー / 隔週 / マンスリー のいずれかを判定）
@@ -47,36 +43,32 @@ class TopSection extends HookConsumerWidget {
 タスク:
 - （タスク内容1）
 - （タスク内容2）
+```
 
 【判定・出力の注意点】
+- タスクの行頭は、必ず半角ハイフンと半角スペース「- 」を使用してください。（アプリのデータ取り込みで必須となります）
 - 毎日更新・リセットされるものは「デイリー」
 - 毎週決まった曜日に更新されるものは「ウィークリー」
 - 14日周期や半月に1回更新されるもの（螺旋、深塔など）は「隔週」
 - 月に1回（1日など）更新されるものは「マンスリー」
-- ※重要※ リセット時刻が不明で04:00などの推測値に設定した場合は、出力フォーマットの末尾に「※時刻が不明だったため〇〇:〇〇に推測して設定しました」と報告文を必ず添えてください。
+- ※重要※ リセット時刻が不明で04:00などの推測値に設定した場合は、各コードブロックの外側（末尾）に「※〇〇の時刻が不明だったため〇〇:〇〇に推測して設定しました」と報告文を必ず添えてください。
 
 【インプット情報】
 （ここに攻略サイト等の情報をペーストしてください）''';
-                        await Clipboard.setData(
-                          const ClipboardData(text: text),
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('プロンプトをクリップボードにコピーしました'),
+                          ),
                         );
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('プロンプトをクリップボードにコピーしました'),
-                            ),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text(
-                        'Gemini作成依頼プロンプト',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
+                      }
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Gemini作成依頼プロンプトをコピー'),
+                  ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextField(
                   controller: controller,
                   maxLines: 15,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'add_event_providers.dart';
@@ -21,9 +22,59 @@ class TopSection extends HookConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'フォーマットに従って入力してください。',
-                  style: TextStyle(fontSize: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'フォーマットに従って入力してください。',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        const text =
+                            '''以下の【インプット情報】（ゲームのイベントや更新コンテンツ情報）を解析し、指定の【出力フォーマット】に従ってインポート用のテキストを生成してください。複数のイベントが含まれている場合は、イベントごとに分けて出力してください。コードブロックなどは使用せず、プレーンテキストで出力してください。
+
+【出力フォーマット】
+ゲーム名: （インプット情報から推測して記載）
+タイトル: （イベントやコンテンツの名称）
+サイクル: （デイリー / ウィークリー / 隔週 / マンスリー のいずれかを判定）
+曜日: （ウィークリーの場合のみ必須。月〜日のいずれか）
+起点日: （隔週の場合のみ必須。YYYY-MM-DD形式。不明な場合は今日の日付）
+日付: （マンスリーの場合のみ必須。1〜31の数字）
+時刻: （リセット時刻をHH:mm形式で記載。不明な場合は04:00など一般的な時間を推測して設定）
+タスク:
+- （タスク内容1）
+- （タスク内容2）
+
+【判定・出力の注意点】
+- 毎日更新・リセットされるものは「デイリー」
+- 毎週決まった曜日に更新されるものは「ウィークリー」
+- 14日周期や半月に1回更新されるもの（螺旋、深塔など）は「隔週」
+- 月に1回（1日など）更新されるものは「マンスリー」
+- ※重要※ リセット時刻が不明で04:00などの推測値に設定した場合は、出力フォーマットの末尾に「※時刻が不明だったため〇〇:〇〇に推測して設定しました」と報告文を必ず添えてください。
+
+【インプット情報】
+（ここに攻略サイト等の情報をペーストしてください）''';
+                        await Clipboard.setData(
+                          const ClipboardData(text: text),
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('プロンプトをクリップボードにコピーしました'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: const Text(
+                        'Gemini作成依頼プロンプト',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 TextField(

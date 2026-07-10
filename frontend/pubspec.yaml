@@ -51,6 +51,7 @@ dependencies:
   two_dimensional_scrollables: ^0.5.3
   firebase_messaging: ^16.4.1
   flutter_local_notifications: ^22.0.1
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:

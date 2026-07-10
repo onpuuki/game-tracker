@@ -267,6 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       return _EventCardItem(
+        key: ValueKey(eventId),
         parsedEvent: parsedEvent,
         eventData: eventData,
         eventGameName: eventGameName,
@@ -1488,6 +1489,7 @@ class _EventCardItem extends StatefulWidget {
   final VoidCallback onCheckedToggle;
 
   const _EventCardItem({
+    super.key,
     required this.parsedEvent,
     required this.eventData,
     required this.eventGameName,

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 class WidgetSyncService {
-  static Future<void> syncTop5Events() async {
+  static Future<void> syncTop5Events({List<String> excludedIds = const []}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -39,6 +39,10 @@ class WidgetSyncService {
         final data = doc.data() as Map<String, dynamic>;
 
         if (data['isDeleted'] == true) {
+          continue;
+        }
+
+        if (excludedIds.contains(doc.id)) {
           continue;
         }
 
@@ -117,6 +121,7 @@ class WidgetSyncService {
 
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
       await HomeWidget.updateWidget(name: 'CompactWidgetProvider');
+      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider');
 
       debugPrint(
         'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',

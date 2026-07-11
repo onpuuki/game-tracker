@@ -21,9 +21,9 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
             val widgetDataPlugin = HomeWidgetPlugin.getData(context)
             val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")
 
-            val rowLayouts = intArrayOf(R.id.row_1, R.id.row_2, R.id.row_3, R.id.row_4)
-            val titleViews = intArrayOf(R.id.row_1_title, R.id.row_2_title, R.id.row_3_title, R.id.row_4_title)
-            val timeViews = intArrayOf(R.id.row_1_time, R.id.row_2_time, R.id.row_3_time, R.id.row_4_time)
+            val rowLayouts = intArrayOf(R.id.row_1, R.id.row_2)
+            val titleViews = intArrayOf(R.id.row_1_title, R.id.row_2_title)
+            val timeViews = intArrayOf(R.id.row_1_time, R.id.row_2_time)
 
             var eventList = JSONArray()
             try {
@@ -32,15 +32,18 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
                 e.printStackTrace()
             }
 
-            for (i in 0 until 4) {
+            for (i in 0 until 2) {
                 if (i < eventList.length()) {
                     val eventObj = eventList.optJSONObject(i)
                     val title = eventObj?.optString("title", "") ?: ""
                     val deadline = eventObj?.optString("deadline", "") ?: ""
 
+                    val verticalTitle = title.map { it.toString() }.joinToString("\n")
+                    val verticalDeadline = deadline.map { it.toString() }.joinToString("\n")
+
                     views.setViewVisibility(rowLayouts[i], View.VISIBLE)
-                    views.setTextViewText(titleViews[i], title)
-                    views.setTextViewText(timeViews[i], deadline)
+                    views.setTextViewText(titleViews[i], verticalTitle)
+                    views.setTextViewText(timeViews[i], verticalDeadline)
                 } else {
                     views.setViewVisibility(rowLayouts[i], View.GONE)
                 }

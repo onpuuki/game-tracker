@@ -22,119 +22,68 @@
         android:layout_marginBottom="0dp" />
 
     <LinearLayout
-        android:id="@+id/row_1"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingTop="0dp"
-        android:paddingBottom="0dp"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp">
-        <TextView
-            android:id="@+id/row_1_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-        <TextView
-            android:id="@+id/row_1_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/holo_red_dark"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+        android:orientation="horizontal"
+        android:layoutDirection="rtl">
 
-    <LinearLayout
-        android:id="@+id/row_2"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingTop="0dp"
-        android:paddingBottom="0dp"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp">
-        <TextView
-            android:id="@+id/row_2_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-        <TextView
-            android:id="@+id/row_2_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/holo_red_dark"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+        <LinearLayout
+            android:id="@+id/row_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="top|center_horizontal"
+            android:orientation="horizontal"
+            android:layoutDirection="rtl"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:id="@+id/row_1_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="top|center_horizontal"
+                android:textColor="@android:color/black"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/row_1_time"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="top|center_horizontal"
+                android:textColor="@android:color/holo_red_dark"
+                android:textSize="11sp" />
+        </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/row_3"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingTop="0dp"
-        android:paddingBottom="0dp"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp">
-        <TextView
-            android:id="@+id/row_3_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-        <TextView
-            android:id="@+id/row_3_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/holo_red_dark"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+        <LinearLayout
+            android:id="@+id/row_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="top|center_horizontal"
+            android:orientation="horizontal"
+            android:layoutDirection="rtl"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:id="@+id/row_2_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="top|center_horizontal"
+                android:textColor="@android:color/black"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/row_2_time"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="top|center_horizontal"
+                android:textColor="@android:color/holo_red_dark"
+                android:textSize="11sp" />
+        </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/row_4"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingTop="0dp"
-        android:paddingBottom="0dp"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp">
-        <TextView
-            android:id="@+id/row_4_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-        <TextView
-            android:id="@+id/row_4_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/holo_red_dark"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
     </LinearLayout>
 
 </LinearLayout>

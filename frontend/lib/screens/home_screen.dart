@@ -315,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
           await _savePreferences();
-          await WidgetSyncService.syncTop5Events();
+          await WidgetSyncService.syncTop5Events(excludedIds: _checkedEventIds);
         },
       );
     } catch (e) {
@@ -2079,7 +2079,9 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                               allCompleted,
                                                         });
 
-                                                    await WidgetSyncService.syncTop5Events();
+                                                    await WidgetSyncService.syncTop5Events(
+                                                      excludedIds: allCompleted ? [widget.parsedEvent.doc.id] : [],
+                                                    );
                                                   },
                                                 ),
                                                 Text(

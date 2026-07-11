@@ -14,15 +14,21 @@
         android:format12Hour="yyyy/MM/dd(E) HH:mm"
         android:gravity="center"
         android:textColor="@android:color/black"
-        android:textSize="13sp"
+        android:textSize="14sp"
         android:textStyle="bold"
-        android:layout_marginBottom="2dp" />
+        android:paddingTop="0dp"
+        android:paddingBottom="2dp"
+        android:layout_marginTop="0dp"
+        android:layout_marginBottom="0dp" />
 
     <LinearLayout
         android:id="@+id/row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_1_title"
@@ -48,6 +54,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_2_title"
@@ -73,6 +82,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_3_title"
@@ -98,6 +110,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_4_title"
@@ -123,6 +138,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_5_title"

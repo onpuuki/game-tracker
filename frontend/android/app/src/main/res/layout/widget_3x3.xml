@@ -22,19 +22,21 @@
         android:id="@+id/row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginBottom="4dp">
         <TextView
             android:id="@+id/row_1_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
             android:id="@+id/row_1_time"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="12sp"
@@ -45,19 +47,21 @@
         android:id="@+id/row_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginBottom="4dp">
         <TextView
             android:id="@+id/row_2_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
             android:id="@+id/row_2_time"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="12sp"
@@ -68,19 +72,21 @@
         android:id="@+id/row_3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginBottom="4dp">
         <TextView
             android:id="@+id/row_3_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
             android:id="@+id/row_3_time"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="12sp"
@@ -91,19 +97,21 @@
         android:id="@+id/row_4"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginBottom="4dp">
         <TextView
             android:id="@+id/row_4_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
             android:id="@+id/row_4_time"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="12sp"
@@ -114,19 +122,21 @@
         android:id="@+id/row_5"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginBottom="4dp">
         <TextView
             android:id="@+id/row_5_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
             android:id="@+id/row_5_time"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="12sp"

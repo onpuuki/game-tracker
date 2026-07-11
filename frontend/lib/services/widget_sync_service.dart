@@ -65,9 +65,8 @@ class WidgetSyncService {
           continue;
         }
 
-        final gameName = data['gameName']?.toString() ?? '';
         final title = data['title']?.toString() ?? 'No Title';
-        final displayTitle = gameName.isNotEmpty ? '[$gameName] $title' : title;
+        final displayTitle = title; // To avoid long text, game name is removed in 3x3 widget
 
         parsedEvents.add({
           'id': doc.id,

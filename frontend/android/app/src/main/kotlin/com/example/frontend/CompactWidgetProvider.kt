@@ -13,10 +13,10 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-class MediumListWidgetProvider : HomeWidgetProvider() {
+class CompactWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.widget_3x3)
+            val views = RemoteViews(context.packageName, R.layout.widget_compact)
 
             val widgetDataPlugin = HomeWidgetPlugin.getData(context)
             val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")

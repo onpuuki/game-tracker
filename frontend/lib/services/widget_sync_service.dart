@@ -112,7 +112,7 @@ class WidgetSyncService {
       final jsonString = jsonEncode(widgetDataList);
 
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
-      await HomeWidget.updateWidget(name: 'MediumListWidgetProvider');
+      await HomeWidget.updateWidget(name: 'CompactWidgetProvider');
 
       debugPrint(
         'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',

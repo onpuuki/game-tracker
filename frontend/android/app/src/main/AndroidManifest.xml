@@ -25,16 +25,36 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <receiver
-            android:name="es.antonborri.home_widget.HomeWidgetProvider"
-            android:exported="true">
+        <receiver android:name=".SmallWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/widget_info" />
+                android:resource="@xml/small_widget_info" />
         </receiver>
+
+        <receiver android:name=".MediumWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/medium_widget_info" />
+        </receiver>
+
+        <receiver android:name=".LargeWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/large_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".TaskWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

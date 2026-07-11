@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@android:color/white"
-    android:padding="6dp">
+    android:padding="4dp">
 
     <TextClock
         android:id="@+id/clock"
@@ -14,16 +14,16 @@
         android:format12Hour="yyyy/MM/dd(E) HH:mm"
         android:gravity="center"
         android:textColor="@android:color/black"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:textStyle="bold"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="2dp" />
 
     <LinearLayout
         android:id="@+id/row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_1_title"
             android:layout_width="0dp"
@@ -31,7 +31,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
@@ -39,7 +39,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -48,7 +48,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_2_title"
             android:layout_width="0dp"
@@ -56,7 +56,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
@@ -64,7 +64,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -73,7 +73,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_3_title"
             android:layout_width="0dp"
@@ -81,7 +81,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
@@ -89,7 +89,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -98,7 +98,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_4_title"
             android:layout_width="0dp"
@@ -106,7 +106,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
@@ -114,7 +114,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -123,7 +123,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="0dp">
         <TextView
             android:id="@+id/row_5_title"
             android:layout_width="0dp"
@@ -131,7 +131,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:textColor="@android:color/black"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
         <TextView
@@ -139,7 +139,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:maxLines="1" />
     </LinearLayout>
 

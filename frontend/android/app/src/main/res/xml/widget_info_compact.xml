@@ -4,6 +4,8 @@
     android:minHeight="40dp"
     android:minResizeWidth="40dp"
     android:minResizeHeight="40dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="86400000"
     android:initialLayout="@layout/widget_compact"
     android:resizeMode="horizontal|vertical"

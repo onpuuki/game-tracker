@@ -87,7 +87,7 @@ class WidgetSyncService {
       );
 
       // Take top 5
-      final top5Events = parsedEvents.take(5).toList();
+      final top5Events = parsedEvents.take(4).toList();
 
       List<Map<String, String>> widgetDataList = [];
       for (var event in top5Events) {

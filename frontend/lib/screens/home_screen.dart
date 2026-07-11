@@ -306,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
         tagColor: tagColor,
         isDarkMode: isDarkMode,
         dateStr: dateStr,
-        onCheckedToggle: () {
+        onCheckedToggle: () async {
           setState(() {
             if (isChecked) {
               _checkedEventIds.remove(eventId);
@@ -314,8 +314,8 @@ class _HomeScreenState extends State<HomeScreen> {
               _checkedEventIds.add(eventId);
             }
           });
-          _savePreferences();
-          WidgetSyncService.syncTop5Events();
+          await _savePreferences();
+          await WidgetSyncService.syncTop5Events();
         },
       );
     } catch (e) {
@@ -2078,6 +2078,8 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                           'isCompleted':
                                                               allCompleted,
                                                         });
+
+                                                    await WidgetSyncService.syncTop5Events();
                                                   },
                                                 ),
                                                 Text(

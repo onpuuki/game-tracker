@@ -46,6 +46,10 @@ class WidgetSyncService {
           continue;
         }
 
+        if (data['isCompleted'] == true) {
+          continue;
+        }
+
         final endDateData = data['endDate'];
         if (endDateData == null) {
           continue;

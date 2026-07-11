@@ -22,10 +22,14 @@ class WidgetSyncService {
       // Fetch user's checked events
       final userDoc = await db.collection('users').doc(user.uid).get();
       List<dynamic> checkedEventsRaw = userDoc.data()?['checkedEvents'] ?? [];
-      Set<String> checkedEvents = checkedEventsRaw.map((e) => e.toString()).toSet();
+      Set<String> checkedEvents = checkedEventsRaw
+          .map((e) => e.toString())
+          .toSet();
 
       // Fetch all events
-      final QuerySnapshot eventsSnapshot = await db.collectionGroup('events').get();
+      final QuerySnapshot eventsSnapshot = await db
+          .collectionGroup('events')
+          .get();
 
       final now = DateTime.now();
 
@@ -65,8 +69,9 @@ class WidgetSyncService {
           continue;
         }
 
-        final title = data['title']?.toString() ?? 'No Title';
-        final displayTitle = title; // To avoid long text, game name is removed in 3x3 widget
+        final String title = data['title'] as String? ?? '無題';
+        final displayTitle =
+            title; // To avoid long text, game name is removed in 3x3 widget
 
         parsedEvents.add({
           'id': doc.id,
@@ -76,7 +81,10 @@ class WidgetSyncService {
       }
 
       // Sort by endDate ascending
-      parsedEvents.sort((a, b) => (a['endDate'] as DateTime).compareTo(b['endDate'] as DateTime));
+      parsedEvents.sort(
+        (a, b) =>
+            (a['endDate'] as DateTime).compareTo(b['endDate'] as DateTime),
+      );
 
       // Take top 5
       final top5Events = parsedEvents.take(5).toList();
@@ -106,7 +114,9 @@ class WidgetSyncService {
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
       await HomeWidget.updateWidget(name: 'MediumListWidgetProvider');
 
-      debugPrint('WidgetSyncService: Synced ${widgetDataList.length} events to widget.');
+      debugPrint(
+        'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',
+      );
     } catch (e, stacktrace) {
       debugPrint('WidgetSyncService error: $e\n$stacktrace');
     }

@@ -18,6 +18,7 @@ import 'feedback_list_screen.dart';
 import 'add_event_screen.dart';
 import 'game_selection_screen.dart';
 import 'export_settings_screen.dart';
+import '../services/widget_sync_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -189,26 +190,35 @@ class _HomeScreenState extends State<HomeScreen> {
       final hasValidCodeUrl = gameCodeUrl != null && gameCodeUrl.isNotEmpty;
 
       bool isUpcoming = false;
-      int? daysUntilStart;
+      int? startInDays;
+      int? startInHours;
+      int? endInDays;
+      int? endInHours;
+
       final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
 
       if (startDate != null) {
-        final start = DateTime(startDate.year, startDate.month, startDate.day);
-        if (start.isAfter(today)) {
+        if (startDate.isAfter(now)) {
           isUpcoming = true;
-          daysUntilStart = start.difference(today).inDays;
+          final diff = startDate.difference(now);
+          startInDays = diff.inDays;
+          startInHours = diff.inHours % 24;
         }
       }
 
-      int? remainingDays;
-      if (endDate != null) {
-        final end = DateTime(endDate.year, endDate.month, endDate.day);
-        remainingDays = end.difference(today).inDays;
+      bool isOngoing = false;
+      if (!isUpcoming && endDate != null) {
+        if (endDate.isAfter(now) || endDate.isAtSameMomentAs(now)) {
+          isOngoing = true;
+          final diff = endDate.difference(now);
+          endInDays = diff.inDays;
+          endInHours = diff.inHours % 24;
+        }
       }
 
       Widget? trailingWidget;
-      if (isUpcoming && daysUntilStart != null) {
+      if (isUpcoming && startInDays != null && startInHours != null) {
+        final textStr = startInDays > 0 ? '開催まで$startInDays日$startInHours時間' : '開催まで$startInHours時間';
         trailingWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -217,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
             border: Border.all(color: Colors.green),
           ),
           child: Text(
-            '開催まで$daysUntilStart日',
+            textStr,
             style: const TextStyle(
               color: Colors.green,
               fontWeight: FontWeight.bold,
@@ -225,7 +235,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
-      } else if (remainingDays != null && remainingDays >= 0) {
+      } else if (isOngoing && endInDays != null && endInHours != null) {
+        final textStr = endInDays > 0 ? '終了まで$endInDays日$endInHours時間' : '終了まで$endInHours時間';
         trailingWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -234,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
             border: Border.all(color: Colors.red),
           ),
           child: Text(
-            '終了まで$remainingDays日',
+            textStr,
             style: const TextStyle(
               color: Colors.red,
               fontWeight: FontWeight.bold,
@@ -304,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
           _savePreferences();
+          WidgetSyncService.syncTop5Events();
         },
       );
     } catch (e) {
@@ -315,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPreferences();
+    WidgetSyncService.syncTop5Events();
 
     _configStream = FirebaseFirestore.instanceFor(
       app: Firebase.app(),

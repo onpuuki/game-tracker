@@ -57,7 +57,7 @@ jobs:
           git log -n 5 --oneline >> "$OUTPUT_FILE"
           echo "" >> "$OUTPUT_FILE"
 
-          FILES=$(find frontend/lib/ functions/src/ .github/workflows/ -type f \( -name "*.dart" -o -name "*.ts" -o -name "*.yml" \) | grep -E -v "\.g\.dart$|\.freezed\.dart$" || true)
+          FILES=$(find frontend/lib/ frontend/android/ frontend/ios/ functions/src/ .github/workflows/ -type f -not -path "*/build/*" -not -path "*/.gradle/*" -not -path "*/.dart_tool/*" -not -path "*/Pods/*" \( -name "*.dart" -o -name "*.ts" -o -name "*.yml" -o -name "*.kt" -o -name "*.xml" -o -name "*.gradle" -o -name "*.gradle.kts" -o -name "*.swift" -o -name "*.pbxproj" \) | grep -E -v "\.g\.dart$|\.freezed\.dart$" || true)
           EXTRA_FILES="frontend/pubspec.yaml frontend/analysis_options.yaml functions/package.json firestore.rules firestore.indexes.json firebase.json"
 
           for FILE in $FILES $EXTRA_FILES; do

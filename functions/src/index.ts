@@ -1390,10 +1390,11 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
         const targetUsers = usersSnapshot.docs.filter(doc => {
             const data = doc.data();
             const settings = data.settings;
+            const token = data.fcmToken || settings?.fcmToken;
             return settings &&
                    settings.notificationEnabled === true &&
                    settings.notificationHour === currentHour &&
-                   data.fcmToken;
+                   token;
         });
 
         if (targetUsers.length === 0) {
@@ -1415,6 +1416,7 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
         for (const userDoc of targetUsers) {
             const userData = userDoc.data();
+            const token = userData.fcmToken || userData.settings?.fcmToken;
             const checkedEvents: string[] = userData.checkedEvents || [];
             const daysBefore = userData.settings?.notificationDaysBefore || 7;
 
@@ -1436,7 +1438,7 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
             if (userUncompletedEvents.length > 0) {
                 const msg = {
-                    token: userData.fcmToken,
+                    token: token,
                     notification: {
                         title: '未完了のイベントがあります',
                         body: `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`
@@ -1485,8 +1487,9 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
 
         const userData = userDoc.data() as any;
         const settings = userData.settings;
+        const token = userData.fcmToken || settings?.fcmToken;
 
-        if (!settings || settings.notificationEnabled !== true || !userData.fcmToken) {
+        if (!settings || settings.notificationEnabled !== true || !token) {
             const msg = 'Notification is disabled or FCM token is missing for this user.';
             await writeDebugLog(traceId, msg);
             throw new functions.https.HttpsError('failed-precondition', msg);
@@ -1519,7 +1522,7 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
 
         if (userUncompletedEvents.length > 0) {
             const msg = {
-                token: userData.fcmToken,
+                token: token,
                 notification: {
                     title: '未完了のイベントがあります',
                     body: `[手動テスト] 設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`

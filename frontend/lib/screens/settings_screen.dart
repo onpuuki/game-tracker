@@ -74,16 +74,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        await FirebaseFirestore.instanceFor(
-          app: Firebase.app(),
-          databaseId: 'default',
-        ).collection('users').doc(user.uid).set({
+        String? token;
+        if (_notificationEnabled) {
+          await FirebaseMessaging.instance.requestPermission();
+          token = await FirebaseMessaging.instance.getToken();
+        }
+
+        final Map<String, dynamic> updateData = {
           'settings': {
             'notificationEnabled': _notificationEnabled,
             'notificationHour': _notificationHour,
             'notificationDaysBefore': _notificationDaysBefore,
           },
-        }, SetOptions(merge: true));
+        };
+
+        if (_notificationEnabled && token != null) {
+          updateData['fcmToken'] = token;
+        } else if (!_notificationEnabled) {
+          updateData['fcmToken'] = FieldValue.delete();
+        }
+
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set(
+          updateData,
+          SetOptions(merge: true),
+        );
       } catch (e) {
         debugPrint('Error syncing user settings: $e');
       }

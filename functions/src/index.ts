@@ -1467,7 +1467,7 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
 export const testSendNotifications = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated to run test notification.');
+        throw new functions.https.HttpsError('unauthenticated', 'User not authenticated');
     }
 
     const uid = context.auth.uid;
@@ -1489,7 +1489,7 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
         if (!settings || settings.notificationEnabled !== true || !userData.fcmToken) {
             const msg = 'Notification is disabled or FCM token is missing for this user.';
             await writeDebugLog(traceId, msg);
-            return { success: false, message: msg };
+            throw new functions.https.HttpsError('failed-precondition', msg);
         }
 
         await writeDebugLog(traceId, `User ${uid} has notifications enabled. Proceeding to fetch events...`);
@@ -1529,20 +1529,23 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
             try {
                 await admin.messaging().send(msg);
                 await writeDebugLog(traceId, `Successfully sent test notification to user ${uid}`);
-                return { success: true, message: `通知を送信しました。（対象: ${userUncompletedEvents.length}件）` };
             } catch (e: any) {
                 functions.logger.error(`[${traceId}] Failed to send test message to user ${uid}:`, e);
                 await writeDebugLog(traceId, `Failed to send test message to user ${uid}`, e instanceof Error ? e.stack : String(e));
-                return { success: false, message: '通知の送信に失敗しました。詳細エラーはデバッグログを確認してください。' };
+                throw new functions.https.HttpsError('internal', '通知の送信に失敗しました。詳細エラーはデバッグログを確認してください。');
             }
         } else {
              await writeDebugLog(traceId, `No uncompleted events in the range for user ${uid} during test`);
-             return { success: true, message: '対象となる未完了イベントがありませんでした。' };
         }
 
+        return { success: true, message: '通知処理が完了しました' };
     } catch (error: any) {
         functions.logger.error(`[${traceId}] Error in testSendNotifications:`, error);
         await writeDebugLog(traceId, 'Error in testSendNotifications', error instanceof Error ? error.stack : String(error));
-        throw new functions.https.HttpsError('internal', 'Internal error occurred during test notification.', error.message);
+
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError('internal', error.message || '内部エラーが発生しました');
     }
 });

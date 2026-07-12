@@ -38,7 +38,7 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
                     val title = eventObj?.optString("title", "") ?: ""
                     val deadline = eventObj?.optString("deadline", "") ?: ""
 
-                    val safeTitle = if (title.length > 8) title.take(7) + "︙" else title
+                    val safeTitle = if (title.length > 6) title.take(5) + "︙" else title
                     val verticalTitle = safeTitle.map { it.toString() }.joinToString("\n")
                     val verticalDeadline = deadline.map { it.toString() }.joinToString("\n")
 

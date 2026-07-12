@@ -21,7 +21,9 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
             val widgetDataPlugin = HomeWidgetPlugin.getData(context)
             val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")
 
-            val textViews = intArrayOf(R.id.event_1_text, R.id.event_2_text)
+            val containers = intArrayOf(R.id.event_1_container, R.id.event_2_container)
+            val titleViews = intArrayOf(R.id.event_1_title, R.id.event_2_title)
+            val deadlineViews = intArrayOf(R.id.event_1_deadline, R.id.event_2_deadline)
 
             var eventList = JSONArray()
             try {
@@ -36,14 +38,15 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
                     val title = eventObj?.optString("title", "") ?: ""
                     val deadline = eventObj?.optString("deadline", "") ?: ""
 
-                    val combined = "$title $deadline"
-                    val displayStr = if (combined.length > 16) combined.take(15) + "︙" else combined
-                    val verticalText = displayStr.map { it.toString() }.joinToString("\n")
+                    val safeTitle = if (title.length > 8) title.take(7) + "︙" else title
+                    val verticalTitle = safeTitle.map { it.toString() }.joinToString("\n")
+                    val verticalDeadline = deadline.map { it.toString() }.joinToString("\n")
 
-                    views.setViewVisibility(textViews[i], View.VISIBLE)
-                    views.setTextViewText(textViews[i], verticalText)
+                    views.setViewVisibility(containers[i], View.VISIBLE)
+                    views.setTextViewText(titleViews[i], verticalTitle)
+                    views.setTextViewText(deadlineViews[i], verticalDeadline)
                 } else {
-                    views.setViewVisibility(textViews[i], View.GONE)
+                    views.setViewVisibility(containers[i], View.GONE)
                 }
             }
 

@@ -118,14 +118,34 @@ class WidgetSyncService {
       final jsonString = jsonEncode(widgetDataList);
 
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
-      await HomeWidget.updateWidget(name: 'CompactWidgetProvider');
-      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider');
+      await HomeWidget.updateWidget(name: 'CompactWidgetProvider', androidName: 'CompactWidgetProvider');
+      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider', androidName: 'VerticalWidgetProvider');
 
       debugPrint(
         'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',
       );
+
+      await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('debug_logs').add({
+        'message': 'WidgetSync Success. target: ${widgetDataList.length} events, excludedIds: $excludedIds',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     } catch (e, stacktrace) {
       debugPrint('WidgetSyncService error: $e\n$stacktrace');
+
+      try {
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('debug_logs').add({
+          'message': 'WidgetSync Error: $e',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (logError) {
+        debugPrint('Failed to write error log to Firestore: $logError');
+      }
     }
   }
 }

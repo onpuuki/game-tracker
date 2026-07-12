@@ -315,7 +315,15 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
           await _savePreferences();
-          await WidgetSyncService.syncTop5Events(excludedIds: _checkedEventIds);
+          try {
+            await WidgetSyncService.syncTop5Events(excludedIds: _checkedEventIds.toList());
+          } catch (e) {
+            debugPrint('WidgetSync Error: $e');
+            FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('debug_logs').add({
+              'error': e.toString(),
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+          }
         },
       );
     } catch (e) {
@@ -2081,9 +2089,17 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                               allCompleted,
                                                         });
 
-                                                    await WidgetSyncService.syncTop5Events(
-                                                      excludedIds: allCompleted ? [widget.parsedEvent.doc.id] : [],
-                                                    );
+                                                    try {
+                                                      await WidgetSyncService.syncTop5Events(
+                                                        excludedIds: allCompleted ? [widget.parsedEvent.doc.id] : [],
+                                                      );
+                                                    } catch (e) {
+                                                      debugPrint('WidgetSync Error: $e');
+                                                      FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('debug_logs').add({
+                                                        'error': e.toString(),
+                                                        'timestamp': FieldValue.serverTimestamp(),
+                                                      });
+                                                    }
                                                   },
                                                 ),
                                                 Text(

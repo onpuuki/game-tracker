@@ -1575,7 +1575,6 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
             };
 
             try {
-                await new Promise(resolve => setTimeout(resolve, 3000));
                 await admin.messaging().send(msg);
                 await writeDebugLog(traceId, `Successfully sent test notification to user ${uid}`);
             } catch (e: any) {

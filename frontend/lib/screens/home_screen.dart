@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'debug_log_screen.dart';
 import 'prompt_editor_screen.dart';
 import 'sync_status_screen.dart';
@@ -350,6 +351,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${message.notification!.title ?? ''}\n${message.notification!.body ?? ''}'),
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.blueGrey.shade900,
+          ),
+        );
+      }
+    });
+
     SharedPreferences.getInstance().then((prefs) {
       if (mounted) {
         setState(() {

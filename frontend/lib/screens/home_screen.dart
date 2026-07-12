@@ -52,6 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
+  bool _isBannerAdLoading = false;
+  NativeAd? _nativeAd;
+  bool _isNativeAdLoaded = false;
 
   // Filter State
   String _filterKeyword = '';
@@ -223,7 +226,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       Widget? trailingWidget;
       if (isUpcoming && startInDays != null && startInHours != null) {
-        final textStr = startInDays > 0 ? '開催まで$startInDays日$startInHours時間' : '開催まで$startInHours時間';
+        final textStr = startInDays > 0
+            ? '開催まで$startInDays日$startInHours時間'
+            : '開催まで$startInHours時間';
         trailingWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -241,7 +246,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       } else if (isOngoing && endInDays != null && endInHours != null) {
-        final textStr = endInDays > 0 ? '終了まで$endInDays日$endInHours時間' : '終了まで$endInHours時間';
+        final textStr = endInDays > 0
+            ? '終了まで$endInDays日$endInHours時間'
+            : '終了まで$endInHours時間';
         trailingWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -321,10 +328,15 @@ class _HomeScreenState extends State<HomeScreen> {
           });
           await _savePreferences();
           try {
-            await WidgetSyncService.syncTop5Events(excludedIds: _checkedEventIds.toList());
+            await WidgetSyncService.syncTop5Events(
+              excludedIds: _checkedEventIds.toList(),
+            );
           } catch (e) {
             debugPrint('WidgetSync Error: $e');
-            FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('debug_logs').add({
+            FirebaseFirestore.instanceFor(
+              app: Firebase.app(),
+              databaseId: 'default',
+            ).collection('debug_logs').add({
               'error': e.toString(),
               'timestamp': FieldValue.serverTimestamp(),
             });
@@ -341,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPreferences();
     WidgetSyncService.syncTop5Events();
-    _loadBannerAd();
+    _loadNativeAd();
 
     _configStream = FirebaseFirestore.instanceFor(
       app: Firebase.app(),
@@ -354,7 +366,28 @@ class _HomeScreenState extends State<HomeScreen> {
     ).collectionGroup('events').snapshots();
   }
 
-  void _loadBannerAd() {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isBannerAdLoaded && !_isBannerAdLoading) {
+      _isBannerAdLoading = true;
+      _loadAd();
+    }
+  }
+
+  Future<void> _loadAd() async {
+    final size = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+      MediaQuery.of(context).size.width.truncate(),
+    );
+
+    if (size == null) {
+      debugPrint('Unable to get height of anchored banner.');
+      return;
+    }
+    _loadBannerAd(size);
+  }
+
+  void _loadBannerAd(AdSize size) {
     final adUnitId = Platform.isAndroid
         ? 'ca-app-pub-3940256099942544/6300978111'
         : 'ca-app-pub-3940256099942544/2934735716';
@@ -362,18 +395,42 @@ class _HomeScreenState extends State<HomeScreen> {
     _bannerAd = BannerAd(
       adUnitId: adUnitId,
       request: const AdRequest(),
-      size: AdSize.banner,
+      size: size,
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           debugPrint('$ad loaded.');
           setState(() {
             _isBannerAdLoaded = true;
+            _isBannerAdLoading = false;
           });
         },
         onAdFailedToLoad: (ad, err) {
           debugPrint('BannerAd failed to load: $err');
           ad.dispose();
+          _isBannerAdLoading = false;
         },
+      ),
+    )..load();
+  }
+
+  void _loadNativeAd() {
+    _nativeAd = NativeAd(
+      adUnitId: 'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
+      request: const AdRequest(),
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          debugPrint('$NativeAd loaded.');
+          setState(() {
+            _isNativeAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('$NativeAd failedToLoad: $error');
+          ad.dispose();
+        },
+      ),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: TemplateType.small,
       ),
     )..load();
   }
@@ -381,6 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _bannerAd?.dispose();
+    _nativeAd?.dispose();
     super.dispose();
   }
 
@@ -1513,9 +1571,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 return TabBarView(
                   children: [
                     ListView.builder(
-                      itemCount: events.length,
+                      itemCount: _isNativeAdLoaded && events.length >= 2
+                          ? events.length + 1
+                          : events.length,
                       itemBuilder: (context, index) {
-                        return _buildEventCard(events[index]);
+                        if (_isNativeAdLoaded && index == 2) {
+                          return Container(
+                            height: 120,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 8.0,
+                            ),
+                            child: AdWidget(ad: _nativeAd!),
+                          );
+                        }
+
+                        final eventIndex = (_isNativeAdLoaded && index > 2)
+                            ? index - 1
+                            : index;
+                        return _buildEventCard(events[eventIndex]);
                       },
                     ),
                     TimelineView(
@@ -2086,85 +2160,93 @@ class _EventCardItemState extends State<_EventCardItem> {
                                   Wrap(
                                     spacing: 8.0,
                                     runSpacing: -8.0,
-                                    children: (widget.eventData['tasks'] as List)
-                                        .asMap()
-                                        .entries
-                                        .map((entry) {
-                                          final taskIndex = entry.key;
-                                          final task =
-                                              entry.value
-                                                  as Map<String, dynamic>;
-                                          final taskName = task['name'] ?? '';
-                                          final isTaskCompleted =
-                                              task['isCompleted'] == true;
+                                    children: (widget.eventData['tasks'] as List).asMap().entries.map((
+                                      entry,
+                                    ) {
+                                      final taskIndex = entry.key;
+                                      final task =
+                                          entry.value as Map<String, dynamic>;
+                                      final taskName = task['name'] ?? '';
+                                      final isTaskCompleted =
+                                          task['isCompleted'] == true;
 
-                                          return IntrinsicWidth(
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Checkbox(
-                                                  value: isTaskCompleted,
-                                                  onChanged: (bool? value) async {
-                                                    if (value == null) return;
+                                      return IntrinsicWidth(
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Checkbox(
+                                              value: isTaskCompleted,
+                                              onChanged: (bool? value) async {
+                                                if (value == null) return;
 
-                                                    final updatedTasks =
-                                                        List<
-                                                          Map<String, dynamic>
-                                                        >.from(
-                                                          widget
-                                                              .eventData['tasks'],
-                                                        );
-                                                    updatedTasks[taskIndex]['isCompleted'] =
-                                                        value;
+                                                final updatedTasks =
+                                                    List<
+                                                      Map<String, dynamic>
+                                                    >.from(
+                                                      widget.eventData['tasks'],
+                                                    );
+                                                updatedTasks[taskIndex]['isCompleted'] =
+                                                    value;
 
-                                                    final allCompleted =
-                                                        updatedTasks.every(
-                                                          (t) =>
-                                                              t['isCompleted'] ==
-                                                              true,
-                                                        );
+                                                final allCompleted =
+                                                    updatedTasks.every(
+                                                      (t) =>
+                                                          t['isCompleted'] ==
+                                                          true,
+                                                    );
 
-                                                    await widget
-                                                        .parsedEvent
-                                                        .doc
-                                                        .reference
-                                                        .update({
-                                                          'tasks': updatedTasks,
-                                                          'isCompleted':
-                                                              allCompleted,
-                                                        });
+                                                await widget
+                                                    .parsedEvent
+                                                    .doc
+                                                    .reference
+                                                    .update({
+                                                      'tasks': updatedTasks,
+                                                      'isCompleted':
+                                                          allCompleted,
+                                                    });
 
-                                                    try {
-                                                      await WidgetSyncService.syncTop5Events(
-                                                        excludedIds: allCompleted ? [widget.parsedEvent.doc.id] : [],
-                                                      );
-                                                    } catch (e) {
-                                                      debugPrint('WidgetSync Error: $e');
-                                                      FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('debug_logs').add({
-                                                        'error': e.toString(),
-                                                        'timestamp': FieldValue.serverTimestamp(),
-                                                      });
-                                                    }
-                                                  },
-                                                ),
-                                                Text(
-                                                  taskName,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    decoration: isTaskCompleted
-                                                        ? TextDecoration
-                                                              .lineThrough
-                                                        : null,
-                                                    color: isTaskCompleted
-                                                        ? Colors.grey
-                                                        : null,
-                                                  ),
-                                                ),
-                                              ],
+                                                try {
+                                                  await WidgetSyncService.syncTop5Events(
+                                                    excludedIds: allCompleted
+                                                        ? [
+                                                            widget
+                                                                .parsedEvent
+                                                                .doc
+                                                                .id,
+                                                          ]
+                                                        : [],
+                                                  );
+                                                } catch (e) {
+                                                  debugPrint(
+                                                    'WidgetSync Error: $e',
+                                                  );
+                                                  FirebaseFirestore.instanceFor(
+                                                    app: Firebase.app(),
+                                                    databaseId: 'default',
+                                                  ).collection('debug_logs').add({
+                                                    'error': e.toString(),
+                                                    'timestamp':
+                                                        FieldValue.serverTimestamp(),
+                                                  });
+                                                }
+                                              },
                                             ),
-                                          );
-                                        })
-                                        .toList(),
+                                            Text(
+                                              taskName,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                decoration: isTaskCompleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                                color: isTaskCompleted
+                                                    ? Colors.grey
+                                                    : null,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
                                 ],
                               ],

@@ -26,6 +26,8 @@ class WidgetSyncService {
           .map((e) => e.toString())
           .toSet();
 
+      final ignoreIds = checkedEvents.union(excludedIds.toSet());
+
       // Fetch all events
       final QuerySnapshot eventsSnapshot = await db
           .collectionGroup('events')
@@ -38,19 +40,15 @@ class WidgetSyncService {
       for (var doc in eventsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
 
-        if (data['isDeleted'] == true) {
-          continue;
-        }
-
-        if (excludedIds.contains(doc.id)) {
-          continue;
-        }
-
-        if (checkedEvents.contains(doc.id)) {
+        if (ignoreIds.contains(doc.id)) {
           continue;
         }
 
         if (data['isCompleted'] == true) {
+          continue;
+        }
+
+        if (data['isDeleted'] == true) {
           continue;
         }
 

@@ -28,61 +28,27 @@
         android:orientation="horizontal"
         android:layoutDirection="rtl">
 
-        <LinearLayout
-            android:id="@+id/row_1"
+        <TextView
+            android:id="@+id/event_1_text"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="top|center_horizontal"
-            android:orientation="horizontal"
-            android:layoutDirection="rtl"
+            android:textColor="@android:color/black"
+            android:textSize="11sp"
             android:paddingTop="4dp"
-            android:paddingBottom="4dp">
-            <TextView
-                android:id="@+id/row_1_title"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="top|center_horizontal"
-                android:textColor="@android:color/black"
-                android:textSize="11sp" />
-            <TextView
-                android:id="@+id/row_1_time"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="top|center_horizontal"
-                android:textColor="@android:color/holo_red_dark"
-                android:textSize="11sp" />
-        </LinearLayout>
+            android:paddingBottom="4dp" />
 
-        <LinearLayout
-            android:id="@+id/row_2"
+        <TextView
+            android:id="@+id/event_2_text"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="top|center_horizontal"
-            android:orientation="horizontal"
-            android:layoutDirection="rtl"
+            android:textColor="@android:color/black"
+            android:textSize="11sp"
             android:paddingTop="4dp"
-            android:paddingBottom="4dp">
-            <TextView
-                android:id="@+id/row_2_title"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="top|center_horizontal"
-                android:textColor="@android:color/black"
-                android:textSize="11sp" />
-            <TextView
-                android:id="@+id/row_2_time"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="top|center_horizontal"
-                android:textColor="@android:color/holo_red_dark"
-                android:textSize="11sp" />
-        </LinearLayout>
+            android:paddingBottom="4dp" />
 
     </LinearLayout>
 

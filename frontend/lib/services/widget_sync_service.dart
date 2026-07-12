@@ -122,11 +122,11 @@ class WidgetSyncService {
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
       await HomeWidget.updateWidget(
         name: 'CompactWidgetProvider',
-        qualifiedAndroidName: 'com.onpuuki.multigametask.CompactWidgetProvider',
+        qualifiedAndroidName: 'com.example.frontend.CompactWidgetProvider',
       );
       await HomeWidget.updateWidget(
         name: 'VerticalWidgetProvider',
-        qualifiedAndroidName: 'com.onpuuki.multigametask.VerticalWidgetProvider',
+        qualifiedAndroidName: 'com.example.frontend.VerticalWidgetProvider',
       );
 
       debugPrint(

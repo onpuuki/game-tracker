@@ -35,11 +35,8 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
         val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")
 
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-        val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 100)
-
-        // Calculate max items based on width. Roughly 1 item per 35dp.
-        val calculatedMaxItems = maxOf(3, minWidth / 35)
-        val maxItemsToDisplay = minOf(20, calculatedMaxItems)
+        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 40)
+        val maxItemsToDisplay = (width / 32).coerceIn(4, 20)
 
         val containers = intArrayOf(
             R.id.event_1_container, R.id.event_2_container, R.id.event_3_container, R.id.event_4_container, R.id.event_5_container, R.id.event_6_container, R.id.event_7_container, R.id.event_8_container, R.id.event_9_container, R.id.event_10_container,

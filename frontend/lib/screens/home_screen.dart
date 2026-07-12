@@ -1509,7 +1509,7 @@ class _EventCardItem extends StatefulWidget {
   final Color tagColor;
   final bool isDarkMode;
   final String dateStr;
-  final VoidCallback onCheckedToggle;
+  final Future<void> Function() onCheckedToggle;
 
   const _EventCardItem({
     super.key,
@@ -1623,6 +1623,7 @@ class _EventCardItemState extends State<_EventCardItem> {
 
     try {
       await widget.parsedEvent.doc.reference.update(updateData);
+      await WidgetSyncService.syncTop5Events();
       if (mounted) {
         setState(() {
           _isEditing = false;
@@ -1666,6 +1667,7 @@ class _EventCardItemState extends State<_EventCardItem> {
           'isCreationLocked': true,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        await WidgetSyncService.syncTop5Events();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -1860,11 +1862,11 @@ class _EventCardItemState extends State<_EventCardItem> {
                             }
                           }
                         },
-                  onLongPress: () {
+                  onLongPress: () async {
                     setState(() {
                       _localIsChecked = !_localIsChecked;
                     });
-                    widget.onCheckedToggle(); // 親の状態もバックグラウンドで更新
+                    await widget.onCheckedToggle(); // 親の状態もバックグラウンドで更新
                   },
                   child: Stack(
                     children: [

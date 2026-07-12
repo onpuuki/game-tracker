@@ -21,9 +21,9 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
             val widgetDataPlugin = HomeWidgetPlugin.getData(context)
             val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")
 
-            val containers = intArrayOf(R.id.event_1_container, R.id.event_2_container)
-            val titleViews = intArrayOf(R.id.event_1_title, R.id.event_2_title)
-            val deadlineViews = intArrayOf(R.id.event_1_deadline, R.id.event_2_deadline)
+            val containers = intArrayOf(R.id.event_1_container, R.id.event_2_container, R.id.event_3_container, R.id.event_4_container)
+            val titleViews = intArrayOf(R.id.event_1_title, R.id.event_2_title, R.id.event_3_title, R.id.event_4_title)
+            val deadlineViews = intArrayOf(R.id.event_1_deadline, R.id.event_2_deadline, R.id.event_3_deadline, R.id.event_4_deadline)
 
             var eventList = JSONArray()
             try {
@@ -32,7 +32,7 @@ class VerticalWidgetProvider : HomeWidgetProvider() {
                 e.printStackTrace()
             }
 
-            for (i in 0 until 2) {
+            for (i in 0 until 4) {
                 if (i < eventList.length()) {
                     val eventObj = eventList.optJSONObject(i)
                     val title = eventObj?.optString("title", "") ?: ""

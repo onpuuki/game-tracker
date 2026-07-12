@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 class WidgetSyncService {
-  static Future<void> syncTop5Events({List<String> excludedIds = const []}) async {
+  static Future<void> syncTop5Events({
+    List<String> excludedIds = const [],
+  }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -118,8 +120,14 @@ class WidgetSyncService {
       final jsonString = jsonEncode(widgetDataList);
 
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
-      await HomeWidget.updateWidget(name: 'CompactWidgetProvider');
-      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider');
+      await HomeWidget.updateWidget(
+        name: 'CompactWidgetProvider',
+        qualifiedAndroidName: 'com.onpuuki.multigametask.CompactWidgetProvider',
+      );
+      await HomeWidget.updateWidget(
+        name: 'VerticalWidgetProvider',
+        qualifiedAndroidName: 'com.onpuuki.multigametask.VerticalWidgetProvider',
+      );
 
       debugPrint(
         'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',

@@ -94,8 +94,8 @@ class WidgetSyncService {
             (a['endDate'] as DateTime).compareTo(b['endDate'] as DateTime),
       );
 
-      // Take top 5
-      final top5Events = parsedEvents.take(4).toList();
+      // Take top 20
+      final top5Events = parsedEvents.take(20).toList();
 
       List<Map<String, String>> widgetDataList = [];
       for (var event in top5Events) {

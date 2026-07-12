@@ -20,7 +20,6 @@ import 'game_selection_screen.dart';
 import 'export_settings_screen.dart';
 import '../services/widget_sync_service.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -50,12 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isClearingEvents = false;
   List<String> _latestAllGameNames = [];
 
-  BannerAd? _bannerAd;
-  bool _isBannerAdLoaded = false;
-  bool _isBannerAdLoading = false;
   final Map<int, NativeAd> _nativeAds = {};
   final Map<int, bool> _nativeAdLoaded = {};
-  static const int _adInterval = 5;
+  static const int _adInterval = 8;
+  bool _isPremium = false;
 
   // Filter State
   String _filterKeyword = '';
@@ -352,6 +349,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) {
+        setState(() {
+          _isPremium = prefs.getBool('is_premium') ?? false;
+        });
+      }
+    });
     _loadPreferences();
     WidgetSyncService.syncTop5Events();
 
@@ -367,55 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_isBannerAdLoaded && !_isBannerAdLoading) {
-      _isBannerAdLoading = true;
-      _loadAd();
-    }
-  }
-
-  Future<void> _loadAd() async {
-    final size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(
-      MediaQuery.of(context).size.width.truncate(),
-    );
-
-    if (size == null) {
-      debugPrint('Unable to get height of anchored banner.');
-      return;
-    }
-    _loadBannerAd(size);
-  }
-
-  void _loadBannerAd(AdSize size) {
-    final adUnitId = Platform.isAndroid
-        ? 'ca-app-pub-3940256099942544/6300978111'
-        : 'ca-app-pub-3940256099942544/2934735716';
-
-    _bannerAd = BannerAd(
-      adUnitId: adUnitId,
-      request: const AdRequest(),
-      size: size,
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          debugPrint('$ad loaded.');
-          setState(() {
-            _isBannerAdLoaded = true;
-            _isBannerAdLoading = false;
-          });
-        },
-        onAdFailedToLoad: (ad, err) {
-          debugPrint('BannerAd failed to load: $err');
-          ad.dispose();
-          _isBannerAdLoading = false;
-        },
-      ),
-    )..load();
-  }
-
-  @override
   void dispose() {
-    _bannerAd?.dispose();
     for (final ad in _nativeAds.values) {
       ad.dispose();
     }
@@ -996,15 +952,6 @@ class _HomeScreenState extends State<HomeScreen> {
       length: 2,
       child: Scaffold(
         key: _scaffoldKey,
-        bottomNavigationBar: _isBannerAdLoaded && _bannerAd != null
-            ? SafeArea(
-                child: SizedBox(
-                  width: _bannerAd!.size.width.toDouble(),
-                  height: _bannerAd!.size.height.toDouble(),
-                  child: AdWidget(ad: _bannerAd!),
-                ),
-              )
-            : null,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           bottom: const TabBar(
@@ -1273,6 +1220,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () {
                         Navigator.pop(context); // Close drawer
                         _showWelcomeDialog();
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('[テスト用] 課金モード (広告非表示)'),
+                      value: _isPremium,
+                      onChanged: (bool value) async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('is_premium', value);
+                        setState(() {
+                          _isPremium = value;
+                        });
                       },
                     ),
                   ],
@@ -1551,8 +1509,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 return TabBarView(
                   children: [
                     ListView.builder(
-                      itemCount: events.length + (events.length ~/ _adInterval),
+                      itemCount: _isPremium ? events.length : events.length + (events.length ~/ _adInterval),
                       itemBuilder: (context, index) {
+                        if (_isPremium) {
+                          return _buildEventCard(events[index]);
+                        }
+
                         final bool isAdIndex = (index + 1) % (_adInterval + 1) == 0;
                         final int eventIndex = index - (index ~/ (_adInterval + 1));
 

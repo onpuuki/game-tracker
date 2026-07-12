@@ -5,7 +5,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { getFunctions } from "firebase-admin/functions";
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import * as messaging from 'firebase-admin/messaging';
+// import * as messaging from 'firebase-admin/messaging';
 import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
 import { GoogleGenAI } from '@google/genai';
@@ -1378,10 +1378,13 @@ export const setAdminRole = functions.region('asia-northeast1').https.onCall(asy
 });
 
 export const sendScheduledNotifications = functions.region('asia-northeast1').pubsub.schedule('0 * * * *').timeZone('Asia/Tokyo').onRun(async (context) => {
+    const traceId = 'notify-' + Date.now();
     const now = dayjs().tz('Asia/Tokyo');
     const currentHour = now.hour();
 
     try {
+        await writeDebugLog(traceId, `Starting scheduled notifications at hour ${currentHour}`);
+
         // Find users who have notifications enabled for this hour
         const usersSnapshot = await db.collection('users').get();
         const targetUsers = usersSnapshot.docs.filter(doc => {
@@ -1394,16 +1397,20 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
         });
 
         if (targetUsers.length === 0) {
-            functions.logger.info(`No users configured for notifications at hour ${currentHour}`);
+            functions.logger.info(`[${traceId}] No users configured for notifications at hour ${currentHour}`);
+            await writeDebugLog(traceId, `No users configured for notifications at hour ${currentHour}`);
             return;
         }
+
+        await writeDebugLog(traceId, `Found ${targetUsers.length} users with notifications enabled for this hour`);
 
         // Fetch all events
         const eventsSnapshot = await db.collectionGroup('events').get();
         const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
         // Send notifications
-        const messages: messaging.Message[] = [];
+        let successfulCount = 0;
+        let failedCount = 0;
         const nowDay = now.startOf('day');
 
         for (const userDoc of targetUsers) {
@@ -1423,31 +1430,119 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
                 const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
                 const diffDays = eventDateDay.diff(nowDay, 'day');
 
-                return diffDays <= daysBefore;
+                // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
+                return 0 <= diffDays && diffDays <= daysBefore;
             });
 
             if (userUncompletedEvents.length > 0) {
-                messages.push({
+                const msg = {
                     token: userData.fcmToken,
                     notification: {
                         title: '未完了のイベントがあります',
                         body: `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`
                     }
-                });
+                };
+
+                try {
+                    await admin.messaging().send(msg);
+                    successfulCount++;
+                } catch (e: any) {
+                    functions.logger.error(`[${traceId}] Failed to send message to user ${userDoc.id}:`, e);
+                    await writeDebugLog(traceId, `Failed to send message to user ${userDoc.id}`, e instanceof Error ? e.stack : String(e));
+                    failedCount++;
+                }
+            } else {
+                 await writeDebugLog(traceId, `No uncompleted events in the range for user ${userDoc.id}`);
             }
         }
 
-        if (messages.length > 0) {
-            const batchResponses = await Promise.all(messages.map(msg => admin.messaging().send(msg).catch(e => {
-                functions.logger.error('Failed to send message:', e);
-                return null;
-            })));
-            const successfulCount = batchResponses.filter(r => r !== null).length;
-            functions.logger.info(`Sent ${successfulCount}/${messages.length} notifications successfully.`);
-        } else {
-            functions.logger.info(`No targeted users had uncompleted events.`);
+        functions.logger.info(`[${traceId}] Sent ${successfulCount} notifications successfully, ${failedCount} failed.`);
+        await writeDebugLog(traceId, `Completed notification run. Success: ${successfulCount}, Failed: ${failedCount}`);
+
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Error in sendScheduledNotifications:`, error);
+        await writeDebugLog(traceId, 'Error in sendScheduledNotifications', error instanceof Error ? error.stack : String(error));
+    }
+});
+
+export const testSendNotifications = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated to run test notification.');
+    }
+
+    const uid = context.auth.uid;
+    const traceId = 'test-notify-' + Date.now();
+    const now = dayjs().tz('Asia/Tokyo');
+
+    try {
+        await writeDebugLog(traceId, `Starting test notifications for user ${uid}`);
+
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) {
+            await writeDebugLog(traceId, `User doc not found for uid ${uid}`);
+            throw new functions.https.HttpsError('not-found', 'User data not found.');
         }
-    } catch (error) {
-        functions.logger.error('Error in sendScheduledNotifications', error);
+
+        const userData = userDoc.data() as any;
+        const settings = userData.settings;
+
+        if (!settings || settings.notificationEnabled !== true || !userData.fcmToken) {
+            const msg = 'Notification is disabled or FCM token is missing for this user.';
+            await writeDebugLog(traceId, msg);
+            return { success: false, message: msg };
+        }
+
+        await writeDebugLog(traceId, `User ${uid} has notifications enabled. Proceeding to fetch events...`);
+
+        // Fetch all events
+        const eventsSnapshot = await db.collectionGroup('events').get();
+        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+        const checkedEvents: string[] = userData.checkedEvents || [];
+        const daysBefore = settings.notificationDaysBefore || 7;
+        const nowDay = now.startOf('day');
+
+        const userUncompletedEvents = allEvents.filter(event => {
+            if (event.isCompleted) return false;
+            if (event.isDeleted === true) return false;
+            if (!event.endDate) return false;
+            if (checkedEvents.includes(event.id)) return false;
+
+            const endDateObj = getSafeDateObj(event.endDate);
+            if (!endDateObj) return false;
+
+            const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
+            const diffDays = eventDateDay.diff(nowDay, 'day');
+
+            return 0 <= diffDays && diffDays <= daysBefore;
+        });
+
+        if (userUncompletedEvents.length > 0) {
+            const msg = {
+                token: userData.fcmToken,
+                notification: {
+                    title: '未完了のイベントがあります',
+                    body: `[手動テスト] 設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`
+                }
+            };
+
+            try {
+                await admin.messaging().send(msg);
+                await writeDebugLog(traceId, `Successfully sent test notification to user ${uid}`);
+                return { success: true, message: `通知を送信しました。（対象: ${userUncompletedEvents.length}件）` };
+            } catch (e: any) {
+                functions.logger.error(`[${traceId}] Failed to send test message to user ${uid}:`, e);
+                await writeDebugLog(traceId, `Failed to send test message to user ${uid}`, e instanceof Error ? e.stack : String(e));
+                return { success: false, message: '通知の送信に失敗しました。詳細エラーはデバッグログを確認してください。' };
+            }
+        } else {
+             await writeDebugLog(traceId, `No uncompleted events in the range for user ${uid} during test`);
+             return { success: true, message: '対象となる未完了イベントがありませんでした。' };
+        }
+
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Error in testSendNotifications:`, error);
+        await writeDebugLog(traceId, 'Error in testSendNotifications', error instanceof Error ? error.stack : String(error));
+        throw new functions.https.HttpsError('internal', 'Internal error occurred during test notification.', error.message);
     }
 });

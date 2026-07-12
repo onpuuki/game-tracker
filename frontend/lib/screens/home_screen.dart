@@ -19,6 +19,8 @@ import 'add_event_screen.dart';
 import 'game_selection_screen.dart';
 import 'export_settings_screen.dart';
 import '../services/widget_sync_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isClearingEvents = false;
   List<String> _latestAllGameNames = [];
+
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
 
   // Filter State
   String _filterKeyword = '';
@@ -336,6 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPreferences();
     WidgetSyncService.syncTop5Events();
+    _loadBannerAd();
 
     _configStream = FirebaseFirestore.instanceFor(
       app: Firebase.app(),
@@ -346,6 +352,36 @@ class _HomeScreenState extends State<HomeScreen> {
       app: Firebase.app(),
       databaseId: 'default',
     ).collectionGroup('events').snapshots();
+  }
+
+  void _loadBannerAd() {
+    final adUnitId = Platform.isAndroid
+        ? 'ca-app-pub-3940256099942544/6300978111'
+        : 'ca-app-pub-3940256099942544/2934735716';
+
+    _bannerAd = BannerAd(
+      adUnitId: adUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          debugPrint('$ad loaded.');
+          setState(() {
+            _isBannerAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('BannerAd failed to load: $err');
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPreferences() async {
@@ -922,6 +958,15 @@ class _HomeScreenState extends State<HomeScreen> {
       length: 2,
       child: Scaffold(
         key: _scaffoldKey,
+        bottomNavigationBar: _isBannerAdLoaded && _bannerAd != null
+            ? SafeArea(
+                child: SizedBox(
+                  width: _bannerAd!.size.width.toDouble(),
+                  height: _bannerAd!.size.height.toDouble(),
+                  child: AdWidget(ad: _bannerAd!),
+                ),
+              )
+            : null,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           bottom: const TabBar(

@@ -28,27 +28,59 @@
         android:orientation="horizontal"
         android:layoutDirection="rtl">
 
-        <TextView
-            android:id="@+id/event_1_text"
+        <LinearLayout
+            android:id="@+id/event_1_container"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="top|center_horizontal"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
+            android:orientation="vertical"
             android:paddingTop="4dp"
-            android:paddingBottom="4dp" />
+            android:paddingBottom="4dp"
+            android:gravity="center_horizontal">
 
-        <TextView
-            android:id="@+id/event_2_text"
+            <TextView
+                android:id="@+id/event_1_title"
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="bottom|center_horizontal"
+                android:textColor="@android:color/black"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/event_1_deadline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FF5252"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/event_2_container"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="top|center_horizontal"
-            android:textColor="@android:color/black"
-            android:textSize="11sp"
+            android:orientation="vertical"
             android:paddingTop="4dp"
-            android:paddingBottom="4dp" />
+            android:paddingBottom="4dp"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:id="@+id/event_2_title"
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="bottom|center_horizontal"
+                android:textColor="@android:color/black"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/event_2_deadline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FF5252"
+                android:textSize="11sp" />
+        </LinearLayout>
 
     </LinearLayout>
 

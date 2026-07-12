@@ -1420,21 +1420,43 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
             const checkedEvents: string[] = userData.checkedEvents || [];
             const daysBefore = userData.settings?.notificationDaysBefore || 7;
 
-            const userUncompletedEvents = allEvents.filter(event => {
-                if (event.isCompleted) return false;
-                if (event.isDeleted === true) return false;
-                if (!event.endDate) return false;
-                if (checkedEvents.includes(event.id)) return false;
+            let completedSkipped = 0;
+            let deletedSkipped = 0;
+            let noEndDateSkipped = 0;
+            let checkedSkipped = 0;
+            let pastSkipped = 0;
+            let futureSkipped = 0;
 
-                const endDateObj = getSafeDateObj(event.endDate);
-                if (!endDateObj) return false;
+            const userUncompletedEvents = allEvents.filter(event => {
+                if (event.isCompleted) { completedSkipped++; return false; }
+                if (event.isDeleted === true) { deletedSkipped++; return false; }
+                if (!event.endDate) { noEndDateSkipped++; return false; }
+                if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
+
+                let endDateObj = event.endDate;
+                if (endDateObj && typeof endDateObj.toDate === 'function') {
+                    endDateObj = endDateObj.toDate();
+                } else if (typeof endDateObj === 'string') {
+                    endDateObj = new Date(endDateObj);
+                }
+                if (!endDateObj) {
+                    noEndDateSkipped++; return false;
+                }
 
                 const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
                 const diffDays = eventDateDay.diff(nowDay, 'day');
 
                 // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
-                return 0 <= diffDays && diffDays <= daysBefore;
+                if (diffDays < 0) {
+                    pastSkipped++; return false;
+                }
+                if (diffDays > daysBefore) {
+                    futureSkipped++; return false;
+                }
+                return true;
             });
+
+            await writeDebugLog(traceId, 'Filter breakdown', `Total: ${allEvents.length}, Checked: ${checkedSkipped}, Past: ${pastSkipped}, Future: ${futureSkipped}, NoDate: ${noEndDateSkipped}, Completed: ${completedSkipped}, Deleted: ${deletedSkipped}, Matched: ${userUncompletedEvents.length}`);
 
             if (userUncompletedEvents.length > 0) {
                 const msg = {
@@ -1505,20 +1527,43 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
         const daysBefore = settings.notificationDaysBefore || 7;
         const nowDay = now.startOf('day');
 
-        const userUncompletedEvents = allEvents.filter(event => {
-            if (event.isCompleted) return false;
-            if (event.isDeleted === true) return false;
-            if (!event.endDate) return false;
-            if (checkedEvents.includes(event.id)) return false;
+        let completedSkipped = 0;
+        let deletedSkipped = 0;
+        let noEndDateSkipped = 0;
+        let checkedSkipped = 0;
+        let pastSkipped = 0;
+        let futureSkipped = 0;
 
-            const endDateObj = getSafeDateObj(event.endDate);
-            if (!endDateObj) return false;
+        const userUncompletedEvents = allEvents.filter(event => {
+            if (event.isCompleted) { completedSkipped++; return false; }
+            if (event.isDeleted === true) { deletedSkipped++; return false; }
+            if (!event.endDate) { noEndDateSkipped++; return false; }
+            if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
+
+            let endDateObj = event.endDate;
+            if (endDateObj && typeof endDateObj.toDate === 'function') {
+                endDateObj = endDateObj.toDate();
+            } else if (typeof endDateObj === 'string') {
+                endDateObj = new Date(endDateObj);
+            }
+            if (!endDateObj) {
+                noEndDateSkipped++; return false;
+            }
 
             const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
             const diffDays = eventDateDay.diff(nowDay, 'day');
 
-            return 0 <= diffDays && diffDays <= daysBefore;
+            // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
+            if (diffDays < 0) {
+                pastSkipped++; return false;
+            }
+            if (diffDays > daysBefore) {
+                futureSkipped++; return false;
+            }
+            return true;
         });
+
+        await writeDebugLog(traceId, 'Filter breakdown', `Total: ${allEvents.length}, Checked: ${checkedSkipped}, Past: ${pastSkipped}, Future: ${futureSkipped}, NoDate: ${noEndDateSkipped}, Completed: ${completedSkipped}, Deleted: ${deletedSkipped}, Matched: ${userUncompletedEvents.length}`);
 
         if (userUncompletedEvents.length > 0) {
             const msg = {

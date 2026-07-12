@@ -1399,45 +1399,39 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
         }
 
         // Fetch all events
-        const eventsSnapshot = await db.collection('events').get();
+        const eventsSnapshot = await db.collectionGroup('events').get();
         const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-
-        // Identify events that end today
-        const endOfTodayMs = now.endOf('day').valueOf();
-
-        const todayDueEvents = allEvents.filter((event: any) => {
-            if (event.isCompleted) return false;
-            if (!event.endDate) return false;
-
-            const endDateObj = getSafeDateObj(event.endDate);
-            if (!endDateObj) return false;
-            const endDateMs = endDateObj.getTime();
-
-            // Due today if endDate falls within today, or is already past but wasn't completed
-            return endDateMs <= endOfTodayMs;
-        });
-
-        if (todayDueEvents.length === 0) {
-            functions.logger.info(`No uncompleted events due today.`);
-            return;
-        }
 
         // Send notifications
         const messages: messaging.Message[] = [];
+        const nowDay = now.startOf('day');
 
         for (const userDoc of targetUsers) {
             const userData = userDoc.data();
             const checkedEvents: string[] = userData.checkedEvents || [];
+            const daysBefore = userData.settings?.notificationDaysBefore || 7;
 
-            // Filter to only events the user hasn't checked off
-            const userUncompletedEvents = todayDueEvents.filter(e => !checkedEvents.includes(e.id));
+            const userUncompletedEvents = allEvents.filter(event => {
+                if (event.isCompleted) return false;
+                if (event.isDeleted === true) return false;
+                if (!event.endDate) return false;
+                if (checkedEvents.includes(event.id)) return false;
+
+                const endDateObj = getSafeDateObj(event.endDate);
+                if (!endDateObj) return false;
+
+                const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
+                const diffDays = eventDateDay.diff(nowDay, 'day');
+
+                return diffDays <= daysBefore;
+            });
 
             if (userUncompletedEvents.length > 0) {
                 messages.push({
                     token: userData.fcmToken,
                     notification: {
                         title: '未完了のイベントがあります',
-                        body: `本日期限の未完了イベントが${userUncompletedEvents.length}件あります。`
+                        body: `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`
                     }
                 });
             }

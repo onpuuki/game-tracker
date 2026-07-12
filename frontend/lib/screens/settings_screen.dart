@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _notificationEnabled = false;
   int _notificationHour = 21;
+  int _notificationDaysBefore = 7;
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Load FCM settings from Firestore
     bool notificationEnabled = false;
     int notificationHour = 21;
+    int notificationDaysBefore = 7;
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
@@ -49,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final settings = data['settings'] as Map<String, dynamic>;
             notificationEnabled = settings['notificationEnabled'] ?? false;
             notificationHour = settings['notificationHour'] ?? 21;
+            notificationDaysBefore = settings['notificationDaysBefore'] ?? 7;
           }
         }
       } catch (e) {
@@ -61,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _rotationLock = prefs.getBool('rotationLock') ?? false;
       _notificationEnabled = notificationEnabled;
       _notificationHour = notificationHour;
+      _notificationDaysBefore = notificationDaysBefore;
       _isLoading = false;
     });
   }
@@ -76,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'settings': {
             'notificationEnabled': _notificationEnabled,
             'notificationHour': _notificationHour,
+            'notificationDaysBefore': _notificationDaysBefore,
           },
         }, SetOptions(merge: true));
       } catch (e) {
@@ -191,6 +197,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('未完了イベントの通知を有効にする'),
             value: _notificationEnabled,
             onChanged: _updateNotificationEnabled,
+          ),
+          ListTile(
+            title: const Text('期限の何日前に通知'),
+            trailing: Text('$_notificationDaysBefore日前まで'),
+            onTap: _notificationEnabled
+                ? () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (BuildContext builder) {
+                        return SizedBox(
+                          height: 250,
+                          child: CupertinoPicker(
+                            itemExtent: 32.0,
+                            scrollController: FixedExtentScrollController(
+                              initialItem: _notificationDaysBefore - 1,
+                            ),
+                            onSelectedItemChanged: (int index) {
+                              setState(() {
+                                _notificationDaysBefore = index + 1;
+                              });
+                            },
+                            children: List<Widget>.generate(30, (int index) {
+                              return Center(
+                                child: Text('${index + 1}日前まで'),
+                              );
+                            }),
+                          ),
+                        );
+                      },
+                    ).whenComplete(() => _syncNotificationSettings());
+                  }
+                : null,
           ),
           ListTile(
             title: const Text('通知時間'),

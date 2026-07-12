@@ -376,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadAd() async {
-    final size = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+    final size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(
       MediaQuery.of(context).size.width.truncate(),
     );
 

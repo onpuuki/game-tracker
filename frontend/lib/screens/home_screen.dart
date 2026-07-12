@@ -47,6 +47,7 @@ class ParsedEvent {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isClearingEvents = false;
+  bool _isTestingNotification = false;
   List<String> _latestAllGameNames = [];
 
   final Map<int, NativeAd> _nativeAds = {};
@@ -1197,6 +1198,49 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _isClearingEvents = false;
                                     });
                                   }
+                                }
+                              }
+                            },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.notifications_active),
+                      title: _isTestingNotification
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('手動通知テスト(即時)'),
+                      onTap: _isTestingNotification
+                          ? null
+                          : () async {
+                              setState(() {
+                                _isTestingNotification = true;
+                              });
+
+                              try {
+                                final callable = FirebaseFunctions.instance
+                                    .httpsCallable('testSendNotifications');
+                                await callable.call();
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('通知リクエストを送信しました（詳細はデバッグログを確認）'),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() {
+                                    _isTestingNotification = false;
+                                  });
                                 }
                               }
                             },

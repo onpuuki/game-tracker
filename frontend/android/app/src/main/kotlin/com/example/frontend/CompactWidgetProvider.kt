@@ -35,12 +35,8 @@ class CompactWidgetProvider : HomeWidgetProvider() {
         val jsonString = widgetDataPlugin.getString("widget_top5_events", "[]")
 
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-        val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 100)
-
-        // Calculate max items based on height. Roughly 1 item per 30dp after a baseline of ~40dp for clock/padding
-        val availableHeightForRows = maxOf(0, minHeight - 40)
-        val calculatedMaxItems = maxOf(3, availableHeightForRows / 30)
-        val maxItemsToDisplay = minOf(20, calculatedMaxItems)
+        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 110)
+        val maxItemsToDisplay = (height / 26).coerceIn(4, 20)
 
         val rowLayouts = intArrayOf(
             R.id.row_1, R.id.row_2, R.id.row_3, R.id.row_4, R.id.row_5, R.id.row_6, R.id.row_7, R.id.row_8, R.id.row_9, R.id.row_10,

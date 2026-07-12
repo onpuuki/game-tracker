@@ -353,16 +353,20 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.notification != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${message.notification!.title ?? ''}\n${message.notification!.body ?? ''}'),
-            duration: const Duration(seconds: 5),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.blueGrey.shade900,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      final title = message.notification?.title ?? message.data['title'] ?? '通知';
+      final body = message.notification?.body ?? message.data['body'] ?? '未完了のイベントがあります';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🔔 $title\n$body'),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.blue.shade900,
+        ),
+      );
     });
 
     SharedPreferences.getInstance().then((prefs) {
@@ -1233,23 +1237,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _isTestingNotification = true;
                               });
 
+                              if (context.mounted) {
+                                Navigator.pop(context); // Close drawer immediately
+                              }
+
                               try {
                                 final callable = FirebaseFunctions.instanceFor(
                                         region: 'asia-northeast1')
                                     .httpsCallable('testSendNotifications');
                                 await callable.call();
-
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('通知リクエストを送信しました（詳細はデバッグログを確認）'),
-                                  ),
-                                );
                               } catch (e) {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
+                                debugPrint('Test notification error: $e');
                               } finally {
                                 if (mounted) {
                                   setState(() {

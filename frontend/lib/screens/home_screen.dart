@@ -1219,7 +1219,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               });
 
                               try {
-                                final callable = FirebaseFunctions.instance
+                                final callable = FirebaseFunctions.instanceFor(
+                                        region: 'asia-northeast1')
                                     .httpsCallable('testSendNotifications');
                                 await callable.call();
 

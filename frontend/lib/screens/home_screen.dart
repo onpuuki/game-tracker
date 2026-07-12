@@ -53,8 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
   bool _isBannerAdLoading = false;
-  NativeAd? _nativeAd;
-  bool _isNativeAdLoaded = false;
+  final Map<int, NativeAd> _nativeAds = {};
+  final Map<int, bool> _nativeAdLoaded = {};
+  static const int _adInterval = 5;
 
   // Filter State
   String _filterKeyword = '';
@@ -353,7 +354,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPreferences();
     WidgetSyncService.syncTop5Events();
-    _loadNativeAd();
 
     _configStream = FirebaseFirestore.instanceFor(
       app: Firebase.app(),
@@ -413,32 +413,12 @@ class _HomeScreenState extends State<HomeScreen> {
     )..load();
   }
 
-  void _loadNativeAd() {
-    _nativeAd = NativeAd(
-      adUnitId: 'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
-      request: const AdRequest(),
-      listener: NativeAdListener(
-        onAdLoaded: (ad) {
-          debugPrint('$NativeAd loaded.');
-          setState(() {
-            _isNativeAdLoaded = true;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          debugPrint('$NativeAd failedToLoad: $error');
-          ad.dispose();
-        },
-      ),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.small,
-      ),
-    )..load();
-  }
-
   @override
   void dispose() {
     _bannerAd?.dispose();
-    _nativeAd?.dispose();
+    for (final ad in _nativeAds.values) {
+      ad.dispose();
+    }
     super.dispose();
   }
 
@@ -1571,24 +1551,55 @@ class _HomeScreenState extends State<HomeScreen> {
                 return TabBarView(
                   children: [
                     ListView.builder(
-                      itemCount: _isNativeAdLoaded && events.length >= 2
-                          ? events.length + 1
-                          : events.length,
+                      itemCount: events.length + (events.length ~/ _adInterval),
                       itemBuilder: (context, index) {
-                        if (_isNativeAdLoaded && index == 2) {
-                          return Container(
-                            height: 120,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                              vertical: 8.0,
-                            ),
-                            child: AdWidget(ad: _nativeAd!),
-                          );
+                        final bool isAdIndex = (index + 1) % (_adInterval + 1) == 0;
+                        final int eventIndex = index - (index ~/ (_adInterval + 1));
+
+                        if (isAdIndex) {
+                          if (!_nativeAds.containsKey(index)) {
+                            _nativeAds[index] = NativeAd(
+                              adUnitId: 'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
+                              request: const AdRequest(),
+                              listener: NativeAdListener(
+                                onAdLoaded: (ad) {
+                                  debugPrint('$NativeAd loaded at index $index.');
+                                  if (mounted) {
+                                    setState(() {
+                                      _nativeAdLoaded[index] = true;
+                                    });
+                                  }
+                                },
+                                onAdFailedToLoad: (ad, error) {
+                                  debugPrint('$NativeAd failedToLoad at index $index: $error');
+                                  ad.dispose();
+                                },
+                              ),
+                              nativeTemplateStyle: NativeTemplateStyle(
+                                templateType: TemplateType.small,
+                              ),
+                            )..load();
+                          }
+
+                          if (_nativeAdLoaded[index] == true) {
+                            return Container(
+                              height: 120,
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 8.0,
+                              ),
+                              child: AdWidget(ad: _nativeAds[index]!),
+                            );
+                          } else {
+                            return const SizedBox(
+                              height: 120,
+                              child: Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
                         }
 
-                        final eventIndex = (_isNativeAdLoaded && index > 2)
-                            ? index - 1
-                            : index;
                         return _buildEventCard(events[eventIndex]);
                       },
                     ),

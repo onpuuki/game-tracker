@@ -1223,19 +1223,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                     .httpsCallable('testSendNotifications');
                                 await callable.call();
 
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('通知リクエストを送信しました（詳細はデバッグログを確認）'),
-                                    ),
-                                  );
-                                }
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('通知リクエストを送信しました（詳細はデバッグログを確認）'),
+                                  ),
+                                );
                               } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error: $e')),
-                                  );
-                                }
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e')),
+                                );
                               } finally {
                                 if (mounted) {
                                   setState(() {

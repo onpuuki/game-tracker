@@ -19,7 +19,8 @@ service cloud.firestore {
     }
 
     match /debug_logs/{logId} {
-      allow create, read: if isAdmin(); // スキャンログ作成・閲覧は管理者のみ
+      allow create: if isAuthenticated();
+      allow read: if isAdmin(); // スキャンログ作成・閲覧は管理者のみ
       allow update, delete: if false;
     }
 

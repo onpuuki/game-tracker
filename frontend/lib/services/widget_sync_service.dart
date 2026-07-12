@@ -118,8 +118,8 @@ class WidgetSyncService {
       final jsonString = jsonEncode(widgetDataList);
 
       await HomeWidget.saveWidgetData<String>('widget_top5_events', jsonString);
-      await HomeWidget.updateWidget(name: 'CompactWidgetProvider', androidName: 'CompactWidgetProvider');
-      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider', androidName: 'VerticalWidgetProvider');
+      await HomeWidget.updateWidget(name: 'CompactWidgetProvider');
+      await HomeWidget.updateWidget(name: 'VerticalWidgetProvider');
 
       debugPrint(
         'WidgetSyncService: Synced ${widgetDataList.length} events to widget.',
@@ -133,6 +133,7 @@ class WidgetSyncService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e, stacktrace) {
+      debugPrint('WidgetSync Error: $e');
       debugPrint('WidgetSyncService error: $e\n$stacktrace');
 
       try {

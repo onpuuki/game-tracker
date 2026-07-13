@@ -71,8 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Sort State
   String _primarySortField = 'gameName';
   String _primarySortOrder = 'asc';
-  String _secondarySortField = 'startDate';
-  String _secondarySortOrder = 'asc';
 
   DateTime? _parseEventDate(dynamic dateData) {
     if (dateData == null) return null;
@@ -422,9 +420,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
       _primarySortOrder = prefs.getString('primarySortOrder') ?? 'asc';
-      _secondarySortField =
-          prefs.getString('secondarySortField') ?? 'startDate';
-      _secondarySortOrder = prefs.getString('secondarySortOrder') ?? 'asc';
     });
 
     final hasShownWelcomeDialog =
@@ -507,8 +502,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await prefs.setString('primarySortField', _primarySortField);
     await prefs.setString('primarySortOrder', _primarySortOrder);
-    await prefs.setString('secondarySortField', _secondarySortField);
-    await prefs.setString('secondarySortOrder', _secondarySortOrder);
   }
 
   void _showFilterBottomSheet(List<String> allGameNames) {
@@ -812,157 +805,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showSortDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('並び替え'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '第一優先',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButton<String>(
-                            value: _primarySortField,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'gameName',
-                                child: Text('ゲーム名'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'startDate',
-                                child: Text('開始日'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'endDate',
-                                child: Text('終了日'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setDialogState(() => _primarySortField = value);
-                                setState(() {});
-                                _savePreferences();
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButton<String>(
-                            value: _primarySortOrder,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(value: 'asc', child: Text('昇順')),
-                              DropdownMenuItem(
-                                value: 'desc',
-                                child: Text('降順'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setDialogState(() => _primarySortOrder = value);
-                                setState(() {});
-                                _savePreferences();
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '第二優先',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButton<String>(
-                            value: _secondarySortField,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'gameName',
-                                child: Text('ゲーム名'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'startDate',
-                                child: Text('開始日'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'endDate',
-                                child: Text('終了日'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setDialogState(
-                                  () => _secondarySortField = value,
-                                );
-                                setState(() {});
-                                _savePreferences();
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButton<String>(
-                            value: _secondarySortOrder,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(value: 'asc', child: Text('昇順')),
-                              DropdownMenuItem(
-                                value: 'desc',
-                                child: Text('降順'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setDialogState(
-                                  () => _secondarySortOrder = value,
-                                );
-                                setState(() {});
-                                _savePreferences();
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('閉じる'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -1024,16 +866,70 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                     return Padding(
                       padding: const EdgeInsets.only(right: 4.0),
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          _showSortDialog();
+                      child: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          final parts = value.split('_');
+                          if (parts.length == 2) {
+                            setState(() {
+                              _primarySortField = parts[0];
+                              _primarySortOrder = parts[1];
+                            });
+                            _savePreferences();
+                          }
                         },
-                        icon: const Icon(Icons.sort, size: 18),
-                        label: const Text('並び替え'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Theme.of(context).primaryColor,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'gameName_asc',
+                            child: Text('ゲーム名 (昇順)'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'gameName_desc',
+                            child: Text('ゲーム名 (降順)'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'startDate_asc',
+                            child: Text('開始日 (昇順)'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'startDate_desc',
+                            child: Text('開始日 (降順)'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'endDate_asc',
+                            child: Text('終了日 (昇順)'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'endDate_desc',
+                            child: Text('終了日 (降順)'),
+                          ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 2,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.sort, size: 18, color: Theme.of(context).primaryColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                '並び替え',
+                                style: TextStyle(
+                                  color: Theme.of(context).primaryColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -1553,16 +1449,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   final primaryA = getFieldValue(a, _primarySortField);
                   final primaryB = getFieldValue(b, _primarySortField);
                   int result = compare(primaryA, primaryB, _primarySortOrder);
-
-                  if (result == 0) {
-                    final secondaryA = getFieldValue(a, _secondarySortField);
-                    final secondaryB = getFieldValue(b, _secondarySortField);
-                    result = compare(
-                      secondaryA,
-                      secondaryB,
-                      _secondarySortOrder,
-                    );
-                  }
 
                   return result;
                 });

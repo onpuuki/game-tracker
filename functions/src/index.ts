@@ -1459,11 +1459,20 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
             await writeDebugLog(traceId, 'Filter breakdown', `Total: ${allEvents.length}, Checked: ${checkedSkipped}, Past: ${pastSkipped}, Future: ${futureSkipped}, NoDate: ${noEndDateSkipped}, Completed: ${completedSkipped}, Deleted: ${deletedSkipped}, Matched: ${userUncompletedEvents.length}`);
 
             if (userUncompletedEvents.length > 0) {
-                const msg = {
+                const title = '未完了のイベントがあります';
+                const body = `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const msg: any = {
                     token: token,
                     notification: {
-                        title: '未完了のイベントがあります',
-                        body: `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`
+                        title: title,
+                        body: body
+                    },
+                    data: {
+                        title: title,
+                        body: body
+                    },
+                    android: {
+                        priority: 'high'
                     }
                 };
 
@@ -1568,7 +1577,7 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
         if (userUncompletedEvents.length > 0) {
             const title = '未完了のイベントがあります';
             const body = `[手動テスト] 設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
-            const msg = {
+            const msg: any = {
                 token: token,
                 notification: {
                     title: title,
@@ -1577,6 +1586,9 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
                 data: {
                     title: title,
                     body: body
+                },
+                android: {
+                    priority: 'high'
                 }
             };
 

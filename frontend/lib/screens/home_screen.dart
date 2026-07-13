@@ -974,7 +974,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.edit_document),
-                      title: const Text('プロンプトエディタ'),
+                      title: const Text('対象ゲーム設定'),
                       onTap: () {
                         Navigator.pop(context); // Close drawer
                         Navigator.push(

@@ -100,7 +100,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
 === 出力フォーマット ===
 以下のイベント情報の修正・追加・削除を実行し、完了後に結果を話し言葉で報告してください。
 
-【対象ゲームID】: (例: genshin, zzz 等)
+【対象ゲームID】: (必ずエクスポートデータ内の gameName の値を一言一句そのまま使用すること。例: "原神", "ゼンレスゾーンゼロ" 等。絶対に英語や略称に変換しないこと)
 【操作】: (update / delete / add)
 【対象イベントID】: (update, deleteの場合必須)
 【更新内容】:

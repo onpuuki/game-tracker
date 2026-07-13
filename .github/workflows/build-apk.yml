@@ -34,7 +34,7 @@ jobs:
       - name: Build Admin APK
         working-directory: frontend
         run: |
-          flutter build apk --release --flavor admin --dart-define=IS_ADMIN=true
+          flutter build apk --release --flavor admin --dart-define=IS_ADMIN=true --dart-define=ADMIN_SECRET=GT_ADMIN_SECRET_2026
 
       - name: Build User APK
         working-directory: frontend

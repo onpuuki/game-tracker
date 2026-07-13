@@ -68,6 +68,14 @@ Future<void> _initializeFirebase() async {
       debugPrint('Anonymous Login Success: ${userCredential.user?.uid}');
     }
 
+    _setupSecondaryServices();
+  } catch (e) {
+    debugPrint('Failed to sign in anonymously: $e');
+  }
+}
+
+Future<void> _setupSecondaryServices() async {
+  try {
     // --- ここからRBAC(管理者権限)の自動付与処理を追加 ---
     const bool isAdminApp = bool.fromEnvironment(
       'IS_ADMIN',
@@ -129,7 +137,7 @@ Future<void> _initializeFirebase() async {
           });
     }
   } catch (e) {
-    debugPrint('Failed to sign in anonymously: $e');
+    debugPrint('Secondary setup error: $e');
   }
 }
 

@@ -962,7 +962,246 @@ export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSecond
 });
 
 // Google Driveへのエクスポート処理
-// Google Driveへのエクスポート処理
+
+async function performExportToDrive(folderId: string, traceId: string): Promise<{ fileId: string, exportedCount: number }> {
+    functions.logger.info(`[${traceId}] Starting performExportToDrive to folder: ${folderId}`);
+    await writeDebugLog(traceId, `Starting export to Google Drive. Folder ID: ${folderId}`);
+
+    const fileName = 'events_export.json';
+    const passThrough = new PassThrough();
+    let exportedCount = 0;
+
+    // Use a Promise to properly handle the stream
+    const uploadPromise = new Promise<{ fileId: string, exportedCount: number }>(async (resolve, reject) => {
+        try {
+            const auth = new google.auth.GoogleAuth({
+                scopes: ['https://www.googleapis.com/auth/drive']
+            });
+            const drive = google.drive({ version: 'v3', auth });
+
+            const query = `'${folderId}' in parents and trashed=false`;
+            const res = await drive.files.list({
+                q: query,
+                spaces: 'drive',
+                fields: 'files(id, name, mimeType)',
+                includeItemsFromAllDrives: true,
+                supportsAllDrives: true
+            });
+
+            const allFiles = res.data.files || [];
+            const existingFile = allFiles.find(f => f.name === fileName);
+
+            let fileIdToUpdate;
+            if (existingFile) {
+                fileIdToUpdate = existingFile.id!;
+            } else {
+                const errorMsg = `Target file '${fileName}' not found. Recognized files: ${JSON.stringify(allFiles)}`;
+                functions.logger.error(`[${traceId}] ${errorMsg}`);
+                await writeDebugLog(traceId, errorMsg);
+                return reject(new functions.https.HttpsError('not-found', `ダミーファイル(${fileName})が見つかりません。ドライブに空のファイルを手動で作成してください。`));
+            }
+
+            const media = {
+                mimeType: 'application/json',
+                body: passThrough
+            };
+
+            // Start uploading in the background
+            const updatePromise = drive.files.update({
+                fileId: fileIdToUpdate,
+                media: media
+            });
+
+            // Feed data to the stream
+            passThrough.write('[\n');
+            let isFirst = true;
+            const stream = db.collectionGroup('events').stream();
+
+            for await (const doc of stream) {
+                const data = (doc as unknown as admin.firestore.QueryDocumentSnapshot).data();
+                const eventData = {
+                    id: (doc as unknown as admin.firestore.QueryDocumentSnapshot).id,
+                    gameName: data.gameName ?? null,
+                    title: data.title ?? null,
+                    summary: data.summary ?? null,
+                    tag: data.tag ?? null,
+                    subTag: data.subTag ?? null,
+                    startDate: data.startDate ?? null,
+                    endDate: data.endDate ?? null,
+                    eventUrl: data.eventUrl ?? null,
+                    redeemCode: data.redeemCode ?? null,
+                    isLocked: data.isLocked ?? false
+                };
+
+                if (!isFirst) {
+                    passThrough.write(',\n');
+                }
+                passThrough.write(JSON.stringify(eventData, null, 2));
+                isFirst = false;
+                exportedCount++;
+            }
+            passThrough.write('\n]');
+            passThrough.end();
+
+            // Wait for the upload to finish
+            const updateRes = await updatePromise;
+
+            functions.logger.info(`[${traceId}] Updating existing file: ${fileIdToUpdate}`);
+            await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileIdToUpdate}`);
+
+            resolve({ fileId: updateRes.data.id!, exportedCount });
+        } catch (error: any) {
+            functions.logger.error(`[${traceId}] Stream error in exportToDrive`, error);
+            passThrough.destroy(error as Error);
+            reject(error);
+        }
+    });
+
+    return uploadPromise;
+}
+
+
+
+export const updateExportSchedule = onDocumentWritten({ document: 'settings/export_config', database: 'default', region: 'asia-northeast1' }, async (event) => {
+    const traceId = 'export-sched-upd-' + Date.now();
+    functions.logger.info(`[${traceId}] updateExportSchedule triggered`, { traceId });
+
+    const afterData = event.data?.after?.data();
+
+    const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'game-tracker-444b2'; // Fallback to project ID
+    const locationId = 'asia-northeast1';
+    const client = new CloudSchedulerClient();
+    const parent = client.locationPath(projectId, locationId);
+
+    // Get the Cloud Function URL dynamically or construct it
+    const functionUrl = `https://${locationId}-${projectId}.cloudfunctions.net/triggerScheduledExport`;
+
+    try {
+        // Fetch existing jobs to delete old ones
+        let existingJobs: any[] = [];
+        try {
+            const [jobs] = await client.listJobs({ parent });
+            existingJobs = jobs.filter(job => job.name?.includes('/jobs/export-job-') || job.name?.endsWith('/jobs/export-job'));
+        } catch (listError: any) {
+            functions.logger.warn(`[${traceId}] Could not list export jobs (might not exist yet): ${listError.message}`);
+        }
+
+        let exportTimes: string[] = [];
+        if (afterData?.export_times && Array.isArray(afterData.export_times)) {
+            exportTimes = afterData.export_times;
+        }
+
+        if (exportTimes.length === 0) {
+            // Delete all jobs
+            for (const job of existingJobs) {
+                if (job.name) {
+                    await client.deleteJob({ name: job.name });
+                    functions.logger.info(`[${traceId}] Cloud Scheduler job deleted: ${job.name}`);
+                }
+            }
+            await writeDebugLog(traceId, 'All Cloud Scheduler export jobs deleted (No times set).');
+            return;
+        }
+
+        const activeJobNames = new Set<string>();
+
+        // Create or update required jobs
+        for (const timeStr of exportTimes) {
+            const parts = timeStr.split(':');
+            if (parts.length !== 2) continue;
+
+            const hour = parts[0];
+            const minute = parts[1];
+
+            const cronSchedule = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+            const jobId = `export-job-${hour}-${minute}`;
+            const name = client.jobPath(projectId, locationId, jobId);
+            activeJobNames.add(name);
+
+            const job = {
+                name,
+                schedule: cronSchedule,
+                timeZone: 'Asia/Tokyo',
+                httpTarget: {
+                    uri: functionUrl,
+                    httpMethod: 'POST' as const,
+                },
+            };
+
+            let jobExists = existingJobs.some(existing => existing.name === name);
+
+            if (jobExists) {
+                // Update
+                await client.updateJob({
+                    job,
+                    updateMask: { paths: ['schedule', 'http_target.uri'] }
+                });
+                functions.logger.info(`[${traceId}] Cloud Scheduler job updated: ${name} with schedule: ${cronSchedule}`);
+            } else {
+                // Create
+                try {
+                    await client.createJob({
+                        parent,
+                        job
+                    });
+                    functions.logger.info(`[${traceId}] Cloud Scheduler job created: ${name} with schedule: ${cronSchedule}`);
+                } catch (createErr: any) {
+                    if (createErr.code === 6) { // ALREADY_EXISTS
+                        await client.updateJob({
+                            job,
+                            updateMask: { paths: ['schedule', 'http_target.uri'] }
+                        });
+                        functions.logger.info(`[${traceId}] Cloud Scheduler export job already exists, updated: ${name} with schedule: ${cronSchedule}`);
+                    } else {
+                        throw createErr;
+                    }
+                }
+            }
+        }
+
+        // Delete obsolete jobs
+        for (const job of existingJobs) {
+            if (job.name && !activeJobNames.has(job.name)) {
+                await client.deleteJob({ name: job.name });
+                functions.logger.info(`[${traceId}] Obsolete Cloud Scheduler export job deleted: ${job.name}`);
+            }
+        }
+
+        await writeDebugLog(traceId, 'Export schedule updated successfully.', { times: exportTimes });
+
+    } catch (error: any) {
+         functions.logger.error(`[${traceId}] Failed to update export schedule`, { error: error.message, stack: error instanceof Error ? error.stack : String(error) });
+         await writeDebugLog(traceId, 'Failed to update export schedule', error instanceof Error ? error.stack : String(error));
+    }
+});
+
+export const triggerScheduledExport = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onRequest(async (req, res) => {
+    const traceId = 'sched-export-' + Date.now();
+    functions.logger.info(`[${traceId}] triggerScheduledExport started`);
+
+    try {
+        const configDoc = await db.collection('settings').doc('export_config').get();
+        const folderId = configDoc.data()?.folder_id;
+
+        if (!folderId) {
+            functions.logger.warn(`[${traceId}] folder_id is not set in settings/export_config`);
+            res.status(200).send('Skipped: folder_id not set');
+            return;
+        }
+
+        const { fileId, exportedCount } = await performExportToDrive(folderId, traceId);
+
+        functions.logger.info(`[${traceId}] Scheduled export completed. File ID: ${fileId}, Count: ${exportedCount}`);
+        await writeDebugLog(traceId, 'Scheduled export completed successfully', { fileId, exportedCount });
+
+        res.status(200).send('Scheduled export completed');
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Failed to execute scheduled export`, { error: error.message, stack: error instanceof Error ? error.stack : String(error) });
+        await writeDebugLog(traceId, 'Failed to execute scheduled export', error instanceof Error ? error.stack : String(error));
+        res.status(500).send('Internal Server Error');
+    }
+});
+
 export const exportToDrive = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     const traceId = 'export-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
     const folderId = data.folderId;
@@ -971,100 +1210,21 @@ export const exportToDrive = functions.region('asia-northeast1').runWith({ memor
         throw new functions.https.HttpsError('invalid-argument', 'folderId is required');
     }
 
-    functions.logger.info(`[${traceId}] Starting exportToDrive to folder: ${folderId}`);
-    await writeDebugLog(traceId, `Starting export to Google Drive. Folder ID: ${folderId}`);
-
     try {
-        const fileName = 'events_export.json';
-        const passThrough = new PassThrough();
-        let exportedCount = 0;
-
-        (async () => {
-            try {
-                passThrough.write('[\n');
-                let isFirst = true;
-                const stream = db.collectionGroup('events').stream();
-
-                for await (const doc of stream) {
-                    const data = (doc as unknown as admin.firestore.QueryDocumentSnapshot).data();
-                    const eventData = {
-                        id: (doc as unknown as admin.firestore.QueryDocumentSnapshot).id,
-                        gameName: data.gameName ?? null,
-                        title: data.title ?? null,
-                        summary: data.summary ?? null,
-                        tag: data.tag ?? null,
-                        subTag: data.subTag ?? null,
-                        startDate: data.startDate ?? null,
-                        endDate: data.endDate ?? null,
-                        eventUrl: data.eventUrl ?? null,
-                        redeemCode: data.redeemCode ?? null,
-                        isLocked: data.isLocked ?? false
-                    };
-
-                    if (!isFirst) {
-                        passThrough.write(',\n');
-                    }
-                    passThrough.write(JSON.stringify(eventData, null, 2));
-                    isFirst = false;
-                    exportedCount++;
-                }
-                passThrough.write('\n]');
-                passThrough.end();
-            } catch (err) {
-                functions.logger.error(`[${traceId}] Stream error in exportToDrive`, err);
-                passThrough.destroy(err as Error);
-            }
-        })();
-
-        const media = {
-            mimeType: 'application/json',
-            body: passThrough
-        };
-
-        const auth = new google.auth.GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/drive']
-        });
-        const drive = google.drive({ version: 'v3', auth });
-
-        const query = `'${folderId}' in parents and trashed=false`;
-        const res = await drive.files.list({
-            q: query,
-            spaces: 'drive',
-            fields: 'files(id, name, mimeType)',
-            includeItemsFromAllDrives: true,
-            supportsAllDrives: true
-        });
-
-        const allFiles = res.data.files || [];
-        const existingFile = allFiles.find(f => f.name === fileName);
-
-        let driveFile;
-        if (existingFile) {
-            const fileId = existingFile.id!;
-            functions.logger.info(`[${traceId}] Updating existing file: ${fileId}`);
-            const updateRes = await drive.files.update({
-                fileId: fileId,
-                media: media
-            });
-            driveFile = updateRes.data;
-            await writeDebugLog(traceId, `Updated existing file in Drive. File ID: ${fileId}`);
-        } else {
-            const errorMsg = `Target file '${fileName}' not found. Recognized files: ${JSON.stringify(allFiles)}`;
-            functions.logger.error(`[${traceId}] ${errorMsg}`);
-            await writeDebugLog(traceId, errorMsg);
-            throw new functions.https.HttpsError('not-found', `ダミーファイル(${fileName})が見つかりません。ドライブに空のファイルを手動で作成してください。`);
-        }
-
-        functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${driveFile.id}`);
+        const { fileId, exportedCount } = await performExportToDrive(folderId, traceId);
+        functions.logger.info(`[${traceId}] Export completed successfully. File ID: ${fileId}`);
         return {
             success: true,
             message: 'Export successful',
-            fileId: driveFile.id,
+            fileId: fileId,
             exportedCount: exportedCount
         };
     } catch (error: any) {
          functions.logger.error(`[${traceId}] Export failed: ${error.message}`, { stack: error instanceof Error ? error.stack : String(error) });
          await writeDebugLog(traceId, 'Export failed', error instanceof Error ? error.stack : String(error));
+         if (error instanceof functions.https.HttpsError) {
+             throw error;
+         }
          throw new functions.https.HttpsError('internal', 'Failed to export to Google Drive', error.message);
     }
 });

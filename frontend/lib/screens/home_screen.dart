@@ -1245,9 +1245,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                 final callable = FirebaseFunctions.instanceFor(
                                         region: 'asia-northeast1')
                                     .httpsCallable('testSendNotifications');
-                                await callable.call();
+                                final result = await callable.call();
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(result.data['message'] ?? '実行完了')),
+                                );
                               } catch (e) {
                                 debugPrint('Test notification error: $e');
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('テスト失敗: ${e.toString()}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
                               } finally {
                                 if (mounted) {
                                   setState(() {

@@ -1595,6 +1595,7 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
             try {
                 await admin.messaging().send(msg);
                 await writeDebugLog(traceId, `Successfully sent test notification to user ${uid}`);
+                return { success: true, message: `プッシュ通知を送信しました (対象: ${userUncompletedEvents.length}件)` };
             } catch (e: any) {
                 functions.logger.error(`[${traceId}] Failed to send test message to user ${uid}:`, e);
                 await writeDebugLog(traceId, `Failed to send test message to user ${uid}`, e instanceof Error ? e.stack : String(e));
@@ -1602,9 +1603,8 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
             }
         } else {
              await writeDebugLog(traceId, `No uncompleted events in the range for user ${uid} during test`);
+             return { success: true, message: '通知対象の未完了イベントが0件でした (条件外または全て完了済み)' };
         }
-
-        return { success: true, message: '通知処理が完了しました' };
     } catch (error: any) {
         functions.logger.error(`[${traceId}] Error in testSendNotifications:`, error);
         await writeDebugLog(traceId, 'Error in testSendNotifications', error instanceof Error ? error.stack : String(error));

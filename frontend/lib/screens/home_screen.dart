@@ -354,8 +354,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      final title = message.notification?.title ?? message.data['title'] ?? '通知';
-      final body = message.notification?.body ?? message.data['body'] ?? '未完了のイベントがあります';
+      final title =
+          message.notification?.title ?? message.data['title'] ?? '通知';
+      final body =
+          message.notification?.body ?? message.data['body'] ?? '未完了のイベントがあります';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -904,7 +906,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
@@ -919,7 +924,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.sort, size: 18, color: Theme.of(context).primaryColor),
+                              Icon(
+                                Icons.sort,
+                                size: 18,
+                                color: Theme.of(context).primaryColor,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '並び替え',
@@ -1134,17 +1143,23 @@ class _HomeScreenState extends State<HomeScreen> {
                               });
 
                               if (context.mounted) {
-                                Navigator.pop(context); // Close drawer immediately
+                                Navigator.pop(
+                                  context,
+                                ); // Close drawer immediately
                               }
 
                               try {
                                 final callable = FirebaseFunctions.instanceFor(
-                                        region: 'asia-northeast1')
-                                    .httpsCallable('testSendNotifications');
+                                  region: 'asia-northeast1',
+                                ).httpsCallable('testSendNotifications');
                                 final result = await callable.call();
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(result.data['message'] ?? '実行完了')),
+                                  SnackBar(
+                                    content: Text(
+                                      result.data['message'] ?? '実行完了',
+                                    ),
+                                  ),
                                 );
                               } catch (e) {
                                 debugPrint('Test notification error: $e');
@@ -1462,23 +1477,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 return TabBarView(
                   children: [
                     ListView.builder(
-                      itemCount: _isPremium ? events.length : events.length + (events.length ~/ _adInterval),
+                      itemCount: _isPremium
+                          ? events.length
+                          : events.length + (events.length ~/ _adInterval),
                       itemBuilder: (context, index) {
                         if (_isPremium) {
                           return _buildEventCard(events[index]);
                         }
 
-                        final bool isAdIndex = (index + 1) % (_adInterval + 1) == 0;
-                        final int eventIndex = index - (index ~/ (_adInterval + 1));
+                        final bool isAdIndex =
+                            (index + 1) % (_adInterval + 1) == 0;
+                        final int eventIndex =
+                            index - (index ~/ (_adInterval + 1));
 
                         if (isAdIndex) {
                           if (!_nativeAds.containsKey(index)) {
                             _nativeAds[index] = NativeAd(
-                              adUnitId: 'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
+                              adUnitId:
+                                  'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
                               request: const AdRequest(),
                               listener: NativeAdListener(
                                 onAdLoaded: (ad) {
-                                  debugPrint('$NativeAd loaded at index $index.');
+                                  debugPrint(
+                                    '$NativeAd loaded at index $index.',
+                                  );
                                   if (mounted) {
                                     setState(() {
                                       _nativeAdLoaded[index] = true;
@@ -1486,7 +1508,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   }
                                 },
                                 onAdFailedToLoad: (ad, error) {
-                                  debugPrint('$NativeAd failedToLoad at index $index: $error');
+                                  debugPrint(
+                                    '$NativeAd failedToLoad at index $index: $error',
+                                  );
                                   ad.dispose();
                                 },
                               ),
@@ -1508,9 +1532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           } else {
                             return const SizedBox(
                               height: 120,
-                              child: Center(
-                                child: CircularProgressIndicator(),
-                              ),
+                              child: Center(child: CircularProgressIndicator()),
                             );
                           }
                         }
@@ -2255,7 +2277,11 @@ class _EventCardItemState extends State<_EventCardItem> {
                                           if (historyData is List) {
                                             historyList = historyData
                                                 .map((e) => e?.toString() ?? '')
-                                                .where((e) => e.isNotEmpty)
+                                                .where(
+                                                  (e) =>
+                                                      e.isNotEmpty &&
+                                                      !e.contains('変更あり（概要）'),
+                                                )
                                                 .toList();
                                           }
 
@@ -2273,6 +2299,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: historyList.reversed
+                                                .take(5)
                                                 .map(
                                                   (history) => Padding(
                                                     padding:

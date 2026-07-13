@@ -572,8 +572,6 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         continue;
                     }
 
-                    const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
-
                     const updateData: any = {
                         title: newTitle,
                         summary: event.summary || eData.summary,
@@ -583,8 +581,12 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
                     };
+
+                    if (!(changes.length === 1 && changes[0] === '概要')) {
+                        const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+                        updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
+                    }
 
                     batch.update(eventsCollection.doc(existingEvent.docId), updateData);
                     batchCount++;
@@ -626,8 +628,6 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             continue;
                         }
 
-                        const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
-
                         const updateData: any = {
                             title: newTitle,
                             summary: event.summary || eData.summary,
@@ -637,8 +637,12 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updateHistory: admin.firestore.FieldValue.arrayUnion(historyMsg)
                         };
+
+                        if (!(changes.length === 1 && changes[0] === '概要')) {
+                            const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+                            updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
+                        }
 
                         batch.update(docRef, updateData);
                         batchCount++;

@@ -18,6 +18,7 @@ class SyncStatusScreen extends StatefulWidget {
 class _SyncStatusScreenState extends State<SyncStatusScreen> {
   late Stream<QuerySnapshot> _syncRequestsStream;
   bool _isCycleSyncRunning = false;
+  bool _isManualPromptRunning = false;
 
   @override
   void initState() {
@@ -62,6 +63,116 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
       if (mounted) {
         setState(() {
           _isCycleSyncRunning = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showManualPromptDialog() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('手動プロンプト実行'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      const text = r'''上記のエクスポートデータを確認・分析した結果をもとに、私のアプリに組み込まれているデータベース修正用API（Gemini）に渡すための「修正指示プロンプト」を作成してください。
+以下のフォーマットに厳密に従い、コードブロックで出力してください。
+
+=== 出力フォーマット ===
+以下のイベント情報の修正・追加・削除を実行し、完了後に結果を話し言葉で報告してください。
+
+【対象ゲームID】: (例: genshin, zzz 等)
+【操作】: (update / delete / add)
+【対象イベントID】: (update, deleteの場合必須)
+【更新内容】:
+- title: "..."
+- endDate: "YYYY-MM-DD" など、変更・追加する項目のみ記載
+【背景・理由】: (なぜこの操作が必要なのか。結果報告に含めるためのコンテキスト)
+====================''';
+                      await Clipboard.setData(const ClipboardData(text: text));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('クリップボードにコピーしました'),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Geminiアプリ用プロンプト'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'プロンプト',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _executeManualPrompt(controller.text);
+              },
+              child: const Text('実行'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _executeManualPrompt(String prompt) async {
+    if (prompt.trim().isEmpty) return;
+
+    setState(() {
+      _isManualPromptRunning = true;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      ).httpsCallable('executeManualPrompt');
+      final result = await callable.call({'prompt': prompt});
+
+      if (!mounted) return;
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(result.data['message'] ?? 'プロンプトを実行しました')),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('エラー: ${e.message}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('予期せぬエラー: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isManualPromptRunning = false;
         });
       }
     }
@@ -160,29 +271,55 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
               Container(
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: (isSyncRunning && !isStaleState)
-                            ? null
-                            : _triggerSync,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 40),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: (isSyncRunning && !isStaleState)
+                                ? null
+                                : _triggerSync,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: const Text('AIスキャン'),
+                          ),
                         ),
-                        child: const Text('AIスキャン'),
-                      ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _isCycleSyncRunning
+                                ? null
+                                : _triggerCycleReset,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: _isCycleSyncRunning
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('サイクルスキャン'),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _isCycleSyncRunning
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isManualPromptRunning
                             ? null
-                            : _triggerCycleReset,
-                        style: FilledButton.styleFrom(
+                            : _showManualPromptDialog,
+                        style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 40),
                         ),
-                        child: _isCycleSyncRunning
+                        child: _isManualPromptRunning
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
@@ -191,7 +328,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('サイクルスキャン'),
+                            : const Text('手動プロンプト実行'),
                       ),
                     ),
                   ],

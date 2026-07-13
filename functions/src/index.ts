@@ -1619,3 +1619,144 @@ export const testSendNotifications = functions.region('asia-northeast1').runWith
         throw new functions.https.HttpsError('internal', error.message || '内部エラーが発生しました');
     }
 });
+
+export const executeManualPrompt = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+    if (context.auth.token.admin !== true) {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can execute this prompt.');
+    }
+
+    const { prompt } = data;
+    if (!prompt) {
+        throw new functions.https.HttpsError('invalid-argument', 'Prompt is required.');
+    }
+
+    const traceId = 'manual-prompt-' + Date.now();
+    await writeDebugLog(traceId, 'executeManualPrompt called', { prompt });
+
+    try {
+        const configDoc = await db.collection('settings').doc('config').get();
+        const configData = configDoc?.data();
+        const geminiApiKey = configData?.geminiApiKey;
+
+        if (!geminiApiKey) {
+            throw new Error('Gemini API key is missing');
+        }
+
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
+
+        const systemInstruction = `
+あなたはデータベース修正用APIです。与えられた「修正指示プロンプト」を解析し、以下のJSONスキーマに従って出力してください。
+必ずJSONのみを出力してください（バッククォートでの修飾は可）。
+
+{
+  "operations": [
+    {
+      "gameId": "ゲームID",
+      "operation": "update | delete | add",
+      "eventId": "イベントID（update/deleteの場合は必須）",
+      "updates": {
+        "title": "タイトル（変更がある場合のみ）",
+        "endDate": "YYYY-MM-DD（変更がある場合のみ）",
+        "startDate": "YYYY-MM-DD（変更がある場合のみ）"
+      },
+      "reason": "変更理由"
+    }
+  ],
+  "message": "完了後の話し言葉での結果報告"
+}
+`;
+
+        const generationConfig = {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: systemInstruction + '\n\n【修正指示プロンプト】\n' + prompt }] }],
+            config: generationConfig,
+        });
+
+        const text = response.text || '';
+        let parsedData: any;
+        try {
+            const cleanText = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+            parsedData = JSON.parse(cleanText);
+        } catch (err) {
+            throw new Error('Failed to parse JSON from Gemini response: ' + text);
+        }
+
+        if (!parsedData || !Array.isArray(parsedData.operations)) {
+            throw new Error('Invalid response format from Gemini.');
+        }
+
+        const operations = parsedData.operations;
+        let appliedCount = 0;
+
+        for (const op of operations) {
+            const gameId = op.gameId;
+            const eventId = op.eventId;
+            const updates = op.updates || {};
+
+            if (!gameId) continue;
+
+            const eventsCol = db.collection(`games/${gameId}/events`);
+
+            if (op.operation === 'delete') {
+                if (!eventId) continue;
+                await eventsCol.doc(eventId).update({ isDeleted: true });
+                appliedCount++;
+            } else if (op.operation === 'update') {
+                if (!eventId) continue;
+
+                const dbUpdates: any = {};
+                if (updates.title) dbUpdates.title = updates.title;
+                if (updates.endDate) {
+                    const dateObj = getSafeDateObj(updates.endDate);
+                    if (dateObj) dbUpdates.endDate = admin.firestore.Timestamp.fromDate(dateObj);
+                }
+                if (updates.startDate) {
+                    const dateObj = getSafeDateObj(updates.startDate);
+                    if (dateObj) dbUpdates.startDate = admin.firestore.Timestamp.fromDate(dateObj);
+                }
+
+                if (Object.keys(dbUpdates).length > 0) {
+                    dbUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+                    await eventsCol.doc(eventId).update(dbUpdates);
+                    appliedCount++;
+                }
+            } else if (op.operation === 'add') {
+                const dbUpdates: any = {};
+                if (updates.title) dbUpdates.title = updates.title;
+                if (updates.endDate) {
+                    const dateObj = getSafeDateObj(updates.endDate);
+                    if (dateObj) dbUpdates.endDate = admin.firestore.Timestamp.fromDate(dateObj);
+                }
+                if (updates.startDate) {
+                    const dateObj = getSafeDateObj(updates.startDate);
+                    if (dateObj) dbUpdates.startDate = admin.firestore.Timestamp.fromDate(dateObj);
+                }
+                dbUpdates.createdAt = admin.firestore.FieldValue.serverTimestamp();
+                dbUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+                dbUpdates.isDeleted = false;
+
+                await eventsCol.add(dbUpdates);
+                appliedCount++;
+            }
+        }
+
+        await writeDebugLog(traceId, 'executeManualPrompt finished', { appliedCount, response: parsedData });
+
+        return {
+            success: true,
+            message: parsedData.message || `${appliedCount}件の操作を完了しました。`
+        };
+
+    } catch (error: any) {
+        await writeDebugLog(traceId, 'executeManualPrompt error', { error: error.message });
+        throw new functions.https.HttpsError('internal', error.message || 'Unknown error');
+    }
+});

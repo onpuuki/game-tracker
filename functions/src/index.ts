@@ -1748,7 +1748,7 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
             if (userUncompletedEvents.length > 0) {
                 const title = '未完了のイベントがあります';
-                const body = `設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const body = `対象の未完了イベントが${userUncompletedEvents.length}件あります。`;
                 const msg: any = {
                     token: token,
                     notification: {
@@ -1886,7 +1886,7 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
                 totalMatchedEvents += userUncompletedEvents.length;
                 const title = '未完了のイベントがあります';
                 const prefix = targetUid ? '[手動テスト] ' : '';
-                const body = `${prefix}設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const body = `${prefix}対象の未完了イベントが${userUncompletedEvents.length}件あります。`;
                 const msg: any = {
                     token: token,
                     notification: {

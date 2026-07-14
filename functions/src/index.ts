@@ -787,6 +787,16 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 });
 
 
+export const triggerScheduledNotifications = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+    try {
+        const result = await performSendNotifications();
+        res.status(200).send('Scheduled notifications completed: ' + result.message);
+    } catch (error: any) {
+        functions.logger.error('Error triggering scheduled notifications', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
 export const triggerScheduledSync = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
     // Generate traceId here if we cannot use uuidv4 easily or we can just use a simple random string for now if uuidv4 isn't at the top level
     const traceId = 'sched-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
@@ -809,6 +819,120 @@ export const triggerScheduledSync = functions.region('asia-northeast1').https.on
         functions.logger.error(`[${traceId}] Failed to trigger scheduled sync`, { error: error.message, stack: error instanceof Error ? error.stack : String(error) });
         await writeDebugLog(traceId, 'Failed to trigger scheduled sync', error instanceof Error ? error.stack : String(error));
         res.status(500).send('Internal Server Error');
+    }
+});
+
+export const updateNotificationSchedule = onDocumentWritten({ document: 'settings/notification_config', database: 'default', region: 'asia-northeast1' }, async (event) => {
+    const traceId = 'sched-notify-upd-' + Date.now();
+    functions.logger.info(`[${traceId}] updateNotificationSchedule triggered`, { traceId });
+
+    const afterData = event.data?.after?.data();
+
+    const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'game-tracker-444b2';
+    const locationId = 'asia-northeast1';
+    const client = new CloudSchedulerClient();
+    const parent = client.locationPath(projectId, locationId);
+
+    const functionUrl = `https://${locationId}-${projectId}.cloudfunctions.net/triggerScheduledNotifications`;
+
+    try {
+        let existingJobs: any[] = [];
+        try {
+            const [jobs] = await client.listJobs({ parent });
+            existingJobs = jobs.filter(job => job.name?.includes('/jobs/notify-job-') || job.name?.endsWith('/jobs/notify-job'));
+        } catch (listError: any) {
+            functions.logger.warn(`[${traceId}] Could not list jobs: ${listError.message}`);
+        }
+
+        const isPaused = afterData?.is_paused === true;
+
+        let scanTimes: string[] = [];
+        if (afterData?.scan_times && Array.isArray(afterData.scan_times)) {
+            scanTimes = afterData.scan_times;
+        } else if (afterData?.cron_schedule) {
+            const parts = (afterData.cron_schedule as string).split(' ');
+            if (parts.length >= 2) {
+                 const minute = parts[0].padStart(2, '0');
+                 const hour = parts[1].padStart(2, '0');
+                 scanTimes.push(`${hour}:${minute}`);
+            }
+        }
+
+        if (isPaused || scanTimes.length === 0) {
+            for (const job of existingJobs) {
+                if (job.name) {
+                    await client.deleteJob({ name: job.name });
+                    functions.logger.info(`[${traceId}] Cloud Scheduler job deleted: ${job.name}`);
+                }
+            }
+            await writeDebugLog(traceId, isPaused ? 'All Notification Cloud Scheduler jobs deleted (Paused).' : 'All Notification Cloud Scheduler jobs deleted (No times set).');
+            return;
+        }
+
+        const activeJobNames = new Set<string>();
+
+        for (const timeStr of scanTimes) {
+            const parts = timeStr.split(':');
+            if (parts.length !== 2) continue;
+
+            const hour = parts[0];
+            const minute = parts[1];
+
+            const cronSchedule = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+            const jobId = `notify-job-${hour}-${minute}`;
+            const name = client.jobPath(projectId, locationId, jobId);
+            activeJobNames.add(name);
+
+            const job = {
+                name,
+                schedule: cronSchedule,
+                timeZone: 'Asia/Tokyo',
+                httpTarget: {
+                    uri: functionUrl,
+                    httpMethod: 'POST' as const,
+                },
+            };
+
+            let jobExists = existingJobs.some(existing => existing.name === name);
+
+            if (jobExists) {
+                await client.updateJob({
+                    job,
+                    updateMask: { paths: ['schedule', 'http_target.uri'] }
+                });
+                functions.logger.info(`[${traceId}] Notification Cloud Scheduler job updated: ${name}`);
+            } else {
+                try {
+                    await client.createJob({
+                        parent,
+                        job
+                    });
+                    functions.logger.info(`[${traceId}] Notification Cloud Scheduler job created: ${name}`);
+                } catch (createErr: any) {
+                    if (createErr.code === 6) {
+                        await client.updateJob({
+                            job,
+                            updateMask: { paths: ['schedule', 'http_target.uri'] }
+                        });
+                        functions.logger.info(`[${traceId}] Notification Cloud Scheduler job updated (already exists): ${name}`);
+                    } else {
+                        throw createErr;
+                    }
+                }
+            }
+        }
+
+        for (const job of existingJobs) {
+            if (job.name && !activeJobNames.has(job.name)) {
+                await client.deleteJob({ name: job.name });
+                functions.logger.info(`[${traceId}] Notification Cloud Scheduler job deleted: ${job.name}`);
+            }
+        }
+
+        await writeDebugLog(traceId, `Notification Cloud Scheduler jobs updated successfully. Active jobs: ${activeJobNames.size}`);
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Failed to update Notification Cloud Scheduler jobs`, error);
+        await writeDebugLog(traceId, 'Failed to update Notification Cloud Scheduler jobs', error instanceof Error ? error.stack : String(error));
     }
 });
 
@@ -1662,122 +1786,166 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
     }
 });
 
-export const testSendNotifications = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User not authenticated');
-    }
-
-    const uid = context.auth.uid;
-    const traceId = 'test-notify-' + Date.now();
+async function performSendNotifications(targetUid?: string): Promise<{ success: boolean, message: string }> {
+    const traceId = (targetUid ? 'test-' : 'sched-') + 'notify-' + Date.now();
     const now = dayjs().tz('Asia/Tokyo');
 
     try {
-        await writeDebugLog(traceId, `Starting test notifications for user ${uid}`);
+        await writeDebugLog(traceId, `Starting notifications run for ${targetUid ? 'user ' + targetUid : 'all eligible users'}`);
 
-        const userDoc = await db.collection('users').doc(uid).get();
-        if (!userDoc.exists) {
-            await writeDebugLog(traceId, `User doc not found for uid ${uid}`);
-            throw new functions.https.HttpsError('not-found', 'User data not found.');
+        let targetUsers: any[] = [];
+
+        if (targetUid) {
+            const userDoc = await db.collection('users').doc(targetUid).get();
+            if (!userDoc.exists) {
+                await writeDebugLog(traceId, `User doc not found for uid ${targetUid}`);
+                throw new functions.https.HttpsError('not-found', 'User data not found.');
+            }
+            const userData = userDoc.data() as any;
+            const settings = userData.settings;
+            const token = userData.fcmToken || settings?.fcmToken;
+
+            if (!settings || settings.notificationEnabled !== true || !token) {
+                const msg = 'Notification is disabled or FCM token is missing for this user.';
+                await writeDebugLog(traceId, msg);
+                throw new functions.https.HttpsError('failed-precondition', msg);
+            }
+            targetUsers.push(userDoc);
+        } else {
+            const usersSnapshot = await db.collection('users').get();
+            targetUsers = usersSnapshot.docs.filter(doc => {
+                const data = doc.data();
+                const settings = data.settings;
+                const token = data.fcmToken || settings?.fcmToken;
+                return settings &&
+                       settings.notificationEnabled === true &&
+                       token;
+            });
+            if (targetUsers.length === 0) {
+                await writeDebugLog(traceId, 'No users configured for notifications');
+                return { success: true, message: '通知対象のユーザーがいません' };
+            }
         }
 
-        const userData = userDoc.data() as any;
-        const settings = userData.settings;
-        const token = userData.fcmToken || settings?.fcmToken;
-
-        if (!settings || settings.notificationEnabled !== true || !token) {
-            const msg = 'Notification is disabled or FCM token is missing for this user.';
-            await writeDebugLog(traceId, msg);
-            throw new functions.https.HttpsError('failed-precondition', msg);
-        }
-
-        await writeDebugLog(traceId, `User ${uid} has notifications enabled. Proceeding to fetch events...`);
+        await writeDebugLog(traceId, `Proceeding to fetch events for ${targetUsers.length} users...`);
 
         // Fetch all events
         const eventsSnapshot = await db.collectionGroup('events').get();
         const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-
-        const checkedEvents: string[] = userData.checkedEvents || [];
-        const daysBefore = settings.notificationDaysBefore || 7;
         const nowDay = now.startOf('day');
 
-        let completedSkipped = 0;
-        let deletedSkipped = 0;
-        let noEndDateSkipped = 0;
-        let checkedSkipped = 0;
-        let pastSkipped = 0;
-        let futureSkipped = 0;
+        let successfulCount = 0;
+        let failedCount = 0;
+        let totalMatchedEvents = 0;
 
-        const userUncompletedEvents = allEvents.filter(event => {
-            if (event.isCompleted) { completedSkipped++; return false; }
-            if (event.isDeleted === true) { deletedSkipped++; return false; }
-            if (!event.endDate) { noEndDateSkipped++; return false; }
-            if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
+        for (const userDoc of targetUsers) {
+            const userData = userDoc.data() as any;
+            const token = userData.fcmToken || userData.settings?.fcmToken;
+            const checkedEvents: string[] = userData.checkedEvents || [];
+            const daysBefore = userData.settings?.notificationDaysBefore || 7;
 
-            let endDateObj = event.endDate;
-            if (endDateObj && typeof endDateObj.toDate === 'function') {
-                endDateObj = endDateObj.toDate();
-            } else if (typeof endDateObj === 'string') {
-                endDateObj = new Date(endDateObj);
-            }
-            if (!endDateObj) {
-                noEndDateSkipped++; return false;
-            }
+            let completedSkipped = 0;
+            let deletedSkipped = 0;
+            let noEndDateSkipped = 0;
+            let checkedSkipped = 0;
+            let pastSkipped = 0;
+            let futureSkipped = 0;
 
-            const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
-            const diffDays = eventDateDay.diff(nowDay, 'day');
+            const userUncompletedEvents = allEvents.filter(event => {
+                if (event.isCompleted) { completedSkipped++; return false; }
+                if (event.isDeleted === true) { deletedSkipped++; return false; }
+                if (!event.endDate) { noEndDateSkipped++; return false; }
+                if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
 
-            // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
-            if (diffDays < 0) {
-                pastSkipped++; return false;
-            }
-            if (diffDays > daysBefore) {
-                futureSkipped++; return false;
-            }
-            return true;
-        });
-
-        await writeDebugLog(traceId, 'Filter breakdown', `Total: ${allEvents.length}, Checked: ${checkedSkipped}, Past: ${pastSkipped}, Future: ${futureSkipped}, NoDate: ${noEndDateSkipped}, Completed: ${completedSkipped}, Deleted: ${deletedSkipped}, Matched: ${userUncompletedEvents.length}`);
-
-        if (userUncompletedEvents.length > 0) {
-            const title = '未完了のイベントがあります';
-            const body = `[手動テスト] 設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
-            const msg: any = {
-                token: token,
-                notification: {
-                    title: title,
-                    body: body
-                },
-                data: {
-                    title: title,
-                    body: body
-                },
-                android: {
-                    priority: 'high'
+                let endDateObj = event.endDate;
+                if (endDateObj && typeof endDateObj.toDate === 'function') {
+                    endDateObj = endDateObj.toDate();
+                } else if (typeof endDateObj === 'string') {
+                    endDateObj = new Date(endDateObj);
                 }
-            };
+                if (!endDateObj) {
+                    noEndDateSkipped++; return false;
+                }
 
-            try {
-                await admin.messaging().send(msg);
-                await writeDebugLog(traceId, `Successfully sent test notification to user ${uid}`);
-                return { success: true, message: `プッシュ通知を送信しました (対象: ${userUncompletedEvents.length}件)` };
-            } catch (e: any) {
-                functions.logger.error(`[${traceId}] Failed to send test message to user ${uid}:`, e);
-                await writeDebugLog(traceId, `Failed to send test message to user ${uid}`, e instanceof Error ? e.stack : String(e));
-                throw new functions.https.HttpsError('internal', '通知の送信に失敗しました。詳細エラーはデバッグログを確認してください。');
+                const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
+                const diffDays = eventDateDay.diff(nowDay, 'day');
+
+                // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
+                if (diffDays < 0) {
+                    pastSkipped++; return false;
+                }
+                if (diffDays > daysBefore) {
+                    futureSkipped++; return false;
+                }
+                return true;
+            });
+
+            await writeDebugLog(traceId, `Filter breakdown for ${userDoc.id}`, `Total: ${allEvents.length}, Checked: ${checkedSkipped}, Past: ${pastSkipped}, Future: ${futureSkipped}, NoDate: ${noEndDateSkipped}, Completed: ${completedSkipped}, Deleted: ${deletedSkipped}, Matched: ${userUncompletedEvents.length}`);
+
+            if (userUncompletedEvents.length > 0) {
+                totalMatchedEvents += userUncompletedEvents.length;
+                const title = '未完了のイベントがあります';
+                const prefix = targetUid ? '[手動テスト] ' : '';
+                const body = `${prefix}設定した期限（${daysBefore}日以内）の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const msg: any = {
+                    token: token,
+                    notification: {
+                        title: title,
+                        body: body
+                    },
+                    data: {
+                        title: title,
+                        body: body
+                    },
+                    android: {
+                        priority: 'high'
+                    }
+                };
+
+                try {
+                    await admin.messaging().send(msg);
+                    successfulCount++;
+                } catch (e: any) {
+                    functions.logger.error(`[${traceId}] Failed to send message to user ${userDoc.id}:`, e);
+                    await writeDebugLog(traceId, `Failed to send message to user ${userDoc.id}`, e instanceof Error ? e.stack : String(e));
+                    failedCount++;
+                    if (targetUid) {
+                        throw new functions.https.HttpsError('internal', '通知の送信に失敗しました。詳細エラーはデバッグログを確認してください。');
+                    }
+                }
+            } else {
+                 await writeDebugLog(traceId, `No uncompleted events in the range for user ${userDoc.id}`);
+            }
+        }
+
+        if (targetUid) {
+            if (successfulCount > 0) {
+                await writeDebugLog(traceId, `Successfully sent test notification to user ${targetUid}`);
+                return { success: true, message: `プッシュ通知を送信しました (対象: ${totalMatchedEvents}件)` };
+            } else {
+                return { success: true, message: '通知対象の未完了イベントが0件でした (条件外または全て完了済み)' };
             }
         } else {
-             await writeDebugLog(traceId, `No uncompleted events in the range for user ${uid} during test`);
-             return { success: true, message: '通知対象の未完了イベントが0件でした (条件外または全て完了済み)' };
+            await writeDebugLog(traceId, `Completed scheduled notification run. Success: ${successfulCount}, Failed: ${failedCount}`);
+            return { success: true, message: `Scheduled notifications completed. Success: ${successfulCount}, Failed: ${failedCount}` };
         }
+
     } catch (error: any) {
-        functions.logger.error(`[${traceId}] Error in testSendNotifications:`, error);
-        await writeDebugLog(traceId, 'Error in testSendNotifications', error instanceof Error ? error.stack : String(error));
+        functions.logger.error(`[${traceId}] Error in performSendNotifications:`, error);
+        await writeDebugLog(traceId, 'Error in performSendNotifications', error instanceof Error ? error.stack : String(error));
 
         if (error instanceof functions.https.HttpsError) {
             throw error;
         }
         throw new functions.https.HttpsError('internal', error.message || '内部エラーが発生しました');
     }
+}
+
+export const testSendNotifications = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User not authenticated');
+    }
+    return await performSendNotifications(context.auth.uid);
 });
 
 export const executeManualPrompt = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {

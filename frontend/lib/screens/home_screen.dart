@@ -1013,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.access_time),
-                      title: const Text('自動スキャン時刻'),
+                      title: const Text('通知時刻'),
                       onTap: () {
                         Navigator.pop(context); // Close drawer
                         Navigator.push(

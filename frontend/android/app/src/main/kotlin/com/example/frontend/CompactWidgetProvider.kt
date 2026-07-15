@@ -81,7 +81,7 @@ class CompactWidgetProvider : HomeWidgetProvider() {
         val pendingIntentTemplate = PendingIntent.getActivity(
             context, 0, clickIntentTemplate, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        views.setOnClickPendingIntent(R.id.clock, pendingIntentTemplate)
+        views.setOnClickPendingIntent(R.id.widget_root, pendingIntentTemplate)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }

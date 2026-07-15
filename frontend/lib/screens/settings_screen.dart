@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../main.dart'; // Import themeNotifier
 import 'feedback_screen.dart';
+import 'premium_game_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -307,6 +308,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontSize: 14),
             ),
           ),
+          if (_isPremium)
+            ListTile(
+              leading: const Icon(Icons.videogame_asset),
+              title: const Text('イベント抽出ゲーム追加'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PremiumGameScreen()),
+                );
+              },
+            ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(

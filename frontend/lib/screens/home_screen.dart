@@ -1200,17 +1200,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         _showWelcomeDialog();
                       },
                     ),
-                    SwitchListTile(
-                      title: const Text('[テスト用] 課金モード (広告非表示)'),
-                      value: _isPremium,
-                      onChanged: (bool value) async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('is_premium', value);
-                        setState(() {
-                          _isPremium = value;
-                        });
-                      },
-                    ),
                   ],
                 ),
               )

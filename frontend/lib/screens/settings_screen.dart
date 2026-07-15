@@ -24,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationEnabled = false;
   int _notificationHour = 21;
   int _notificationDaysBefore = 7;
+  bool _isPremium = false;
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _notificationEnabled = notificationEnabled;
       _notificationHour = notificationHour;
       _notificationDaysBefore = notificationDaysBefore;
+      _isPremium = prefs.getBool('is_premium') ?? false;
       _isLoading = false;
     });
   }
@@ -290,6 +292,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'プレミアムモード（月額150円）',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              '※ここにプレミアムモードの機能詳細やトライアル期間の説明が入ります。',
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              onPressed: () async {
+                const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
+                if (isAdmin) {
+                  final prefs = await SharedPreferences.getInstance();
+                  final newValue = !_isPremium;
+                  await prefs.setBool('is_premium', newValue);
+                  setState(() {
+                    _isPremium = newValue;
+                  });
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('管理者権限：プレミアムモードを${newValue ? '有効' : '無効'}にしました'),
+                    ),
+                  );
+                } else {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('課金処理は準備中です'),
+                    ),
+                  );
+                }
+              },
+              child: Text(_isPremium ? 'プレミアムモードを終了する' : 'プレミアムモードを利用する'),
+            ),
+          ),
+          const Divider(),
           const Padding(
             padding: EdgeInsets.all(16.0),
             child: Text(

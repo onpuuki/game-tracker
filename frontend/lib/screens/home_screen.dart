@@ -369,13 +369,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     });
 
-    SharedPreferences.getInstance().then((prefs) {
-      if (mounted) {
-        setState(() {
-          _isPremium = prefs.getBool('is_premium') ?? false;
-        });
-      }
-    });
     _loadPreferences();
     WidgetSyncService.syncTop5Events();
 
@@ -401,6 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      _isPremium = prefs.getBool('is_premium') ?? false;
       _filterKeyword = prefs.getString('filterKeyword') ?? '';
       _selectedGames = prefs.getStringList('selectedGames') ?? [];
       _selectedTags = prefs.getStringList('selectedTags') ?? [];
@@ -948,13 +942,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.settings),
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SettingsScreen(),
                   ),
                 );
+                _loadPreferences();
               },
             ),
             const SizedBox(width: 8.0),

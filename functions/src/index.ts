@@ -1706,7 +1706,7 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
             const userData = userDoc.data();
             const token = userData.fcmToken || userData.settings?.fcmToken;
             const checkedEvents: string[] = userData.checkedEvents || [];
-            const daysBefore = userData.settings?.notificationDaysBefore || 7;
+            const daysBefore = userData.settings?.notificationDaysBefore ?? 7;
 
             let completedSkipped = 0;
             let deletedSkipped = 0;
@@ -1748,7 +1748,8 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
             if (userUncompletedEvents.length > 0) {
                 const title = '未完了のイベントがあります';
-                const body = `対象の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const deadlineText = daysBefore === 0 ? '当日期限' : `${daysBefore}日以内`;
+                const body = `設定した期限（${deadlineText}）の未完了イベントが${userUncompletedEvents.length}件あります。`;
                 const msg: any = {
                     token: token,
                     notification: {
@@ -1842,7 +1843,7 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
             const userData = userDoc.data() as any;
             const token = userData.fcmToken || userData.settings?.fcmToken;
             const checkedEvents: string[] = userData.checkedEvents || [];
-            const daysBefore = userData.settings?.notificationDaysBefore || 7;
+            const daysBefore = userData.settings?.notificationDaysBefore ?? 7;
 
             let completedSkipped = 0;
             let deletedSkipped = 0;
@@ -1886,7 +1887,8 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
                 totalMatchedEvents += userUncompletedEvents.length;
                 const title = '未完了のイベントがあります';
                 const prefix = targetUid ? '[手動テスト] ' : '';
-                const body = `${prefix}対象の未完了イベントが${userUncompletedEvents.length}件あります。`;
+                const deadlineText = daysBefore === 0 ? '当日期限' : `${daysBefore}日以内`;
+                const body = `${prefix}設定した期限（${deadlineText}）の未完了イベントが${userUncompletedEvents.length}件あります。`;
                 const msg: any = {
                     token: token,
                     notification: {

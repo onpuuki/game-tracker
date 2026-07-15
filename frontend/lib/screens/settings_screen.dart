@@ -217,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('期限の何日前に通知'),
-            trailing: Text('$_notificationDaysBefore日前まで'),
+            trailing: Text(_notificationDaysBefore == 0 ? '当日期限のみ' : '$_notificationDaysBefore日前まで'),
             onTap: _notificationEnabled
                 ? () {
                     showModalBottomSheet(
@@ -228,16 +228,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: CupertinoPicker(
                             itemExtent: 32.0,
                             scrollController: FixedExtentScrollController(
-                              initialItem: _notificationDaysBefore - 1,
+                              initialItem: _notificationDaysBefore,
                             ),
                             onSelectedItemChanged: (int index) {
                               setState(() {
-                                _notificationDaysBefore = index + 1;
+                                _notificationDaysBefore = index;
                               });
                             },
-                            children: List<Widget>.generate(30, (int index) {
+                            children: List<Widget>.generate(31, (int index) {
                               return Center(
-                                child: Text('${index + 1}日前まで'),
+                                child: Text(index == 0 ? '当日期限のみ' : '$index日前まで'),
                               );
                             }),
                           ),

@@ -1,0 +1,322 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class PremiumGameScreen extends StatefulWidget {
+  const PremiumGameScreen({super.key});
+
+  @override
+  State<PremiumGameScreen> createState() => _PremiumGameScreenState();
+}
+
+class _PremiumGameScreenState extends State<PremiumGameScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('イベント抽出ゲーム追加'),
+      ),
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'イベント抽出対象に加えるゲーム名を選択してください。最大3ゲームまで追加可能です。ゲームイベントの検索は毎日3:00から5:00にかけて行われるため、イベントの確認は登録後の該当時間までお待ちください。',
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'ゲーム名を入力',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _searchGames(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _isSearching ? null : _searchGames,
+                  child: _isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('検索'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 32),
+          Expanded(
+            child: _buildCustomGamesList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _searchGames() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      // 1. Get Access Token
+      const clientId = 'YOUR_CLIENT_ID';
+      const clientSecret = 'YOUR_CLIENT_SECRET';
+      final tokenResponse = await http.post(
+        Uri.parse('https://id.twitch.tv/oauth2/token'),
+        body: {
+          'client_id': clientId,
+          'client_secret': clientSecret,
+          'grant_type': 'client_credentials',
+        },
+      );
+
+      if (tokenResponse.statusCode != 200) {
+        throw Exception('Failed to get access token');
+      }
+
+      final tokenData = jsonDecode(tokenResponse.body);
+      final accessToken = tokenData['access_token'];
+
+      // 2. Search Games via IGDB API
+      final searchResponse = await http.post(
+        Uri.parse('https://api.igdb.com/v4/games'),
+        headers: {
+          'Client-ID': clientId,
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: 'search "$query"; fields name; limit 10;',
+      );
+
+      if (searchResponse.statusCode != 200) {
+        throw Exception('Failed to search games');
+      }
+
+      final List<dynamic> gamesData = jsonDecode(searchResponse.body);
+      final List<String> gameNames = gamesData.map((e) => e['name'] as String).toList();
+
+      if (!mounted) return;
+
+      // 3. Show Result Dialog
+      if (gameNames.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ゲームが見つかりませんでした。')),
+        );
+      } else {
+        _showSearchResultsDialog(gameNames);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('検索エラー: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
+    }
+  }
+
+  void _showSearchResultsDialog(List<String> gameNames) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('検索結果'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: gameNames.length,
+              itemBuilder: (context, index) {
+                final gameName = gameNames[index];
+                return ListTile(
+                  title: Text(gameName),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _addGame(gameName);
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addGame(String gameName) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final docSnap = await docRef.get();
+
+      if (docSnap.exists) {
+        final data = docSnap.data() as Map<String, dynamic>;
+        final customGames = List<String>.from(data['customGames'] ?? []);
+
+        if (customGames.length >= 3) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('エラー'),
+              content: const Text('登録できるゲームは最大3件までです。'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
+        if (customGames.contains(gameName)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('すでに登録されています。')),
+          );
+          return;
+        }
+      }
+
+      await docRef.set({
+        'customGames': FieldValue.arrayUnion([gameName]),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ゲームを追加しました。')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('追加エラー: $e')),
+      );
+    }
+  }
+
+  Future<void> _removeGame(String gameName) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('確認'),
+        content: const Text('本当に削除してよろしいですか？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('OK', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'customGames': FieldValue.arrayRemove([gameName]),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ゲームを削除しました。')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('削除エラー: $e')),
+      );
+    }
+  }
+
+  Widget _buildCustomGamesList() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('ログインが必要です'));
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(child: Text('エラーが発生しました'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text('登録されたゲームがありません'));
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>?;
+        if (data == null || !data.containsKey('customGames')) {
+          return const Center(child: Text('登録されたゲームがありません'));
+        }
+
+        final customGames = List<String>.from(data['customGames']);
+
+        if (customGames.isEmpty) {
+          return const Center(child: Text('登録されたゲームがありません'));
+        }
+
+        return ListView.builder(
+          itemCount: customGames.length,
+          itemBuilder: (context, index) {
+            final gameName = customGames[index];
+            return ListTile(
+              title: Text(gameName),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete, color: Colors.grey),
+                onPressed: () => _removeGame(gameName),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

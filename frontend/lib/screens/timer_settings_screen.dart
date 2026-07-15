@@ -127,7 +127,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('通知時刻設定')),
+      appBar: AppBar(title: const Text('自動スキャン時刻設定')),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _configStream,
         builder: (context, snapshot) {
@@ -184,7 +184,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                   children: [
                     SwitchListTile(
                       title: const Text(
-                        '通知を停止する',
+                        '自動スキャンを停止する',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: const Text('ONにするとスケジュールされたスキャンが実行されなくなります'),

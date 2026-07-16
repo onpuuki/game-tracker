@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -182,7 +183,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     if (user == null) return;
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid);
       final docSnap = await docRef.get();
 
       if (docSnap.exists) {
@@ -257,7 +258,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid).update({
         'customGames': FieldValue.arrayRemove([gameName]),
       });
       if (!mounted) return;
@@ -279,7 +280,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     }
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Center(child: Text('エラーが発生しました'));

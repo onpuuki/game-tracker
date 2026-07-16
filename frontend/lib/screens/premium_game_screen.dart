@@ -15,6 +15,7 @@ class PremiumGameScreen extends StatefulWidget {
 class _PremiumGameScreenState extends State<PremiumGameScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
+  bool _isAdding = false;
 
   @override
   void dispose() {
@@ -33,7 +34,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
           const Padding(
             padding: EdgeInsets.all(16.0),
             child: Text(
-              'イベント抽出対象に加えるゲーム名を選択してください。最大3ゲームまで追加可能です。ゲームイベントの検索は毎日3:00から5:00にかけて行われるため、イベントの確認は登録後の該当時間までお待ちください。',
+              'イベント抽出対象に加えるゲーム名を選択してください（最大3件）。\n※大手攻略メディアに情報がないタイトルの場合、イベントが抽出されないことがあります。まずは無料トライアル期間を利用して、対象ゲームの抽出が行われるかお試しください。\n※ゲームイベントの自動検索は毎日3:00〜5:00にかけて行われるため、イベントの初回表示は翌日以降になります。',
               style: TextStyle(fontSize: 14),
             ),
           ),
@@ -110,7 +111,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
           'Client-ID': clientId,
           'Authorization': 'Bearer $accessToken',
         },
-        body: 'search "$query"; fields name; limit 10;',
+        body: 'search "$query"; fields name, first_release_date; limit 10;',
       );
 
       if (searchResponse.statusCode != 200) {
@@ -118,7 +119,15 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
       }
 
       final List<dynamic> gamesData = jsonDecode(searchResponse.body);
-      final List<String> gameNames = gamesData.map((e) => e['name'] as String).toList();
+      final List<String> gameNames = gamesData.map((e) {
+        final name = e['name'] as String;
+        if (e.containsKey('first_release_date')) {
+          final timestamp = e['first_release_date'] as int;
+          final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
+          return '$name (${date.year})';
+        }
+        return name;
+      }).toList();
 
       if (!mounted) return;
 
@@ -179,8 +188,13 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
   }
 
   Future<void> _addGame(String gameName) async {
+    if (_isAdding) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    setState(() {
+      _isAdding = true;
+    });
 
     try {
       final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid);
@@ -230,6 +244,12 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('追加エラー: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAdding = false;
+        });
+      }
     }
   }
 

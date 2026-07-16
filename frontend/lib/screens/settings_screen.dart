@@ -50,11 +50,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         if (doc.exists) {
           final data = doc.data();
-          if (data != null && data.containsKey('settings')) {
-            final settings = data['settings'] as Map<String, dynamic>;
-            notificationEnabled = settings['notificationEnabled'] ?? false;
-            notificationHour = settings['notificationHour'] ?? 21;
-            notificationDaysBefore = settings['notificationDaysBefore'] ?? 7;
+          if (data != null) {
+            if (data.containsKey('settings')) {
+              final settings = data['settings'] as Map<String, dynamic>;
+              notificationEnabled = settings['notificationEnabled'] ?? false;
+              notificationHour = settings['notificationHour'] ?? 21;
+              notificationDaysBefore = settings['notificationDaysBefore'] ?? 7;
+            }
+            if (data.containsKey('isPremium')) {
+              final isPremiumDB = data['isPremium'] as bool;
+              if (prefs.getBool('is_premium') != isPremiumDB) {
+                await prefs.setBool('is_premium', isPremiumDB);
+                if (mounted) {
+                  setState(() {
+                    _isPremium = isPremiumDB;
+                  });
+                }
+              }
+            }
           }
         }
       } catch (e) {
@@ -328,6 +341,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final prefs = await SharedPreferences.getInstance();
                   final newValue = !_isPremium;
                   await prefs.setBool('is_premium', newValue);
+
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    await FirebaseFirestore.instanceFor(
+                      app: Firebase.app(),
+                      databaseId: 'default',
+                    ).collection('users').doc(user.uid).set({
+                      'isPremium': newValue,
+                    }, SetOptions(merge: true));
+                  }
+
                   setState(() {
                     _isPremium = newValue;
                   });

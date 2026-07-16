@@ -285,7 +285,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
       final timeOfDay = TimeOfDay(hour: hour, minute: minute);
 
       String cycleType;
-      List<TaskItem> taskItems = tasks.map((t) => TaskItem(id: _uuid(), text: t)).toList();
+      List<TaskItem> taskItems = tasks.asMap().entries.map((e) => TaskItem(id: '${_uuid()}_${e.key}', text: e.value)).toList();
 
       var newState = state.copyWith(
         gameName: gameName,
@@ -334,8 +334,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
         if (dayOfMonth == null || dayOfMonth < 1 || dayOfMonth > 31) {
           throw Exception('日付のフォーマットが不正です (1〜31)');
         }
-        final now = DateTime.now();
-        var monthlyStartDate = DateTime(now.year, now.month, dayOfMonth);
+        var monthlyStartDate = DateTime(2000, 1, dayOfMonth);
 
         newState = newState.copyWith(
           cycleType: cycleType,

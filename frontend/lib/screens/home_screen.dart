@@ -1653,6 +1653,16 @@ class _EventCardItemState extends State<_EventCardItem> {
     if (oldWidget.isChecked != widget.isChecked) {
       _localIsChecked = widget.isChecked;
     }
+
+    if (!_isEditing) {
+      _gameNameController.text = widget.parsedEvent.gameName;
+      _titleController.text = widget.title;
+      _summaryController.text = widget.summary;
+      _redeemCodeController.text = widget.redeemCode ?? '';
+      _startDateController.text = widget.startDateStr ?? '';
+      _endDateController.text = widget.endDateStr ?? '';
+      _eventUrlController.text = widget.eventUrl ?? '';
+    }
   }
 
   void _initEditFields() {

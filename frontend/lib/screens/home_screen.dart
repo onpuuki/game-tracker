@@ -438,18 +438,31 @@ class _HomeScreenState extends State<HomeScreen> {
       FirebaseFirestore.instanceFor(
         app: Firebase.app(),
         databaseId: 'default',
-      ).collection('users').doc(user.uid).get().then((doc) {
+      ).collection('users').doc(user.uid).get().then((doc) async {
         if (doc.exists && mounted) {
           final data = doc.data();
           if (data != null) {
-            setState(() {
-              if (data.containsKey('customGames')) {
-                _userCustomGames = List<String>.from(data['customGames'] ?? []);
+            if (data.containsKey('isPremium')) {
+              final isPremiumDB = data['isPremium'] as bool;
+              if (prefs.getBool('is_premium') != isPremiumDB) {
+                await prefs.setBool('is_premium', isPremiumDB);
+                if (mounted) {
+                  setState(() {
+                    _isPremium = isPremiumDB;
+                  });
+                }
               }
-              if (data.containsKey('checkedEvents')) {
-                _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
-              }
-            });
+            }
+            if (mounted) {
+              setState(() {
+                if (data.containsKey('customGames')) {
+                  _userCustomGames = List<String>.from(data['customGames'] ?? []);
+                }
+                if (data.containsKey('checkedEvents')) {
+                  _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
+                }
+              });
+            }
           }
         }
       });

@@ -24,6 +24,8 @@ class WidgetSyncService {
       // Fetch user's checked events
       final userDoc = await db.collection('users').doc(user.uid).get();
       List<dynamic> checkedEventsRaw = userDoc.data()?['checkedEvents'] ?? [];
+      List<dynamic> customGamesRaw = userDoc.data()?['customGames'] ?? [];
+      List<String> customGames = customGamesRaw.map((e) => e.toString()).toList();
       Set<String> checkedEvents = checkedEventsRaw
           .map((e) => e.toString())
           .toSet();
@@ -43,6 +45,10 @@ class WidgetSyncService {
         final data = doc.data() as Map<String, dynamic>;
 
         if (ignoreIds.contains(doc.id)) {
+          continue;
+        }
+
+        if (data['isCustomGame'] == true && !customGames.contains(data['gameName'])) {
           continue;
         }
 

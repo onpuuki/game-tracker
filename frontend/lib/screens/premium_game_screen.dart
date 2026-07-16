@@ -83,8 +83,8 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
 
     try {
       // 1. Get Access Token
-      const clientId = 'YOUR_CLIENT_ID';
-      const clientSecret = 'YOUR_CLIENT_SECRET';
+      const clientId = 'z3ltpf4ubpp3znlnofroec1x66b77f';
+      const clientSecret = 'zi9uvpunfw859ywugtl487b8kn7n07';
       final tokenResponse = await http.post(
         Uri.parse('https://id.twitch.tv/oauth2/token'),
         body: {

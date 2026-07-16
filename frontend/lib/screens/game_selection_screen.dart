@@ -78,14 +78,14 @@ class _GameSelectionScreenState extends State<GameSelectionScreen> {
               children: [
                 Expanded(
                   child: TextButton(
-                    onPressed: _selectAll,
+                    onPressed: _showOnlyCustomGames ? null : _selectAll,
                     child: const Text('すべて選択'),
                   ),
                 ),
                 const SizedBox(width: 8.0),
                 Expanded(
                   child: TextButton(
-                    onPressed: _clearAll,
+                    onPressed: _showOnlyCustomGames ? null : _clearAll,
                     child: const Text('すべて解除'),
                   ),
                 ),

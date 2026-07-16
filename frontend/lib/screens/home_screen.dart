@@ -54,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Map<int, NativeAd> _nativeAds = {};
   final Map<int, bool> _nativeAdLoaded = {};
+  final Map<int, bool> _nativeAdFailed = {};
   static const int _adInterval = 8;
   bool _isPremium = false;
 
@@ -1534,12 +1535,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                     '$NativeAd failedToLoad at index $index: $error',
                                   );
                                   ad.dispose();
+                                  if (mounted) {
+                                    setState(() {
+                                      _nativeAdFailed[index] = true;
+                                    });
+                                  }
                                 },
                               ),
                               nativeTemplateStyle: NativeTemplateStyle(
                                 templateType: TemplateType.small,
                               ),
                             )..load();
+                          }
+
+                          if (_nativeAdFailed[index] == true) {
+                            return const SizedBox.shrink();
                           }
 
                           if (_nativeAdLoaded[index] == true) {
@@ -1719,13 +1729,19 @@ class _EventCardItemState extends State<_EventCardItem> {
   }
 
   Future<void> _saveChanges() async {
+    Timestamp? parseDate(String text) {
+      if (text.isEmpty) return null;
+      final parsed = DateTime.tryParse(text.replaceAll('/', '-'));
+      return parsed != null ? Timestamp.fromDate(parsed) : null;
+    }
+
     final updateData = {
       'gameName': _gameNameController.text,
       'title': _titleController.text,
       'summary': _summaryController.text,
       'redeemCode': _redeemCodeController.text,
-      'startDate': _startDateController.text,
-      'endDate': _endDateController.text,
+      'startDate': parseDate(_startDateController.text),
+      'endDate': parseDate(_endDateController.text),
       'eventUrl': _eventUrlController.text,
       'tag': _selectedTag,
       'subTag': _selectedSubTag,

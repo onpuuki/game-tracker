@@ -105,13 +105,14 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
       final accessToken = tokenData['access_token'];
 
       // 2. Search Games via IGDB API
+      final escapedQuery = query.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
       final searchResponse = await http.post(
         Uri.parse('https://api.igdb.com/v4/games'),
         headers: {
           'Client-ID': clientId,
           'Authorization': 'Bearer $accessToken',
         },
-        body: 'search "$query"; fields name, first_release_date; limit 10;',
+        body: 'search "$escapedQuery"; fields name, first_release_date; limit 10;',
       );
 
       if (searchResponse.statusCode != 200) {

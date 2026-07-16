@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WidgetSyncService {
   static Future<void> syncTop5Events({
@@ -32,9 +33,14 @@ class WidgetSyncService {
 
       final ignoreIds = checkedEvents.union(excludedIds.toSet());
 
+      // Fetch selected games from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> selectedGames = prefs.getStringList('selectedGames') ?? [];
+
       // Fetch all events
       final QuerySnapshot eventsSnapshot = await db
           .collectionGroup('events')
+          .where('isDeleted', isNotEqualTo: true)
           .get();
 
       final now = DateTime.now();
@@ -45,6 +51,10 @@ class WidgetSyncService {
         final data = doc.data() as Map<String, dynamic>;
 
         if (ignoreIds.contains(doc.id)) {
+          continue;
+        }
+
+        if (selectedGames.isNotEmpty && !selectedGames.contains(data['gameName'])) {
           continue;
         }
 

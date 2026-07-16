@@ -425,6 +425,7 @@ ${existingMiniList || 'なし'}
 6. ハルシネーション（推測・捏造）は絶対に禁止です。不明なURLや日時は無理に補完せずnullとしてください。
 7. 期限管理が命です。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
 8. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
+9. イベントの報酬を最大3つまで抽出し、配列として返してください。原石、星玉、ポリクローム、星声などのガチャ石（プレミアム通貨）やガチャチケットを最優先し、必ず配列の先頭（1番目）に配置してください。表記は簡潔にしてください（例: '💎 原石 x420', '🎁 限定武器', '💰 育成素材'）。報酬が不明、または攻略サイトに明確な記載がない場合は無理に抽出せず、空の配列を返してください（ハルシネーション厳禁）。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -442,7 +443,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 - "endDate": (文字列) 既存IDを出力し、かつ検索結果から終了日が判明しない場合は、絶対にnullにせず一覧にある（期限: xxx）の日付を引き継ぐこと。判明した場合は (YYYY-MM-DD HH:mm:00) または 'UNKNOWN'。
 - "redeemCode": (文字列) ギフトコード または null
 - "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか
-- "eventUrl": (文字列) URL または null`;
+- "eventUrl": (文字列) URL または null
+- "rewards": (文字列の配列) 報酬リスト。最大3件。`;
 
         const generationConfig = {
             temperature: 0.0,
@@ -528,6 +530,9 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         existing.startDate = event.startDate;
                     }
                     if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
+                    if ((!existing.rewards || existing.rewards.length === 0) && event.rewards && event.rewards.length > 0) {
+                        existing.rewards = event.rewards;
+                    }
                 }
             }
 
@@ -597,6 +602,12 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
                     if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
+                    const newRewardsStr = Array.isArray(event.rewards) ? event.rewards.join(',') : '';
+                    const oldRewardsStr = Array.isArray(eData.rewards) ? eData.rewards.join(',') : '';
+                    if (event.rewards && newRewardsStr !== oldRewardsStr) {
+                        changes.push('報酬');
+                    }
+
                     if (changes.length === 0) {
                         unchangedCount++;
                         continue;
@@ -610,6 +621,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         redeemCode: event.redeemCode || eData.redeemCode || null,
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
+                        rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
                         isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     };
@@ -654,6 +666,12 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
                         if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
+                        const newRewardsStr = Array.isArray(event.rewards) ? event.rewards.join(',') : '';
+                        const oldRewardsStr = Array.isArray(eData.rewards) ? eData.rewards.join(',') : '';
+                        if (event.rewards && newRewardsStr !== oldRewardsStr) {
+                            changes.push('報酬');
+                        }
+
                         if (changes.length === 0) {
                             unchangedCount++;
                             continue;
@@ -667,6 +685,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             redeemCode: event.redeemCode || eData.redeemCode || null,
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
+                            rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
                             isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                         };
@@ -2023,7 +2042,8 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
       "updates": {
         "title": "タイトル（変更がある場合のみ）",
         "endDate": "YYYY-MM-DD（変更がある場合のみ）",
-        "startDate": "YYYY-MM-DD（変更がある場合のみ）"
+        "startDate": "YYYY-MM-DD（変更がある場合のみ）",
+        "rewards": ["報酬1", "報酬2"]
       },
       "reason": "変更理由"
     }
@@ -2085,6 +2105,9 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
                     const dateObj = getSafeDateObj(updates.startDate);
                     if (dateObj) dbUpdates.startDate = admin.firestore.Timestamp.fromDate(dateObj);
                 }
+                if (op.updates?.rewards) {
+                    dbUpdates.rewards = op.updates.rewards;
+                }
 
                 if (Object.keys(dbUpdates).length > 0) {
                     dbUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
@@ -2101,6 +2124,9 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
                 if (updates.startDate) {
                     const dateObj = getSafeDateObj(updates.startDate);
                     if (dateObj) dbUpdates.startDate = admin.firestore.Timestamp.fromDate(dateObj);
+                }
+                if (op.updates?.rewards) {
+                    dbUpdates.rewards = op.updates.rewards;
                 }
                 dbUpdates.createdAt = admin.firestore.FieldValue.serverTimestamp();
                 dbUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();

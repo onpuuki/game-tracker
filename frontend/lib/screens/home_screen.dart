@@ -189,6 +189,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final summary = eventData['summary']?.toString() ?? '';
       final imageUrl = eventData['imageUrl']?.toString();
+      final rewardsRaw = eventData['rewards'];
+      final List<String> rewards = rewardsRaw is List
+          ? rewardsRaw.map((e) => e.toString()).toList()
+          : [];
 
       final startDate = parsedEvent.startDate;
       final endDate = parsedEvent.endDate;
@@ -305,6 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
         period: period,
         summary: summary,
         imageUrl: imageUrl,
+        rewards: rewards,
         startDate: startDate,
         endDate: endDate,
         gameCodeUrl: gameCodeUrl,
@@ -1558,6 +1563,7 @@ class _EventCardItem extends StatefulWidget {
   final String period;
   final String summary;
   final String? imageUrl;
+  final List<String> rewards;
   final DateTime? startDate;
   final DateTime? endDate;
   final String? gameCodeUrl;
@@ -1589,6 +1595,7 @@ class _EventCardItem extends StatefulWidget {
     required this.period,
     required this.summary,
     required this.imageUrl,
+    required this.rewards,
     required this.startDate,
     required this.endDate,
     required this.gameCodeUrl,
@@ -2084,6 +2091,23 @@ class _EventCardItemState extends State<_EventCardItem> {
                                           ? Colors.grey
                                           : null,
                                     ),
+                                  ),
+                                ],
+                                if (widget.rewards.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: widget.rewards.take(3).map((reward) => Text(
+                                      reward,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: _localIsChecked
+                                            ? Colors.grey
+                                            : null,
+                                      ),
+                                    )).toList(),
                                   ),
                                 ],
                                 if (widget.isCycleEvent &&

@@ -286,6 +286,34 @@ export const processSyncRequest = onDocumentCreated({
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
 
+        const usersSnapshot = await db.collection('users').get();
+        const customGamesSet = new Set<string>();
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            if (userData && Array.isArray(userData.customGames)) {
+                userData.customGames.forEach((game: string) => {
+                    if (game && typeof game === 'string' && game.trim().length > 0) {
+                        customGamesSet.add(game.trim());
+                    }
+                });
+            }
+        });
+
+        // Filter out those already in targetGames
+        targetGames.forEach(tg => {
+            if (tg && tg.gameName) {
+                customGamesSet.delete(tg.gameName);
+            }
+        });
+
+        // Add to targetGames
+        customGamesSet.forEach(customGame => {
+            targetGames.push({
+                gameName: customGame,
+                keywords: ''
+            });
+        });
+
         if (targetGames.length === 0) {
             await writeDebugLog(traceId, 'Sync failed: Invalid config or no target games');
             await snapshot.ref.update({ status: 'error', error: 'No target games', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -341,6 +369,8 @@ export const syncSingleGameTask = onTaskDispatched({
         const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];
+        const targetGames: ConfigItem[] = configData?.targets || [];
+        const isCustomGame = !targetGames.some(tg => tg.gameName === gameName);
         const geminiApiKey = configData?.geminiApiKey;
 
         if (!geminiApiKey) {
@@ -580,6 +610,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         redeemCode: event.redeemCode || eData.redeemCode || null,
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
+                        isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     };
 
@@ -636,6 +667,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             redeemCode: event.redeemCode || eData.redeemCode || null,
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
+                            isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                         };
 
@@ -660,6 +692,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             isDeleted: false,
                             tasks: [],
                             isCycleEvent: false,
+                            ...(isCustomGame ? { isCustomGame: true } : {}),
                             createdAt: admin.firestore.FieldValue.serverTimestamp(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                             updateHistory: [`[${currentDate}] Created by AI Sync`]

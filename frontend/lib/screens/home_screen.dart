@@ -1,5 +1,6 @@
 import 'timeline_view.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -439,9 +440,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ).collection('users').doc(user.uid).get().then((doc) {
         if (doc.exists && mounted) {
           final data = doc.data();
-          if (data != null && data.containsKey('customGames')) {
+          if (data != null) {
             setState(() {
-              _userCustomGames = List<String>.from(data['customGames'] ?? []);
+              if (data.containsKey('customGames')) {
+                _userCustomGames = List<String>.from(data['customGames'] ?? []);
+              }
+              if (data.containsKey('checkedEvents')) {
+                _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
+              }
             });
           }
         }
@@ -1350,7 +1356,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Checked Filter
                   if (_excludeChecked &&
-                      _checkedEventIds.contains(event.doc.id)) {
+                      (_checkedEventIds.contains(event.doc.id) || event.data['isCompleted'] == true)) {
                     return false;
                   }
 
@@ -1659,8 +1665,8 @@ class _EventCardItemState extends State<_EventCardItem> {
       _titleController.text = widget.title;
       _summaryController.text = widget.summary;
       _redeemCodeController.text = widget.redeemCode ?? '';
-      _startDateController.text = widget.startDateStr ?? '';
-      _endDateController.text = widget.endDateStr ?? '';
+      _startDateController.text = widget.startDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!) : '';
+      _endDateController.text = widget.endDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!) : '';
       _eventUrlController.text = widget.eventUrl ?? '';
     }
   }
@@ -1673,9 +1679,11 @@ class _EventCardItemState extends State<_EventCardItem> {
       text: widget.redeemCode ?? '',
     );
     _startDateController = TextEditingController(
-      text: widget.startDateStr ?? '',
+      text: widget.startDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!) : '',
     );
-    _endDateController = TextEditingController(text: widget.endDateStr ?? '');
+    _endDateController = TextEditingController(
+      text: widget.endDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!) : '',
+    );
     _eventUrlController = TextEditingController(text: widget.eventUrl ?? '');
     _selectedTag = widget.tag;
     _selectedSubTag = widget.subTag;
@@ -2158,11 +2166,9 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                 if (value == null) return;
 
                                                 final updatedTasks =
-                                                    List<
-                                                      Map<String, dynamic>
-                                                    >.from(
-                                                      widget.eventData['tasks'],
-                                                    );
+                                                    (widget.eventData['tasks'] as List)
+                                                        .map((t) => Map<String, dynamic>.from(t))
+                                                        .toList();
                                                 updatedTasks[taskIndex]['isCompleted'] =
                                                     value;
 

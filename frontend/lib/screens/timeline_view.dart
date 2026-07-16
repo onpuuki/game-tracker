@@ -23,6 +23,24 @@ class _TimelineViewState extends State<TimelineView> {
   List<DateTime?> displayRows = []; // hours を廃止し、ギャップ(null)を含む行データへ変更
   Map<String, Map<DateTime, List<ParsedEvent>>> eventMap =
       {}; // 内側のキーを int から DateTime に変更
+  Map<String, bool> customGameMap = {};
+
+  String _getShortCustomGameName(String fullName) {
+    if (RegExp(r'^[a-zA-Z\s]+$').hasMatch(fullName)) {
+      final words = fullName.split(' ').where((w) => w.isNotEmpty).toList();
+      if (words.length == 1) {
+        return words[0].substring(0, words[0].length < 4 ? words[0].length : 4).toUpperCase();
+      } else {
+        return words.map((w) => w[0]).take(4).join('').toUpperCase();
+      }
+    } else {
+      if (fullName.length <= 4) {
+        return fullName;
+      } else {
+        return '${fullName.substring(0, 4)}..';
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -65,12 +83,17 @@ class _TimelineViewState extends State<TimelineView> {
     }
 
     eventMap = {};
+    customGameMap = {};
     for (var game in games) {
       eventMap[game] = {};
+      customGameMap[game] = false;
     }
 
     // イベントの紐付け
     for (var event in widget.events) {
+      if (event.data['isCustomGame'] == true) {
+        customGameMap[event.gameName] = true;
+      }
       if (event.endDate == null) continue;
       final d = event.endDate!;
       DateTime hourKey = DateTime(d.year, d.month, d.day, d.hour);
@@ -160,17 +183,27 @@ class _TimelineViewState extends State<TimelineView> {
           );
         } else if (vicinity.row == 0) {
           final gameName = games[vicinity.column - 1];
-          String abbrev = widget.abbreviations[gameName] ?? '';
-          if (abbrev.isEmpty) {
-            abbrev = gameName.substring(
-              0,
-              gameName.length < 3 ? gameName.length : 3,
-            );
+          final isCustom = customGameMap[gameName] == true;
+          String abbrev = '';
+
+          if (isCustom) {
+            final shortName = _getShortCustomGameName(gameName);
+            abbrev = '👑\n${shortName.split('').join('\n')}';
+          } else {
+            abbrev = widget.abbreviations[gameName] ?? '';
+            if (abbrev.isEmpty) {
+              abbrev = gameName.substring(
+                0,
+                gameName.length < 3 ? gameName.length : 3,
+              );
+            }
+            abbrev = abbrev.split('').join('\n');
           }
+
           return TableViewCell(
             child: Center(
               child: Text(
-                abbrev.split('').join('\n'),
+                abbrev,
                 style: const TextStyle(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),

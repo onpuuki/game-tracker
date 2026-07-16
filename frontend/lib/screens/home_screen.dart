@@ -283,11 +283,17 @@ class _HomeScreenState extends State<HomeScreen> {
         tagColor = Colors.purple;
       }
 
-      final timestamp =
-          (eventData['updatedAt'] ?? eventData['createdAt']) as Timestamp?;
+      final rawUpdated = eventData['updatedAt'] ?? eventData['createdAt'];
+      DateTime? updatedDt;
+      if (rawUpdated is Timestamp) {
+        updatedDt = rawUpdated.toDate();
+      } else if (rawUpdated is String) {
+        updatedDt = DateTime.tryParse(rawUpdated);
+      }
+
       String dateStr = '';
-      if (timestamp != null) {
-        final d = timestamp.toDate();
+      if (updatedDt != null) {
+        final d = updatedDt;
         dateStr =
             '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
       }
@@ -1386,6 +1392,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             _filterEndDate!.year,
                             _filterEndDate!.month,
                             _filterEndDate!.day,
+                            23,
+                            59,
+                            59,
                           )
                         : null;
 

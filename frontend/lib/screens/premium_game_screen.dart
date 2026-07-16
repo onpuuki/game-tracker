@@ -76,6 +76,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
   Future<void> _searchGames() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
+    if (_isSearching) return;
 
     setState(() {
       _isSearching = true;

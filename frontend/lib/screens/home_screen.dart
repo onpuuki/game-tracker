@@ -1535,6 +1535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       events: events,
                       abbreviations: abbreviationsMap,
                       buildEventCard: _buildEventCard,
+                      userCustomGames: _userCustomGames,
                     ),
                   ],
                 );
@@ -1646,7 +1647,7 @@ class _EventCardItemState extends State<_EventCardItem> {
   }
 
   void _initEditFields() {
-    _gameNameController = TextEditingController(text: widget.eventGameName);
+    _gameNameController = TextEditingController(text: widget.parsedEvent.gameName);
     _titleController = TextEditingController(text: widget.title);
     _summaryController = TextEditingController(text: widget.summary);
     _redeemCodeController = TextEditingController(

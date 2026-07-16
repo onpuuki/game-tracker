@@ -338,6 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
           await _savePreferences();
+          await _syncCheckedEventsToFirestore();
           try {
             await WidgetSyncService.syncTop5Events(
               excludedIds: _checkedEventIds.toList(),
@@ -492,6 +493,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _syncCheckedEventsToFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set({
+          'checkedEvents': _checkedEventIds,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to sync checked events: $e');
+      }
+    }
+  }
+
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('filterKeyword', _filterKeyword);
@@ -517,20 +534,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('ongoingOnly', _ongoingOnly);
     await prefs.setStringList('checkedEventIds', _checkedEventIds);
     await prefs.setBool('showOnlyCustomGames', _showOnlyCustomGames);
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        await FirebaseFirestore.instanceFor(
-          app: Firebase.app(),
-          databaseId: 'default',
-        ).collection('users').doc(user.uid).set({
-          'checkedEvents': _checkedEventIds,
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Failed to sync checked events: $e');
-      }
-    }
 
     await prefs.setString('primarySortField', _primarySortField);
     await prefs.setString('primarySortOrder', _primarySortOrder);
@@ -2171,6 +2174,10 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                         .toList();
                                                 updatedTasks[taskIndex]['isCompleted'] =
                                                     value;
+
+                                                setState(() {
+                                                  widget.eventData['tasks'] = updatedTasks;
+                                                });
 
                                                 final allCompleted =
                                                     updatedTasks.every(

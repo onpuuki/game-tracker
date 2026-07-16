@@ -6,12 +6,14 @@ class TimelineView extends StatefulWidget {
   final List<ParsedEvent> events;
   final Map<String, String> abbreviations;
   final Widget Function(ParsedEvent) buildEventCard;
+  final List<String> userCustomGames;
 
   const TimelineView({
     super.key,
     required this.events,
     required this.abbreviations,
     required this.buildEventCard,
+    required this.userCustomGames,
   });
 
   @override
@@ -86,14 +88,11 @@ class _TimelineViewState extends State<TimelineView> {
     customGameMap = {};
     for (var game in games) {
       eventMap[game] = {};
-      customGameMap[game] = false;
+      customGameMap[game] = widget.userCustomGames.contains(game);
     }
 
     // イベントの紐付け
     for (var event in widget.events) {
-      if (event.data['isCustomGame'] == true) {
-        customGameMap[event.gameName] = true;
-      }
       if (event.endDate == null) continue;
       final d = event.endDate!;
       DateTime hourKey = DateTime(d.year, d.month, d.day, d.hour);

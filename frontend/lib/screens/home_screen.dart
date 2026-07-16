@@ -59,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // Filter State
   String _filterKeyword = '';
   List<String> _selectedGames = [];
+  List<String> _userCustomGames = [];
+  bool _showOnlyCustomGames = false;
   List<String> _selectedTags = [];
   List<String> _selectedSubTags = [];
   DateTime? _filterStartDate;
@@ -291,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
         key: ValueKey(eventId),
         parsedEvent: parsedEvent,
         eventData: eventData,
-        eventGameName: eventGameName,
+        eventGameName: _userCustomGames.contains(eventGameName) ? '👑 $eventGameName' : eventGameName,
         title: title,
         tag: tag,
         subTag: subTag,
@@ -414,9 +416,28 @@ class _HomeScreenState extends State<HomeScreen> {
       _ongoingOnly = prefs.getBool('ongoingOnly') ?? false;
       _checkedEventIds = prefs.getStringList('checkedEventIds') ?? [];
 
+      _showOnlyCustomGames = prefs.getBool('showOnlyCustomGames') ?? false;
+
       _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
       _primarySortOrder = prefs.getString('primarySortOrder') ?? 'asc';
     });
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('users').doc(user.uid).get().then((doc) {
+        if (doc.exists && mounted) {
+          final data = doc.data();
+          if (data != null && data.containsKey('customGames')) {
+            setState(() {
+              _userCustomGames = List<String>.from(data['customGames'] ?? []);
+            });
+          }
+        }
+      });
+    }
 
     final hasShownWelcomeDialog =
         prefs.getBool('hasShownWelcomeDialog') ?? false;
@@ -481,6 +502,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('excludeChecked', _excludeChecked);
     await prefs.setBool('ongoingOnly', _ongoingOnly);
     await prefs.setStringList('checkedEventIds', _checkedEventIds);
+    await prefs.setBool('showOnlyCustomGames', _showOnlyCustomGames);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -649,9 +671,18 @@ class _HomeScreenState extends State<HomeScreen> {
                             builder: (context) => GameSelectionScreen(
                               allGames: allGameNames,
                               selectedGames: _selectedGames,
+                              userCustomGames: _userCustomGames,
+                              showOnlyCustomGames: _showOnlyCustomGames,
                               onSelectionChanged: (List<String> newSelection) {
                                 setModalState(() {
                                   _selectedGames = newSelection;
+                                });
+                                setState(() {});
+                                _savePreferences();
+                              },
+                              onToggleShowOnlyCustomGames: (bool value) {
+                                setModalState(() {
+                                  _showOnlyCustomGames = value;
                                 });
                                 setState(() {});
                                 _savePreferences();
@@ -1329,10 +1360,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     return false;
                   }
 
-                  // Game Filter
-                  if (_selectedGames.isNotEmpty &&
-                      !_selectedGames.contains(event.gameName)) {
+                  // Custom Games Visibility and Filter
+                  final isCustom = event.data['isCustomGame'] == true;
+                  if (isCustom && !_userCustomGames.contains(event.gameName)) {
                     return false;
+                  }
+
+                  if (_showOnlyCustomGames) {
+                    if (!_userCustomGames.contains(event.gameName)) {
+                      return false;
+                    }
+                  } else {
+                    // Game Filter
+                    if (_selectedGames.isNotEmpty &&
+                        !_selectedGames.contains(event.gameName)) {
+                      return false;
+                    }
                   }
 
                   // Checked Filter

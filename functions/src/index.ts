@@ -1135,7 +1135,7 @@ export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_c
 });
 
 // イベントの全クリア処理 (バッチ上限対応済み・OOM対策済み)
-export const clearAllEvents = functions.runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+export const clearAllEvents = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     try {
         let totalDeleted = 0;
 

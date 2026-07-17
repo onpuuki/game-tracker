@@ -1,5 +1,6 @@
 import 'timeline_view.dart';
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'dart:async';
 import '../widgets/keep_alive_page.dart';
 import 'package:intl/intl.dart';
@@ -253,9 +254,20 @@ class _HomeScreenState extends State<HomeScreen> {
       final summary = eventData['summary']?.toString() ?? '';
       final imageUrl = eventData['imageUrl']?.toString();
       final rewardsRaw = eventData['rewards'];
-      final List<String> rewards = rewardsRaw is List
-          ? rewardsRaw.map((e) => e.toString()).toList()
-          : [];
+      final List<String> rewards = [];
+      if (rewardsRaw is List) {
+        for (var r in rewardsRaw) {
+          if (r is Map) {
+            final name = r['name']?.toString() ?? '';
+            final quantity = r['quantity']?.toString() ?? '';
+            if (name.isNotEmpty) {
+               rewards.add(quantity.isNotEmpty ? '$name x$quantity' : name);
+            }
+          } else {
+            rewards.add(r.toString());
+          }
+        }
+      }
 
       final startDate = parsedEvent.startDate;
       final endDate = parsedEvent.endDate;
@@ -365,6 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return _EventCardItem(
         key: ValueKey(eventId),
+        isPremium: _isPremium,
         parsedEvent: parsedEvent,
         eventData: eventData,
         eventGameName: _userCustomGames.contains(eventGameName)
@@ -914,6 +927,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -1022,7 +1036,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
+                                color: Colors.black.withOpacity(0.2),
                                 blurRadius: 2,
                                 offset: const Offset(0, 1),
                               ),
@@ -1704,6 +1718,7 @@ class _EventCardItem extends StatefulWidget {
   final bool isDarkMode;
   final String dateStr;
   final Future<void> Function() onCheckedToggle;
+  final bool isPremium;
 
   const _EventCardItem({
     super.key,
@@ -1736,6 +1751,7 @@ class _EventCardItem extends StatefulWidget {
     required this.isDarkMode,
     required this.dateStr,
     required this.onCheckedToggle,
+    required this.isPremium,
   });
 
   @override
@@ -1917,6 +1933,123 @@ class _EventCardItemState extends State<_EventCardItem> {
         ).showSnackBar(SnackBar(content: Text('Failed to delete event: $e')));
       }
     }
+  }
+
+  Widget _buildRewardsSection() {
+    final theme = Theme.of(context);
+    final accentColor = theme.colorScheme.primary.withValues(alpha: 0.08);
+    final borderColor = theme.colorScheme.primary.withValues(alpha: 0.2);
+
+    Widget content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: accentColor,
+        border: Border.all(color: borderColor, width: 1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.card_giftcard, size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 4),
+              Text(
+                'イベント報酬',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: widget.rewards.map((reward) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5), width: 0.5),
+                ),
+                child: Text(
+                  reward,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _localIsChecked ? Colors.grey : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+
+    if (!widget.isPremium) {
+      return Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+              child: content,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock, size: 20, color: Colors.grey),
+                  const SizedBox(height: 4),
+                  Text(
+                    '報酬の詳細を見るには',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pushNamed(context, '/settings');
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'プレミアム登録',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return content;
   }
 
   @override
@@ -2266,27 +2399,8 @@ class _EventCardItemState extends State<_EventCardItem> {
                                   ),
                                 ],
                                 if (widget.rewards.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: widget.rewards
-                                        .take(3)
-                                        .map(
-                                          (reward) => Text(
-                                            reward,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: _localIsChecked
-                                                  ? Colors.grey
-                                                  : null,
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildRewardsSection(),
                                 ],
                                 if (widget.isCycleEvent &&
                                     widget.eventData['tasks'] != null &&

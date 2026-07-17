@@ -110,13 +110,12 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
 【背景・理由】: (★必ず情報源のURLを記載し、Web上の事実のみを理由とすること。データ内の情報を理由にしないこと)
 ====================''';
                       await Clipboard.setData(const ClipboardData(text: text));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('クリップボードにコピーしました'),
-                          ),
-                        );
-                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('クリップボードにコピーしました'),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.copy),
                     label: const Text('Geminiアプリ用プロンプト'),
@@ -214,21 +213,19 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
         traceId: traceId,
       );
 
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Sync request created successfully')),
-        );
-      }
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sync request created successfully')),
+      );
     } catch (e) {
       await logManager.addLog(
         'sync request failed (Exception): $e',
         traceId: traceId,
       );
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Failed to create sync request: $e')),
-        );
-      }
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to create sync request: $e')),
+      );
     }
   }
 
@@ -457,15 +454,14 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                     await Clipboard.setData(
                                       ClipboardData(text: buffer.toString()),
                                     );
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Copied to clipboard'),
-                                        ),
-                                      );
-                                    }
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Copied to clipboard'),
+                                      ),
+                                    );
                                   },
                                 ),
                               ],

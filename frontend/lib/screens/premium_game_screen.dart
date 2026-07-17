@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class PremiumGameScreen extends StatefulWidget {
   const PremiumGameScreen({super.key});
@@ -80,70 +79,48 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     if (query.isEmpty) return;
     if (_isSearching) return;
 
+    if (!mounted) return;
     setState(() {
       _isSearching = true;
     });
 
     try {
-      // 1. Get Access Token
-      const clientId = 'z3ltpf4ubpp3znlnofroec1x66b77f';
-      const clientSecret = 'zi9uvpunfw859ywugtl487b8kn7n07';
-      final tokenResponse = await http.post(
-        Uri.parse('https://id.twitch.tv/oauth2/token'),
-        body: {
-          'client_id': clientId,
-          'client_secret': clientSecret,
-          'grant_type': 'client_credentials',
-        },
-      );
-
-      if (tokenResponse.statusCode != 200) {
-        throw Exception('Failed to get access token');
-      }
-
-      final tokenData = jsonDecode(tokenResponse.body);
-      final accessToken = tokenData['access_token'];
-
-      // 2. Search Games via IGDB API
-      final escapedQuery = query.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-      final searchResponse = await http.post(
-        Uri.parse('https://api.igdb.com/v4/games'),
-        headers: {
-          'Client-ID': clientId,
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: 'search "$escapedQuery"; fields name, first_release_date; limit 10;',
-      );
-
-      if (searchResponse.statusCode != 200) {
-        throw Exception('Failed to search games');
-      }
-
-      final List<dynamic> gamesData = jsonDecode(searchResponse.body);
-      final List<String> gameNames = gamesData.map((e) {
-        final name = e['name'] as String;
-        if (e.containsKey('first_release_date')) {
-          final timestamp = e['first_release_date'] as int;
-          final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
-          return '$name (${date.year})';
-        }
-        return name;
-      }).toList();
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1').httpsCallable('searchIGDBGames');
+      final result = await callable.call({'query': query});
 
       if (!mounted) return;
 
-      // 3. Show Result Dialog
-      if (gameNames.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ゲームが見つかりませんでした。')),
-        );
+      if (result.data != null && result.data['success'] == true) {
+         final List<dynamic> games = result.data['games'] ?? [];
+         final List<String> gameNames = [];
+
+         for (var g in games) {
+           final name = g['name'] as String;
+           if (g.containsKey('first_release_date')) {
+             final timestamp = g['first_release_date'] as int;
+             final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
+             gameNames.add('$name (${date.year})');
+           } else {
+             gameNames.add(name);
+           }
+         }
+
+         if (gameNames.isEmpty) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('ゲームが見つかりませんでした。')),
+           );
+         } else {
+           _showSearchResultsDialog(gameNames);
+         }
       } else {
-        _showSearchResultsDialog(gameNames);
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text(result.data?['message']?.toString() ?? '検索に失敗しました')),
+         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('検索エラー: $e')),
+        SnackBar(content: Text('エラーが発生しました: $e')),
       );
     } finally {
       if (mounted) {

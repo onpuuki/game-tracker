@@ -40,7 +40,7 @@ class WidgetSyncService {
       // Fetch all events
       final QuerySnapshot eventsSnapshot = await db
           .collectionGroup('events')
-          .where('isDeleted', isNotEqualTo: true)
+          .where('endDate', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1))))
           .get();
 
       final now = DateTime.now();

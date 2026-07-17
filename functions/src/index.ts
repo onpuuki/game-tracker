@@ -448,7 +448,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         const generationConfig = {
             temperature: 0.0,
-            tools: [{ googleSearch: {} }]
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json"
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -457,25 +458,11 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         let extractedEvents: any[] = [];
         if (response.text) {
-            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-            const startIndex = cleanText.indexOf('[');
-            if (startIndex !== -1) {
-                let parsed = false;
-                // 後ろから ']' を探して、正しいJSONになるまで試行する
-                for (let i = cleanText.lastIndexOf(']'); i >= startIndex; i--) {
-                    if (cleanText[i] === ']') {
-                        try {
-                            extractedEvents = JSON.parse(cleanText.substring(startIndex, i + 1));
-                            parsed = true;
-                            break;
-                        } catch (e) {
-                            // JSONとして不正な場合は次の ']' を探す
-                        }
-                    }
-                }
-                if (!parsed) throw new Error("Failed to parse JSON array from response.");
-            } else {
-                throw new Error("No JSON array found in response.");
+            try {
+                let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+                extractedEvents = JSON.parse(cleanText);
+            } catch (e) {
+                throw new Error("Failed to parse JSON array from response.");
             }
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
@@ -1699,7 +1686,11 @@ export const setAdminRole = functions.region('asia-northeast1').https.onCall(asy
 
     // フロントエンドから送られてくる秘密鍵
     const secret = data.secret;
-    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'GT_ADMIN_SECRET_2026';
+    const ADMIN_SECRET = process.env.ADMIN_SECRET;
+    if (!ADMIN_SECRET) {
+        functions.logger.error('ADMIN_SECRET environment variable is not set. Denying admin role.');
+        throw new functions.https.HttpsError('internal', 'Server configuration error.');
+    }
 
     if (secret !== ADMIN_SECRET) {
         functions.logger.warn(`Failed admin role attempt for UID: ${context.auth.uid}`);
@@ -1747,12 +1738,30 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
         // Fetch all events
         const eventsSnapshot = await db.collectionGroup('events').get();
-        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const nowDay = now.startOf('day');
+
+        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
+            if (event.isCompleted) return false;
+            if (event.isDeleted === true) return false;
+
+            let endDateObj = event.endDate;
+            if (endDateObj && typeof endDateObj.toDate === 'function') {
+                endDateObj = endDateObj.toDate();
+            } else if (typeof endDateObj === 'string') {
+                endDateObj = new Date(endDateObj);
+            }
+            if (!endDateObj) return false;
+
+            const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
+            if (eventDateDay.diff(nowDay, 'day') < 0) return false;
+
+            event.diffDays = eventDateDay.diff(nowDay, 'day');
+            return true;
+        });
 
         // Send notifications
         let successfulCount = 0;
         let failedCount = 0;
-        const nowDay = now.startOf('day');
 
         for (const userDoc of targetUsers) {
             const userData = userDoc.data();
@@ -1768,31 +1777,8 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
             let futureSkipped = 0;
 
             const userUncompletedEvents = allEvents.filter(event => {
-                if (event.isCompleted) { completedSkipped++; return false; }
-                if (event.isDeleted === true) { deletedSkipped++; return false; }
-                if (!event.endDate) { noEndDateSkipped++; return false; }
                 if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
-
-                let endDateObj = event.endDate;
-                if (endDateObj && typeof endDateObj.toDate === 'function') {
-                    endDateObj = endDateObj.toDate();
-                } else if (typeof endDateObj === 'string') {
-                    endDateObj = new Date(endDateObj);
-                }
-                if (!endDateObj) {
-                    noEndDateSkipped++; return false;
-                }
-
-                const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
-                const diffDays = eventDateDay.diff(nowDay, 'day');
-
-                // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
-                if (diffDays < 0) {
-                    pastSkipped++; return false;
-                }
-                if (diffDays > daysBefore) {
-                    futureSkipped++; return false;
-                }
+                if (event.diffDays > daysBefore) { futureSkipped++; return false; }
                 return true;
             });
 
@@ -1884,8 +1870,27 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
 
         // Fetch all events
         const eventsSnapshot = await db.collectionGroup('events').get();
-        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         const nowDay = now.startOf('day');
+
+        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
+            if (event.isCompleted) return false;
+            if (event.isDeleted === true) return false;
+
+            let endDateObj = event.endDate;
+            if (endDateObj && typeof endDateObj.toDate === 'function') {
+                endDateObj = endDateObj.toDate();
+            } else if (typeof endDateObj === 'string') {
+                endDateObj = new Date(endDateObj);
+            }
+            if (!endDateObj) return false;
+
+            const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
+            if (eventDateDay.diff(nowDay, 'day') < 0) return false;
+
+            event.diffDays = eventDateDay.diff(nowDay, 'day');
+
+            return true;
+        });
 
         let successfulCount = 0;
         let failedCount = 0;
@@ -1905,31 +1910,8 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
             let futureSkipped = 0;
 
             const userUncompletedEvents = allEvents.filter(event => {
-                if (event.isCompleted) { completedSkipped++; return false; }
-                if (event.isDeleted === true) { deletedSkipped++; return false; }
-                if (!event.endDate) { noEndDateSkipped++; return false; }
                 if (checkedEvents.includes(event.id)) { checkedSkipped++; return false; }
-
-                let endDateObj = event.endDate;
-                if (endDateObj && typeof endDateObj.toDate === 'function') {
-                    endDateObj = endDateObj.toDate();
-                } else if (typeof endDateObj === 'string') {
-                    endDateObj = new Date(endDateObj);
-                }
-                if (!endDateObj) {
-                    noEndDateSkipped++; return false;
-                }
-
-                const eventDateDay = dayjs(endDateObj).tz('Asia/Tokyo').startOf('day');
-                const diffDays = eventDateDay.diff(nowDay, 'day');
-
-                // 期限判定: 0日以上（今日以降）かつ daysBefore 以下
-                if (diffDays < 0) {
-                    pastSkipped++; return false;
-                }
-                if (diffDays > daysBefore) {
-                    futureSkipped++; return false;
-                }
+                if (event.diffDays > daysBefore) { futureSkipped++; return false; }
                 return true;
             });
 
@@ -2147,5 +2129,76 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
     } catch (error: any) {
         await writeDebugLog(traceId, 'executeManualPrompt error', { error: error.message });
         throw new functions.https.HttpsError('internal', error.message || 'Unknown error');
+    }
+});
+
+
+export const searchIGDBGames = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 60 }).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    const query = data.query;
+    if (!query || typeof query !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'Query is required.');
+    }
+
+    const traceId = 'igdb-search-' + Date.now();
+    try {
+
+        const configDoc = await db.collection('settings').doc('config').get();
+        const configData = configDoc?.data();
+        const clientId = process.env.TWITCH_CLIENT_ID || configData?.twitchClientId;
+        const clientSecret = process.env.TWITCH_CLIENT_SECRET || configData?.twitchClientSecret;
+
+        if (!clientId || !clientSecret) {
+            functions.logger.error(`[${traceId}] Missing Twitch API credentials.`);
+            throw new functions.https.HttpsError('failed-precondition', 'API credentials are not configured.');
+        }
+
+
+        // 1. Get Access Token
+        const tokenResponse = await fetch('https://id.twitch.tv/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                'client_id': clientId,
+                'client_secret': clientSecret,
+                'grant_type': 'client_credentials'
+            })
+        });
+
+        if (!tokenResponse.ok) {
+            functions.logger.error(`[${traceId}] Failed to get Twitch token: ${tokenResponse.status}`);
+            return { success: false, message: 'トークンの取得に失敗しました' };
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        // 2. Search Games via IGDB API
+        const escapedQuery = query.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+        const searchResponse = await fetch('https://api.igdb.com/v4/games', {
+            method: 'POST',
+            headers: {
+                'Client-ID': clientId,
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json',
+                'Content-Type': 'text/plain'
+            },
+            body: `search "${escapedQuery}"; fields name, first_release_date; limit 10;`
+        });
+
+        if (!searchResponse.ok) {
+            functions.logger.error(`[${traceId}] Failed to search IGDB: ${searchResponse.status}`);
+            return { success: false, message: 'ゲームの検索に失敗しました' };
+        }
+
+        const games = await searchResponse.json();
+        return { success: true, games: games };
+
+    } catch (error: any) {
+        functions.logger.error(`[${traceId}] Error in searchIGDBGames: ${error.message}`);
+        throw new functions.https.HttpsError('internal', '内部エラーが発生しました', error.message);
     }
 });

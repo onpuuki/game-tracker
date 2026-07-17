@@ -3,11 +3,40 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class WidgetSyncService {
+  static Timer? _debounceTimer;
+  static final List<Completer<void>> _completers = [];
+
   static Future<void> syncTop5Events({
+    List<String> excludedIds = const [],
+  }) async {
+    final completer = Completer<void>();
+    _completers.add(completer);
+
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(seconds: 2), () async {
+      try {
+        await _executeSync(excludedIds: excludedIds);
+        for (var c in _completers) {
+          if (!c.isCompleted) c.complete();
+        }
+      } catch (e) {
+        for (var c in _completers) {
+          if (!c.isCompleted) c.completeError(e);
+        }
+      } finally {
+        _completers.clear();
+      }
+    });
+
+    return completer.future;
+  }
+
+  static Future<void> _executeSync({
     List<String> excludedIds = const [],
   }) async {
     try {
@@ -26,7 +55,9 @@ class WidgetSyncService {
       final userDoc = await db.collection('users').doc(user.uid).get();
       List<dynamic> checkedEventsRaw = userDoc.data()?['checkedEvents'] ?? [];
       List<dynamic> customGamesRaw = userDoc.data()?['customGames'] ?? [];
-      List<String> customGames = customGamesRaw.map((e) => e.toString()).toList();
+      List<String> customGames = customGamesRaw
+          .map((e) => e.toString())
+          .toList();
       Set<String> checkedEvents = checkedEventsRaw
           .map((e) => e.toString())
           .toSet();
@@ -35,12 +66,18 @@ class WidgetSyncService {
 
       // Fetch selected games from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final List<String> selectedGames = prefs.getStringList('selectedGames') ?? [];
+      final List<String> selectedGames =
+          prefs.getStringList('selectedGames') ?? [];
 
       // Fetch all events
       final QuerySnapshot eventsSnapshot = await db
           .collectionGroup('events')
-          .where('endDate', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1))))
+          .where(
+            'endDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(
+              DateTime.now().subtract(const Duration(days: 1)),
+            ),
+          )
           .get();
 
       final now = DateTime.now();
@@ -54,11 +91,13 @@ class WidgetSyncService {
           continue;
         }
 
-        if (selectedGames.isNotEmpty && !selectedGames.contains(data['gameName'])) {
+        if (selectedGames.isNotEmpty &&
+            !selectedGames.contains(data['gameName'])) {
           continue;
         }
 
-        if (data['isCustomGame'] == true && !customGames.contains(data['gameName'])) {
+        if (data['isCustomGame'] == true &&
+            !customGames.contains(data['gameName'])) {
           continue;
         }
 
@@ -153,7 +192,8 @@ class WidgetSyncService {
         app: Firebase.app(),
         databaseId: 'default',
       ).collection('debug_logs').add({
-        'message': 'WidgetSync Success. target: ${widgetDataList.length} events, excludedIds: $excludedIds',
+        'message':
+            'WidgetSync Success. target: ${widgetDataList.length} events, excludedIds: $excludedIds',
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e, stacktrace) {
@@ -171,6 +211,7 @@ class WidgetSyncService {
       } catch (logError) {
         debugPrint('Failed to write error log to Firestore: $logError');
       }
+      rethrow;
     }
   }
 }

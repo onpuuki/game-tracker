@@ -33,8 +33,12 @@ class _GameSelectionScreenState extends State<GameSelectionScreen> {
     _currentSelectedGames = List.from(widget.selectedGames);
     _showOnlyCustomGames = widget.showOnlyCustomGames;
 
-    final defaultGames = widget.allGames.where((g) => !widget.userCustomGames.contains(g)).toList();
-    final customGames = widget.allGames.where((g) => widget.userCustomGames.contains(g)).toList();
+    final defaultGames = widget.allGames
+        .where((g) => !widget.userCustomGames.contains(g))
+        .toList();
+    final customGames = widget.allGames
+        .where((g) => widget.userCustomGames.contains(g))
+        .toList();
     _displayGames = [...defaultGames, ...customGames];
   }
 

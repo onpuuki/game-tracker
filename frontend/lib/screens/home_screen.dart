@@ -304,7 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
         key: ValueKey(eventId),
         parsedEvent: parsedEvent,
         eventData: eventData,
-        eventGameName: _userCustomGames.contains(eventGameName) ? '👑 $eventGameName' : eventGameName,
+        eventGameName: _userCustomGames.contains(eventGameName)
+            ? '👑 $eventGameName'
+            : eventGameName,
         title: title,
         tag: tag,
         subTag: subTag,
@@ -460,7 +462,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 _userCustomGames = List<String>.from(data['customGames'] ?? []);
               }
               if (data.containsKey('checkedEvents')) {
-                _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
+                _checkedEventIds = List<String>.from(
+                  data['checkedEvents'] ?? [],
+                );
               }
             });
           }
@@ -1113,8 +1117,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 });
 
                                 try {
-                                  final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1')
-                                      .httpsCallable(
+                                  final callable =
+                                      FirebaseFunctions.instanceFor(
+                                        region: 'asia-northeast1',
+                                      ).httpsCallable(
                                         'clearAllEvents',
                                         options: HttpsCallableOptions(
                                           timeout: const Duration(minutes: 5),
@@ -1140,13 +1146,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
                                   );
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _isClearingEvents = false;
-                                    });
-                                  }
                                 }
+                                if (!mounted) return;
+                                setState(() {
+                                  _isClearingEvents = false;
+                                });
                               }
                             },
                     ),
@@ -1193,13 +1197,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     backgroundColor: Colors.red,
                                   ),
                                 );
-                              } finally {
-                                if (mounted) {
-                                  setState(() {
-                                    _isTestingNotification = false;
-                                  });
-                                }
                               }
+                              if (!mounted) return;
+                              setState(() {
+                                _isTestingNotification = false;
+                              });
                             },
                     ),
                     ListTile(
@@ -1327,8 +1329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ..sort();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
-                  if (
-                      _latestAllGameNames.length != allGameNames.length) {
+                  if (_latestAllGameNames.length != allGameNames.length) {
                     setState(() {
                       _latestAllGameNames = allGameNames;
                     });
@@ -1371,7 +1372,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Checked Filter
                   if (_excludeChecked &&
-                      (_checkedEventIds.contains(event.doc.id) || event.data['isCompleted'] == true)) {
+                      (_checkedEventIds.contains(event.doc.id) ||
+                          event.data['isCompleted'] == true)) {
                     return false;
                   }
 
@@ -1684,27 +1686,42 @@ class _EventCardItemState extends State<_EventCardItem> {
 
     if (!_isEditing) {
       _gameNameController.text = widget.parsedEvent.gameName;
-      _titleController.text = widget.title;
-      _summaryController.text = widget.summary;
+      _titleController.text = widget.parsedEvent.data['title'] ?? widget.title;
+      _summaryController.text =
+          widget.parsedEvent.data['summary'] ?? widget.summary;
       _redeemCodeController.text = widget.redeemCode ?? '';
-      _startDateController.text = widget.startDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!) : '';
-      _endDateController.text = widget.endDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!) : '';
+      _startDateController.text = widget.startDate != null
+          ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!)
+          : '';
+      _endDateController.text = widget.endDate != null
+          ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!)
+          : '';
       _eventUrlController.text = widget.eventUrl ?? '';
     }
   }
 
   void _initEditFields() {
-    _gameNameController = TextEditingController(text: widget.parsedEvent.gameName);
-    _titleController = TextEditingController(text: widget.title);
-    _summaryController = TextEditingController(text: widget.summary);
+    _gameNameController = TextEditingController(
+      text: widget.parsedEvent.gameName,
+    );
+    _titleController = TextEditingController(
+      text: widget.parsedEvent.data['title'] ?? widget.title,
+    );
+    _summaryController = TextEditingController(
+      text: widget.parsedEvent.data['summary'] ?? widget.summary,
+    );
     _redeemCodeController = TextEditingController(
       text: widget.redeemCode ?? '',
     );
     _startDateController = TextEditingController(
-      text: widget.startDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!) : '',
+      text: widget.startDate != null
+          ? DateFormat('yyyy-MM-dd HH:mm').format(widget.startDate!)
+          : '',
     );
     _endDateController = TextEditingController(
-      text: widget.endDate != null ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!) : '',
+      text: widget.endDate != null
+          ? DateFormat('yyyy-MM-dd HH:mm').format(widget.endDate!)
+          : '',
     );
     _eventUrlController = TextEditingController(text: widget.eventUrl ?? '');
     _selectedTag = widget.tag;
@@ -1729,7 +1746,9 @@ class _EventCardItemState extends State<_EventCardItem> {
       if (text.isEmpty) return null;
       final parsed = DateTime.tryParse(text.replaceAll('/', '-'));
       if (parsed == null) {
-        throw FormatException('$fieldNameのフォーマットが正しくありません。(例: 2024-01-01 12:00)');
+        throw FormatException(
+          '$fieldNameのフォーマットが正しくありません。(例: 2024-01-01 12:00)',
+        );
       }
       return Timestamp.fromDate(parsed);
     }
@@ -1750,11 +1769,12 @@ class _EventCardItemState extends State<_EventCardItem> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('FormatException: ', ''))),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('FormatException: ', '')),
+        ),
+      );
       return;
     }
 
@@ -2161,18 +2181,24 @@ class _EventCardItemState extends State<_EventCardItem> {
                                 if (widget.rewards.isNotEmpty) ...[
                                   const SizedBox(height: 6),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: widget.rewards.take(3).map((reward) => Text(
-                                      reward,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: _localIsChecked
-                                            ? Colors.grey
-                                            : null,
-                                      ),
-                                    )).toList(),
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: widget.rewards
+                                        .take(3)
+                                        .map(
+                                          (reward) => Text(
+                                            reward,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: _localIsChecked
+                                                  ? Colors.grey
+                                                  : null,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
                                   ),
                                 ],
                                 if (widget.isCycleEvent &&
@@ -2203,14 +2229,22 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                 if (value == null) return;
 
                                                 final updatedTasks =
-                                                    (widget.eventData['tasks'] as List)
-                                                        .map((t) => Map<String, dynamic>.from(t))
+                                                    (widget.eventData['tasks']
+                                                            as List)
+                                                        .map(
+                                                          (t) =>
+                                                              Map<
+                                                                String,
+                                                                dynamic
+                                                              >.from(t),
+                                                        )
                                                         .toList();
                                                 updatedTasks[taskIndex]['isCompleted'] =
                                                     value;
 
                                                 setState(() {
-                                                  widget.eventData['tasks'] = updatedTasks;
+                                                  widget.eventData['tasks'] =
+                                                      updatedTasks;
                                                 });
 
                                                 final allCompleted =

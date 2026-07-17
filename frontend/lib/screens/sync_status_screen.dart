@@ -59,13 +59,11 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('予期せぬエラー: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCycleSyncRunning = false;
-        });
-      }
     }
+    if (!mounted) return;
+    setState(() {
+      _isCycleSyncRunning = false;
+    });
   }
 
   Future<void> _showManualPromptDialog() async {
@@ -112,9 +110,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                       await Clipboard.setData(const ClipboardData(text: text));
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('クリップボードにコピーしました'),
-                        ),
+                        const SnackBar(content: Text('クリップボードにコピーしました')),
                       );
                     },
                     icon: const Icon(Icons.copy),
@@ -173,19 +169,15 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
       );
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('エラー: ${e.message}')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('エラー: ${e.message}')));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('予期せぬエラー: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isManualPromptRunning = false;
-        });
-      }
     }
+    if (!mounted) return;
+    setState(() {
+      _isManualPromptRunning = false;
+    });
   }
 
   Future<void> _triggerSync() async {
@@ -455,9 +447,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                       ClipboardData(text: buffer.toString()),
                                     );
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).showSnackBar(
+                                    ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text('Copied to clipboard'),
                                       ),

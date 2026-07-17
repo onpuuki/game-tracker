@@ -110,12 +110,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
 
         await FirebaseFirestore.instanceFor(
-          app: Firebase.app(),
-          databaseId: 'default',
-        ).collection('users').doc(user.uid).set(
-          updateData,
-          SetOptions(merge: true),
-        );
+              app: Firebase.app(),
+              databaseId: 'default',
+            )
+            .collection('users')
+            .doc(user.uid)
+            .set(updateData, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Error syncing user settings: $e');
       }
@@ -231,7 +231,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('期限の何日前に通知'),
-            trailing: Text(_notificationDaysBefore == 0 ? '当日期限のみ' : '$_notificationDaysBefore日前まで'),
+            trailing: Text(
+              _notificationDaysBefore == 0
+                  ? '当日期限のみ'
+                  : '$_notificationDaysBefore日前まで',
+            ),
             onTap: _notificationEnabled
                 ? () {
                     showModalBottomSheet(
@@ -251,7 +255,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             },
                             children: List<Widget>.generate(31, (int index) {
                               return Center(
-                                child: Text(index == 0 ? '当日期限のみ' : '$index日前まで'),
+                                child: Text(
+                                  index == 0 ? '当日期限のみ' : '$index日前まで',
+                                ),
                               );
                             }),
                           ),
@@ -326,7 +332,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const PremiumGameScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const PremiumGameScreen(),
+                  ),
                 );
               },
             ),
@@ -334,7 +342,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
               onPressed: () async {
-                const bool isAdmin = bool.fromEnvironment('IS_ADMIN', defaultValue: false);
+                const bool isAdmin = bool.fromEnvironment(
+                  'IS_ADMIN',
+                  defaultValue: false,
+                );
                 if (isAdmin) {
                   final prefs = await SharedPreferences.getInstance();
                   final newValue = !_isPremium;
@@ -356,16 +367,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('管理者権限：プレミアムモードを${newValue ? '有効' : '無効'}にしました'),
+                      content: Text(
+                        '管理者権限：プレミアムモードを${newValue ? '有効' : '無効'}にしました',
+                      ),
                     ),
                   );
                 } else {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('課金処理は準備中です'),
-                    ),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('課金処理は準備中です')));
                 }
               },
               child: Text(_isPremium ? 'プレミアムモードを終了する' : 'プレミアムモードを利用する'),

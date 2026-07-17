@@ -111,13 +111,11 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   @override
@@ -166,7 +164,8 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
               _initialized = true;
 
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() {});
+                if (!mounted) return;
+                setState(() {});
               });
             }
           }

@@ -1100,7 +1100,7 @@ export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_c
 });
 
 // イベントの全クリア処理 (バッチ上限対応済み・OOM対策済み)
-export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+export const clearAllEvents = functions.runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     try {
         let totalDeleted = 0;
 
@@ -1108,12 +1108,12 @@ export const clearAllEvents = functions.runWith({ memory: '256MB', timeoutSecond
             const snapshot = await db.collectionGroup('events').limit(450).get();
             if (snapshot.empty) break;
 
-            const batch = db.batch();
+            const bulkWriter = db.bulkWriter();
             snapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref);
+                bulkWriter.delete(doc.ref);
             });
 
-            await batch.commit();
+            await bulkWriter.close();
             totalDeleted += snapshot.docs.length;
         }
 
@@ -2178,7 +2178,7 @@ export const searchIGDBGames = functions.region('asia-northeast1').runWith({ mem
         const accessToken = tokenData.access_token;
 
         // 2. Search Games via IGDB API
-        const escapedQuery = query.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+        const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         const searchResponse = await fetch('https://api.igdb.com/v4/games', {
             method: 'POST',
             headers: {

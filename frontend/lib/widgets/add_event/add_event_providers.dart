@@ -315,7 +315,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
         if (startDateStr == null || startDateStr.isEmpty) {
           throw Exception('隔週の場合は起点日が必須です');
         }
-        final startDate = DateTime.tryParse(startDateStr);
+        final startDate = DateTime.tryParse(startDateStr.replaceAll('/', '-'));
         if (startDate == null) {
           throw Exception('起点日のフォーマットが不正です (YYYY-MM-DD)');
         }
@@ -357,7 +357,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
     }
   }
 
-  Future<void> submitData(BuildContext context, {required bool mounted}) async {
+  Future<void> submitData(BuildContext context) async {
     final s = state;
     final gameName = s.gameName.trim();
     final title = s.title.trim();

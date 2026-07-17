@@ -348,7 +348,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
           if (createdAtData is Timestamp) {
             createdAt = createdAtData.toDate();
           } else if (createdAtData is String) {
-            createdAt = DateTime.tryParse(createdAtData);
+            createdAt = DateTime.tryParse(createdAtData.toString().replaceAll('/', '-'));
           }
 
           // Keyword filter
@@ -469,7 +469,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                     if (createdAtData is Timestamp) {
                       createdDateTime = createdAtData.toDate();
                     } else if (createdAtData is String) {
-                      createdDateTime = DateTime.tryParse(createdAtData);
+                      createdDateTime = DateTime.tryParse(createdAtData.toString().replaceAll('/', '-'));
                     }
                     final displayTime = createdDateTime ?? DateTime.now();
 

@@ -48,7 +48,7 @@ class AddTab extends HookConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
               ),
               onPressed: () {
-                notifier.submitData(context, mounted: context.mounted);
+                notifier.submitData(context);
               },
               child: const Text('登録', style: TextStyle(fontSize: 18)),
             ),

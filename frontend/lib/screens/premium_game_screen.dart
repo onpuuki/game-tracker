@@ -171,6 +171,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    if (!mounted) return;
     setState(() {
       _isAdding = true;
     });
@@ -209,13 +210,12 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('追加エラー: $e')),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isAdding = false;
-        });
-      }
     }
+
+    if (!mounted) return;
+    setState(() {
+      _isAdding = false;
+    });
   }
 
     Future<void> _removeGame(String gameName) async {

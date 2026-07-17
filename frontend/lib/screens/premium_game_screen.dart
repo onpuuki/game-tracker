@@ -25,9 +25,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('イベント抽出ゲーム追加'),
-      ),
+      appBar: AppBar(title: const Text('イベント抽出ゲーム追加')),
       body: Column(
         children: [
           const Padding(
@@ -66,9 +64,7 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
             ),
           ),
           const Divider(height: 32),
-          Expanded(
-            child: _buildCustomGamesList(),
-          ),
+          Expanded(child: _buildCustomGamesList()),
         ],
       ),
     );
@@ -85,50 +81,55 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     });
 
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1').httpsCallable('searchIGDBGames');
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      ).httpsCallable('searchIGDBGames');
       final result = await callable.call({'query': query});
 
       if (!mounted) return;
 
       if (result.data != null && result.data['success'] == true) {
-         final List<dynamic> games = result.data['games'] ?? [];
-         final List<String> gameNames = [];
+        final List<dynamic> games = result.data['games'] ?? [];
+        final List<String> gameNames = [];
 
-         for (var g in games) {
-           final name = g['name'] as String;
-           if (g.containsKey('first_release_date')) {
-             final timestamp = g['first_release_date'] as int;
-             final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
-             gameNames.add('$name (${date.year})');
-           } else {
-             gameNames.add(name);
-           }
-         }
+        for (var g in games) {
+          final name = g['name'] as String;
+          if (g.containsKey('first_release_date')) {
+            final timestamp = g['first_release_date'] as int;
+            final date = DateTime.fromMillisecondsSinceEpoch(
+              timestamp * 1000,
+              isUtc: true,
+            );
+            gameNames.add('$name (${date.year})');
+          } else {
+            gameNames.add(name);
+          }
+        }
 
-         if (gameNames.isEmpty) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('ゲームが見つかりませんでした。')),
-           );
-         } else {
-           _showSearchResultsDialog(gameNames);
-         }
+        if (gameNames.isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('ゲームが見つかりませんでした。')));
+        } else {
+          _showSearchResultsDialog(gameNames);
+        }
       } else {
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text(result.data?['message']?.toString() ?? '検索に失敗しました')),
-         );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.data?['message']?.toString() ?? '検索に失敗しました'),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エラーが発生しました: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSearching = false;
-        });
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('エラーが発生しました: $e')));
     }
+    if (!mounted) return;
+    setState(() {
+      _isSearching = false;
+    });
   }
 
   void _showSearchResultsDialog(List<String> gameNames) {
@@ -175,7 +176,10 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid);
+      final docRef = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('users').doc(user.uid);
       final docSnap = await docRef.get();
 
       if (docSnap.exists) {
@@ -202,9 +206,9 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
 
         if (customGames.contains(gameName)) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('すでに登録されています。')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('すでに登録されています。')));
           return;
         }
       }
@@ -214,21 +218,19 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ゲームを追加しました。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ゲームを追加しました。')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('追加エラー: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isAdding = false;
-        });
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('追加エラー: $e')));
     }
+    if (!mounted) return;
+    setState(() {
+      _isAdding = false;
+    });
   }
 
   Future<void> _removeGame(String gameName) async {
@@ -256,18 +258,21 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid).update({
+      await FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('users').doc(user.uid).update({
         'customGames': FieldValue.arrayRemove([gameName]),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ゲームを削除しました。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ゲームを削除しました。')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('削除エラー: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('削除エラー: $e')));
     }
   }
 
@@ -278,7 +283,10 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     }
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.uid).snapshots(),
+      stream: FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      ).collection('users').doc(user.uid).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Center(child: Text('エラーが発生しました'));

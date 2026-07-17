@@ -122,13 +122,11 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _runManualExport() async {
@@ -192,16 +190,14 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('エラー: $e')));
-    } finally {
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) {
-        setState(() {
-          _isExporting = false;
-          _exportStatusMessage = '';
-          _exportProgress = null;
-        });
-      }
     }
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    setState(() {
+      _isExporting = false;
+      _exportStatusMessage = '';
+      _exportProgress = null;
+    });
   }
 
   @override
@@ -241,7 +237,8 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
               _initialized = true;
 
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() {});
+                if (!mounted) return;
+                setState(() {});
               });
             }
           } else if (!_initialized) {

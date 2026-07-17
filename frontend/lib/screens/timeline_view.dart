@@ -31,7 +31,9 @@ class _TimelineViewState extends State<TimelineView> {
     if (RegExp(r'^[a-zA-Z\s]+$').hasMatch(fullName)) {
       final words = fullName.split(' ').where((w) => w.isNotEmpty).toList();
       if (words.length == 1) {
-        return words[0].substring(0, words[0].length < 4 ? words[0].length : 4).toUpperCase();
+        return words[0]
+            .substring(0, words[0].length < 4 ? words[0].length : 4)
+            .toUpperCase();
       } else {
         return words.map((w) => w[0]).take(4).join('').toUpperCase();
       }

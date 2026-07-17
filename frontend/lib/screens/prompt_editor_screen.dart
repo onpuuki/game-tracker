@@ -14,13 +14,10 @@ class _TargetItem {
   final TextEditingController abbreviationController;
   final TextEditingController urlController;
 
-  _TargetItem({
-    String gameName = "",
-    String abbreviation = "",
-    String url = "",
-  }) : gameNameController = TextEditingController(text: gameName),
-       abbreviationController = TextEditingController(text: abbreviation),
-       urlController = TextEditingController(text: url);
+  _TargetItem({String gameName = "", String abbreviation = "", String url = ""})
+    : gameNameController = TextEditingController(text: gameName),
+      abbreviationController = TextEditingController(text: abbreviation),
+      urlController = TextEditingController(text: url);
 
   void dispose() {
     gameNameController.dispose();
@@ -78,12 +75,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                   target.urlController.text = url;
                 } catch (e) {
                   // もし codeUrls にあるが targets にない場合は新規追加する
-                  _targetItems.add(
-                    _TargetItem(
-                      gameName: gameName,
-                      url: url,
-                    ),
-                  );
+                  _targetItems.add(_TargetItem(gameName: gameName, url: url));
                 }
               }
             }
@@ -95,13 +87,11 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to load data: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _saveData() async {
@@ -219,27 +209,33 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
                                         children: [
                                           Row(
                                             children: [
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    const Text('ゲーム名', style: TextStyle(fontSize: 12)),
+                                                    const Text(
+                                                      'ゲーム名',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
                                                     TextField(
                                                       controller:
                                                           _targetItems[index]
                                                               .gameNameController,
-                                                      decoration:
-                                                          const InputDecoration(
-                                                            border:
-                                                                OutlineInputBorder(),
-                                                            hintText:
-                                                                'Enter game name...',
-                                                            isDense: true,
-                                                          ),
+                                                      decoration: const InputDecoration(
+                                                        border:
+                                                            OutlineInputBorder(),
+                                                        hintText:
+                                                            'Enter game name...',
+                                                        isDense: true,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -247,12 +243,19 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                               const SizedBox(width: 8),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    const Text('略称', style: TextStyle(fontSize: 12)),
+                                                    const Text(
+                                                      '略称',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
                                                     TextField(
-                                                      controller: _targetItems[index]
-                                                          .abbreviationController,
+                                                      controller:
+                                                          _targetItems[index]
+                                                              .abbreviationController,
                                                       decoration: const InputDecoration(
                                                         border:
                                                             OutlineInputBorder(),
@@ -268,9 +271,13 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                                           ),
                                           const SizedBox(height: 8),
                                           Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              const Text('コード入力サイトURL (コードを埋め込む場所は(コード)と記載)', style: TextStyle(fontSize: 12)),
+                                              const Text(
+                                                'コード入力サイトURL (コードを埋め込む場所は(コード)と記載)',
+                                                style: TextStyle(fontSize: 12),
+                                              ),
                                               TextField(
                                                 controller: _targetItems[index]
                                                     .urlController,

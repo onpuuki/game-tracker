@@ -236,7 +236,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
         );
         count++;
         // WriteBatch limit is 500
-        if (count == 500) {
+        if (count >= 450) {
           await batch.commit();
           batch = FirebaseFirestore.instanceFor(
             app: Firebase.app(),

@@ -191,7 +191,7 @@ class _ExportSettingsScreenState extends State<ExportSettingsScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('エラー: $e')));
     }
-    await Future.delayed(const Duration(seconds: 2));
+
     if (!mounted) return;
     setState(() {
       _isExporting = false;

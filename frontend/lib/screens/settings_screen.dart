@@ -136,6 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _notificationEnabled = finalEnabled;
     });
@@ -144,6 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _updateNotificationHour(int? hour) async {
     if (hour != null) {
+      if (!mounted) return;
       setState(() {
         _notificationHour = hour;
       });

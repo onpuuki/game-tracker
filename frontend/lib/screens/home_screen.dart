@@ -358,6 +358,10 @@ class _HomeScreenState extends State<HomeScreen> {
               'error': e.toString(),
               'timestamp': FieldValue.serverTimestamp(),
             });
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('ウィジェットの更新に失敗しました: $e')),
+            );
           }
         },
       );
@@ -1201,7 +1205,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 );
                               }
-                              if (!mounted) return;
+                              if (!context.mounted) return;
                               setState(() {
                                 _isTestingNotification = false;
                               });
@@ -2297,6 +2301,10 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                     'timestamp':
                                                         FieldValue.serverTimestamp(),
                                                   });
+                                                  if (!context.mounted) return;
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('ウィジェットの更新に失敗しました: $e')),
+                                                  );
                                                 }
                                               },
                                             ),

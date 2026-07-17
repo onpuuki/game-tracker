@@ -108,7 +108,22 @@ Future<void> _setupSecondaryServices() async {
     // FCM Permissions & Token registration
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await FirebaseMessaging.instance.requestPermission();
+      final settings = await FirebaseMessaging.instance.requestPermission();
+
+      if (settings.authorizationStatus == AuthorizationStatus.denied ||
+          settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+        // 権限が拒否された場合、Firestore側の通知設定を強制的にオフにする（サイレントエラー防止）
+        await FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'default',
+        ).collection('users').doc(user.uid).set({
+          'settings': {
+            'notificationEnabled': false,
+          }
+        }, SetOptions(merge: true));
+        debugPrint('FCM permission denied. Disabled notifications in Firestore.');
+      }
+
       FirebaseMessaging.onBackgroundMessage(
         _firebaseMessagingBackgroundHandler,
       );

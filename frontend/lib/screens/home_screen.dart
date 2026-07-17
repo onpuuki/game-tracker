@@ -1,5 +1,6 @@
 import 'timeline_view.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../widgets/keep_alive_page.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -75,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Sort State
   String _primarySortField = 'gameName';
   String _primarySortOrder = 'asc';
+  Timer? _debounceTimer;
 
   DateTime? _parseEventDate(dynamic dateData) {
     if (dateData == null) return null;
@@ -171,7 +173,65 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   late Stream<DocumentSnapshot> _configStream;
-  late Stream<QuerySnapshot> _eventsStream;
+  StreamController<List<QueryDocumentSnapshot>>? _eventsStreamController;
+  final List<StreamSubscription> _eventSubscriptions = [];
+  final Map<String, List<QueryDocumentSnapshot>> _eventSnapshotsMap = {};
+
+  void _initEventsStream() {
+    _eventsStreamController?.close();
+    _eventsStreamController = StreamController<List<QueryDocumentSnapshot>>.broadcast();
+    for (var sub in _eventSubscriptions) {
+      sub.cancel();
+    }
+    _eventSubscriptions.clear();
+    _eventSnapshotsMap.clear();
+
+    final db = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'default',
+    );
+
+    // Standard events (filtered by isStandard = true as per memory rule)
+    final standardSub = db
+        .collectionGroup('events')
+        .where('isStandard', isEqualTo: true)
+        .snapshots()
+        .listen((snapshot) {
+      _eventSnapshotsMap['standard'] = snapshot.docs;
+      _emitEvents();
+    }, onError: (e) {
+      _eventsStreamController?.addError(e);
+    });
+    _eventSubscriptions.add(standardSub);
+
+    // Custom games events
+    for (final gameName in _userCustomGames) {
+      if (gameName.isNotEmpty) {
+        final safeGameName = Uri.encodeComponent(gameName.replaceAll('/', '／'));
+        final customSub = db
+            .collection('games')
+            .doc(safeGameName)
+            .collection('events')
+            .snapshots()
+            .listen((snapshot) {
+          _eventSnapshotsMap['custom_$gameName'] = snapshot.docs;
+          _emitEvents();
+        }, onError: (e) {
+          _eventsStreamController?.addError(e);
+        });
+        _eventSubscriptions.add(customSub);
+      }
+    }
+  }
+
+  void _emitEvents() {
+    if (_eventsStreamController?.isClosed == true) return;
+    final List<QueryDocumentSnapshot> allDocs = [];
+    for (final docs in _eventSnapshotsMap.values) {
+      allDocs.addAll(docs);
+    }
+    _eventsStreamController?.add(allDocs);
+  }
 
   Widget _buildEventCard(ParsedEvent parsedEvent) {
     try {
@@ -348,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
           try {
             await WidgetSyncService.syncTop5Events(
               excludedIds: _checkedEventIds.toList(),
+              throwError: true,
             );
           } catch (e) {
             debugPrint('WidgetSync Error: $e');
@@ -401,10 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
       databaseId: 'default',
     ).collection('settings').doc('config').snapshots();
 
-    _eventsStream = FirebaseFirestore.instanceFor(
-      app: Firebase.app(),
-      databaseId: 'default',
-    ).collectionGroup('events').snapshots();
+    _initEventsStream();
   }
 
   @override
@@ -412,6 +470,10 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final ad in _nativeAds.values) {
       ad.dispose();
     }
+    for (var sub in _eventSubscriptions) {
+      sub.cancel();
+    }
+    _eventsStreamController?.close();
     super.dispose();
   }
 
@@ -464,9 +526,14 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             }
             if (!mounted) return;
+            bool customGamesChanged = false;
             setState(() {
               if (data.containsKey('customGames')) {
-                _userCustomGames = List<String>.from(data['customGames'] ?? []);
+                final newCustomGames = List<String>.from(data['customGames'] ?? []);
+                if (newCustomGames.join(',') != _userCustomGames.join(',')) {
+                  _userCustomGames = newCustomGames;
+                  customGamesChanged = true;
+                }
               }
               if (data.containsKey('checkedEvents')) {
                 _checkedEventIds = List<String>.from(
@@ -474,6 +541,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
             });
+            if (customGamesChanged) {
+              _initEventsStream();
+            }
           }
         }
       });
@@ -622,7 +692,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             _filterKeyword = value;
                           });
                           setState(() {});
-                          _savePreferences();
+                          _debounceTimer?.cancel();
+                          _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+                            _savePreferences();
+                          });
                         },
                       ),
                     ),
@@ -1293,8 +1366,8 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            return StreamBuilder<QuerySnapshot>(
-              stream: _eventsStream,
+            return StreamBuilder<List<QueryDocumentSnapshot>>(
+              stream: _eventsStreamController?.stream,
               builder: (context, eventSnapshot) {
                 if (eventSnapshot.hasError) {
                   return Center(
@@ -1305,7 +1378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final docs = eventSnapshot.data?.docs ?? [];
+                final docs = eventSnapshot.data ?? [];
 
                 if (docs.isEmpty) {
                   return const Center(child: Text('No events found.'));
@@ -1794,7 +1867,7 @@ class _EventCardItemState extends State<_EventCardItem> {
 
     try {
       await widget.parsedEvent.doc.reference.update(updateData);
-      await WidgetSyncService.syncTop5Events();
+      await WidgetSyncService.syncTop5Events(throwError: true);
       if (!mounted) return;
       setState(() {
         _isEditing = false;
@@ -1836,7 +1909,7 @@ class _EventCardItemState extends State<_EventCardItem> {
           'isCreationLocked': true,
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        await WidgetSyncService.syncTop5Events();
+        await WidgetSyncService.syncTop5Events(throwError: true);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -2288,6 +2361,7 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                                 .id,
                                                           ]
                                                         : [],
+                                                    throwError: true,
                                                   );
                                                 } catch (e) {
                                                   debugPrint(

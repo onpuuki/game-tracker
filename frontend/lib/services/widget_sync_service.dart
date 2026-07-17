@@ -13,6 +13,7 @@ class WidgetSyncService {
 
   static Future<void> syncTop5Events({
     List<String> excludedIds = const [],
+    bool throwError = false,
   }) async {
     final completer = Completer<void>();
     _completers.add(completer);
@@ -26,7 +27,13 @@ class WidgetSyncService {
         }
       } catch (e) {
         for (var c in _completers) {
-          if (!c.isCompleted) c.completeError(e);
+          if (!c.isCompleted) {
+            if (throwError) {
+              c.completeError(e);
+            } else {
+              c.complete();
+            }
+          }
         }
       } finally {
         _completers.clear();

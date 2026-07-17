@@ -842,23 +842,27 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         tokens: totalTokens
                     };
 
-                    t.update(syncRequestRef, {
+                    const newCompletedTasks = (docData.completedTasks || 0) + 1;
+                    const totalTasks = docData.totalTasks || 0;
+
+                    const updateData: any = {
                         totalTokens: newTotalTokens,
-                        completedTasks: admin.firestore.FieldValue.increment(1),
+                        completedTasks: newCompletedTasks,
                         debugInfo: admin.firestore.FieldValue.arrayUnion(newDebugInfo),
                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
+                    };
+
+                    if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
+                        updateData.status = 'completed';
+                    }
+
+                    t.update(syncRequestRef, updateData);
                 }
             });
 
-            // Status aggregation
             const updatedDoc = await syncRequestRef.get();
             const uData = updatedDoc.data();
-            if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
-                 await syncRequestRef.update({
-                     status: 'completed',
-                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                 });
+            if (uData && uData.status === 'completed') {
                  await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
             }
 
@@ -867,21 +871,27 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
              await db.runTransaction(async (t) => {
                  const doc = await t.get(syncRequestRef);
                  if (doc.exists) {
-                     t.update(syncRequestRef, {
-                         completedTasks: admin.firestore.FieldValue.increment(1),
+                     const docData = doc.data()!;
+                     const newCompletedTasks = (docData.completedTasks || 0) + 1;
+                     const totalTasks = docData.totalTasks || 0;
+
+                     const updateData: any = {
+                         completedTasks: newCompletedTasks,
                          debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Processed', game: gameName, message: 'No events found' }),
                          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                     });
+                     };
+
+                     if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
+                         updateData.status = 'completed';
+                     }
+
+                     t.update(syncRequestRef, updateData);
                  }
              });
 
              const updatedDoc = await syncRequestRef.get();
              const uData = updatedDoc.data();
-             if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
-                  await syncRequestRef.update({
-                      status: 'completed',
-                      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                  });
+             if (uData && uData.status === 'completed') {
                   await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
              }
         }
@@ -892,26 +902,23 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         await db.runTransaction(async (t) => {
              const doc = await t.get(syncRequestRef);
              if (doc.exists) {
-                 t.update(syncRequestRef, {
-                     completedTasks: admin.firestore.FieldValue.increment(1),
+                 const docData = doc.data()!;
+                 const newCompletedTasks = (docData.completedTasks || 0) + 1;
+                 const totalTasks = docData.totalTasks || 0;
+
+                 const updateData: any = {
+                     completedTasks: newCompletedTasks,
                      debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Error', game: gameName, error: error instanceof Error ? error.message : String(error) }),
                      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                 });
+                 };
+
+                 if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
+                     updateData.status = 'completed';
+                 }
+
+                 t.update(syncRequestRef, updateData);
              }
         });
-
-        const updatedDoc = await syncRequestRef.get();
-        const uData = updatedDoc.data();
-        if (uData && uData.totalTasks && uData.completedTasks >= uData.totalTasks) {
-             // We had an error, so we might want to set status to 'error' or 'completed' with errors.
-             // We'll set it to 'completed' so it doesn't stay 'dispatched', or 'error' if it's considered totally failed.
-             // Let's set it to completed but maybe there's a UI handling for errors in debugInfo.
-             // Setting to 'error' might be better if any task failed, but the prompt says 'status == error' expects an 'error' field.
-             await syncRequestRef.update({
-                 status: 'completed', // Or we can keep it simple
-                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             });
-        }
 
         throw error;
     }
@@ -1194,9 +1201,14 @@ export const updateSyncSchedule = onDocumentWritten({ document: 'settings/sync_c
 export const clearAllEvents = functions.region('asia-northeast1').runWith({ memory: '512MB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
     try {
         let totalDeleted = 0;
+        let lastDoc: admin.firestore.QueryDocumentSnapshot | undefined = undefined;
 
         while (true) {
-            const snapshot = await db.collectionGroup('events').limit(450).get();
+            let query = db.collectionGroup('events').limit(450);
+            if (lastDoc) {
+                query = query.startAfter(lastDoc);
+            }
+            const snapshot = await query.get();
             if (snapshot.empty) break;
 
             const bulkWriter = db.bulkWriter();
@@ -1206,6 +1218,7 @@ export const clearAllEvents = functions.region('asia-northeast1').runWith({ memo
 
             await bulkWriter.close();
             totalDeleted += snapshot.docs.length;
+            lastDoc = snapshot.docs[snapshot.docs.length - 1] as admin.firestore.QueryDocumentSnapshot;
         }
 
         functions.logger.info(`Successfully deleted ${totalDeleted} events from all games.`);

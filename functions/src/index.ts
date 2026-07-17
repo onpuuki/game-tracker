@@ -286,16 +286,13 @@ export const processSyncRequest = onDocumentCreated({
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
 
-        const usersSnapshot = await db.collection('users').get();
+        // Replace full users scan with premium_custom_games scan
         const customGamesSet = new Set<string>();
-        usersSnapshot.forEach(doc => {
-            const userData = doc.data();
-            if (userData && Array.isArray(userData.customGames)) {
-                userData.customGames.forEach((game: string) => {
-                    if (game && typeof game === 'string' && game.trim().length > 0) {
-                        customGamesSet.add(game.trim());
-                    }
-                });
+        const premiumGamesSnapshot = await db.collection('premium_custom_games').get();
+        premiumGamesSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data && Array.isArray(data.uids) && data.uids.length > 0) {
+                customGamesSet.add(decodeURIComponent(doc.id));
             }
         });
 
@@ -386,7 +383,32 @@ export const syncSingleGameTask = onTaskDispatched({
 
         currentEventsList = await cleanupDuplicateEvents(currentEventsList, db);
 
-        const existingMiniList = currentEventsList.map(e => {
+        const now = dayjs().tz("Asia/Tokyo");
+
+        // Filter out deleted events and past events (ended more than 3 days ago)
+        const activeEventsList = currentEventsList.filter(e => {
+            const d = e.data;
+            if (d.isDeleted === true) return false;
+
+            if (d.endDate) {
+                let endDateJs;
+                if (typeof d.endDate.toDate === 'function') {
+                    endDateJs = dayjs(d.endDate.toDate()).tz("Asia/Tokyo");
+                } else if (typeof d.endDate === 'string') {
+                    endDateJs = dayjs(d.endDate).tz("Asia/Tokyo");
+                }
+
+                if (endDateJs && endDateJs.isValid()) {
+                    // Check if ended more than 3 days ago
+                    if (now.diff(endDateJs, 'day') > 3) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        });
+
+        const existingMiniList = activeEventsList.map(e => {
             const d = e.data;
             let endStr = '未定';
             if (d.endDate && typeof d.endDate.toDate === 'function') {
@@ -2239,4 +2261,75 @@ export const searchIGDBGames = functions.region('asia-northeast1').runWith({ mem
         functions.logger.error(`[${traceId}] Error in searchIGDBGames: ${error.message}`);
         throw new functions.https.HttpsError('internal', '内部エラーが発生しました', error.message);
     }
+});
+
+
+export const addPremiumCustomGame = functions.region('asia-northeast1').https.onCall(async (data, context) => {
+    const uid = context.auth?.uid;
+    if (!uid) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    const gameName = data.gameName;
+    if (!gameName || typeof gameName !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+
+    if (!userData?.isPremium) {
+        throw new functions.https.HttpsError('permission-denied', 'Only premium users can add custom games.');
+    }
+
+    const customGames = userData.customGames || [];
+    if (customGames.length >= 3) {
+        throw new functions.https.HttpsError('resource-exhausted', 'You can register up to 3 custom games.');
+    }
+
+    if (customGames.includes(gameName)) {
+        throw new functions.https.HttpsError('already-exists', 'Game already registered.');
+    }
+
+    const customGameRef = db.collection('premium_custom_games').doc(encodeURIComponent(gameName));
+
+    const batch = db.batch();
+    batch.update(userRef, {
+        customGames: admin.firestore.FieldValue.arrayUnion(gameName)
+    });
+    batch.set(customGameRef, {
+        uids: admin.firestore.FieldValue.arrayUnion(uid)
+    }, { merge: true });
+
+    await batch.commit();
+
+    return { success: true, message: 'Game added successfully.' };
+});
+
+export const removePremiumCustomGame = functions.region('asia-northeast1').https.onCall(async (data, context) => {
+    const uid = context.auth?.uid;
+    if (!uid) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    const gameName = data.gameName;
+    if (!gameName || typeof gameName !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    const customGameRef = db.collection('premium_custom_games').doc(encodeURIComponent(gameName));
+
+    const batch = db.batch();
+    batch.update(userRef, {
+        customGames: admin.firestore.FieldValue.arrayRemove(gameName)
+    });
+    batch.set(customGameRef, {
+        uids: admin.firestore.FieldValue.arrayRemove(uid)
+    }, { merge: true });
+
+    await batch.commit();
+
+    return { success: true, message: 'Game removed successfully.' };
 });

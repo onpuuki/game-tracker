@@ -176,64 +176,49 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     });
 
     try {
-      final docRef = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: 'default',
-      ).collection('users').doc(user.uid);
-      final docSnap = await docRef.get();
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1')
+          .httpsCallable('addPremiumCustomGame');
 
-      if (docSnap.exists) {
-        final data = docSnap.data() as Map<String, dynamic>;
-        final customGames = List<String>.from(data['customGames'] ?? []);
-
-        if (customGames.length >= 3) {
-          if (!mounted) return;
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('エラー'),
-              content: const Text('登録できるゲームは最大3件までです。'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-
-        if (customGames.contains(gameName)) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('すでに登録されています。')));
-          return;
-        }
-      }
-
-      await docRef.set({
-        'customGames': FieldValue.arrayUnion([gameName]),
-      }, SetOptions(merge: true));
+      final result = await callable.call({'gameName': gameName});
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ゲームを追加しました。')));
+      if (result.data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ゲームを追加しました。')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エラー: ${result.data['message']}')),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      String errorMessage = '追加に失敗しました。';
+      if (e.code == 'resource-exhausted') {
+        errorMessage = '登録できるゲームは3つまでです。';
+      } else if (e.code == 'already-exists') {
+        errorMessage = 'すでに登録されています。';
+      } else if (e.code == 'permission-denied') {
+        errorMessage = 'プレミアムプランへの登録が必要です。';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('追加エラー: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('追加エラー: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAdding = false;
+        });
+      }
     }
-    if (!mounted) return;
-    setState(() {
-      _isAdding = false;
-    });
   }
 
-  Future<void> _removeGame(String gameName) async {
+    Future<void> _removeGame(String gameName) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -258,21 +243,26 @@ class _PremiumGameScreenState extends State<PremiumGameScreen> {
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: 'default',
-      ).collection('users').doc(user.uid).update({
-        'customGames': FieldValue.arrayRemove([gameName]),
-      });
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1')
+          .httpsCallable('removePremiumCustomGame');
+
+      final result = await callable.call({'gameName': gameName});
+
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ゲームを削除しました。')));
+      if (result.data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ゲームを削除しました。')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エラー: ${result.data['message']}')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('削除エラー: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('削除エラー: $e')),
+      );
     }
   }
 

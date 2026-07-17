@@ -459,11 +459,24 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         let extractedEvents: any[] = [];
         if (response.text) {
+            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
-                let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
                 extractedEvents = JSON.parse(cleanText);
             } catch (e) {
-                throw new Error("Failed to parse JSON array from response.");
+                functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting regex fallback...`);
+                try {
+                    // 正規表現で [ { ... } ] の形を強引に抽出するフォールバック
+                    const arrayMatch = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+                    if (arrayMatch && arrayMatch[0]) {
+                        extractedEvents = JSON.parse(arrayMatch[0]);
+                        functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
+                    } else {
+                        throw new Error("Regex fallback failed to find a valid JSON array.");
+                    }
+                } catch (fallbackError) {
+                    functions.logger.error(`[${traceId}] Failed to parse JSON array from response.`, { text: response.text });
+                    throw new Error("Failed to parse JSON array from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+                }
             }
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
         } else {
@@ -1738,10 +1751,20 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
         await writeDebugLog(traceId, `Found ${targetUsers.length} users with notifications enabled for this hour`);
 
         // Fetch all events
-        const eventsSnapshot = await db.collectionGroup('events').get();
         const nowDay = now.startOf('day');
 
-        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
+        // Firestoreクエリ側で事前に不要なドキュメントを除外しOOMリスクを軽減する
+        // endDateはTimestamp型とString型が混在している可能性があるため、両方のクエリを発行する
+        const [tsSnapshot, strSnapshot] = await Promise.all([
+            db.collectionGroup('events').where('endDate', '>=', admin.firestore.Timestamp.fromDate(nowDay.toDate())).get(),
+            db.collectionGroup('events').where('endDate', '>=', nowDay.format('YYYY-MM-DD')).get()
+        ]);
+
+        const combinedDocs = [...tsSnapshot.docs, ...strSnapshot.docs];
+        // 重複排除（万が一同じIDが取れた場合）
+        const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+
+        const allEvents = uniqueDocs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
             if (event.isCompleted) return false;
             if (event.isDeleted === true) return false;
 
@@ -1870,10 +1893,19 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
         await writeDebugLog(traceId, `Proceeding to fetch events for ${targetUsers.length} users...`);
 
         // Fetch all events
-        const eventsSnapshot = await db.collectionGroup('events').get();
         const nowDay = now.startOf('day');
 
-        const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
+        // Firestoreクエリ側で事前に不要なドキュメントを除外しOOMリスクを軽減する
+        // endDateはTimestamp型とString型が混在している可能性があるため、両方のクエリを発行する
+        const [tsSnapshot, strSnapshot] = await Promise.all([
+            db.collectionGroup('events').where('endDate', '>=', admin.firestore.Timestamp.fromDate(nowDay.toDate())).get(),
+            db.collectionGroup('events').where('endDate', '>=', nowDay.format('YYYY-MM-DD')).get()
+        ]);
+
+        const combinedDocs = [...tsSnapshot.docs, ...strSnapshot.docs];
+        const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+
+        const allEvents = uniqueDocs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
             if (event.isCompleted) return false;
             if (event.isDeleted === true) return false;
 

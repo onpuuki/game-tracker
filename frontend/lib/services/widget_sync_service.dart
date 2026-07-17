@@ -78,6 +78,8 @@ class WidgetSyncService {
               DateTime.now().subtract(const Duration(days: 1)),
             ),
           )
+          .orderBy('endDate', descending: false)
+          .limit(50)
           .get();
 
       final now = DateTime.now();
@@ -118,7 +120,7 @@ class WidgetSyncService {
         if (endDateData is Timestamp) {
           endDate = endDateData.toDate();
         } else if (endDateData is String) {
-          final parsed = DateTime.tryParse(endDateData);
+          final parsed = DateTime.tryParse(endDateData.replaceAll('/', '-'));
           if (parsed != null) {
             endDate = parsed;
           } else {
@@ -142,12 +144,6 @@ class WidgetSyncService {
           'endDate': endDate,
         });
       }
-
-      // Sort by endDate ascending
-      parsedEvents.sort(
-        (a, b) =>
-            (a['endDate'] as DateTime).compareTo(b['endDate'] as DateTime),
-      );
 
       // Take top 20
       final top5Events = parsedEvents.take(20).toList();

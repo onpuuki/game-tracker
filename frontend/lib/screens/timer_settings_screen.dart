@@ -36,11 +36,10 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       if (_selectedTimes.any(
         (t) => t.hour == picked.hour && t.minute == picked.minute,
       )) {
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(content: Text('この時刻は既に追加されています')),
-          );
-        }
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('この時刻は既に追加されています')),
+        );
         return;
       }
       setState(() {
@@ -66,11 +65,10 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
             entry.value.hour == picked.hour &&
             entry.value.minute == picked.minute,
       )) {
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(content: Text('この時刻は既に存在します')),
-          );
-        }
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('この時刻は既に存在します')),
+        );
         return;
       }
       setState(() {
@@ -104,17 +102,15 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
         'cron_schedule': FieldValue.delete(),
       }, SetOptions(merge: true));
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('設定を保存しました')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('設定を保存しました')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
     } finally {
       if (mounted) {
         setState(() {

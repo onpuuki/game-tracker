@@ -61,11 +61,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final isPremiumDB = data['isPremium'] as bool;
               if (prefs.getBool('is_premium') != isPremiumDB) {
                 await prefs.setBool('is_premium', isPremiumDB);
-                if (mounted) {
-                  setState(() {
-                    _isPremium = isPremiumDB;
-                  });
-                }
+                if (!mounted) return;
+                setState(() {
+                  _isPremium = isPremiumDB;
+                });
               }
             }
           }
@@ -130,11 +129,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         finalEnabled = false;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('通知の権限が拒否されました。設定から許可してください。')),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('通知の権限が拒否されました。設定から許可してください。')),
+        );
       }
     }
 

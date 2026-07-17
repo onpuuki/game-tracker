@@ -461,18 +461,35 @@ class AddEventNotifier extends Notifier<AddEventState> {
         ).showSnackBar(const SnackBar(content: Text('起点日時を選択してください')));
         return;
       }
+      int dayOfMonth = s.monthlyStartDate!.day;
+      int year = now.year;
+      int month = now.month;
+
+      int maxDaysInCurrentMonth = DateTime(year, month + 1, 0).day;
+      int currentMonthDay = dayOfMonth > maxDaysInCurrentMonth ? maxDaysInCurrentMonth : dayOfMonth;
+
       endDate = DateTime(
-        now.year,
-        now.month,
-        s.monthlyStartDate!.day,
+        year,
+        month,
+        currentMonthDay,
         s.monthlyTime!.hour,
         s.monthlyTime!.minute,
       );
+
       if (endDate.isBefore(now)) {
+        int nextMonth = month + 1;
+        int nextYear = year;
+        if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear += 1;
+        }
+        int maxDaysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+        int nextMonthDay = dayOfMonth > maxDaysInNextMonth ? maxDaysInNextMonth : dayOfMonth;
+
         endDate = DateTime(
-          now.year,
-          now.month + 1,
-          s.monthlyStartDate!.day,
+          nextYear,
+          nextMonth,
+          nextMonthDay,
           s.monthlyTime!.hour,
           s.monthlyTime!.minute,
         );

@@ -440,30 +440,29 @@ class _HomeScreenState extends State<HomeScreen> {
         app: Firebase.app(),
         databaseId: 'default',
       ).collection('users').doc(user.uid).get().then((doc) async {
-        if (doc.exists && mounted) {
+        if (!mounted) return;
+        if (doc.exists) {
           final data = doc.data();
           if (data != null) {
             if (data.containsKey('isPremium')) {
               final isPremiumDB = data['isPremium'] as bool;
               if (prefs.getBool('is_premium') != isPremiumDB) {
                 await prefs.setBool('is_premium', isPremiumDB);
-                if (mounted) {
-                  setState(() {
-                    _isPremium = isPremiumDB;
-                  });
-                }
+                if (!mounted) return;
+                setState(() {
+                  _isPremium = isPremiumDB;
+                });
               }
             }
-            if (mounted) {
-              setState(() {
-                if (data.containsKey('customGames')) {
-                  _userCustomGames = List<String>.from(data['customGames'] ?? []);
-                }
-                if (data.containsKey('checkedEvents')) {
-                  _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
-                }
-              });
-            }
+            if (!mounted) return;
+            setState(() {
+              if (data.containsKey('customGames')) {
+                _userCustomGames = List<String>.from(data['customGames'] ?? []);
+              }
+              if (data.containsKey('checkedEvents')) {
+                _checkedEventIds = List<String>.from(data['checkedEvents'] ?? []);
+              }
+            });
           }
         }
       });
@@ -495,9 +494,8 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool('hasShownWelcomeDialog', true);
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
               },
               child: const Text('同意してはじめる'),
             ),
@@ -1115,7 +1113,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 });
 
                                 try {
-                                  final callable = FirebaseFunctions.instance
+                                  final callable = FirebaseFunctions.instanceFor(region: 'asia-northeast1')
                                       .httpsCallable(
                                         'clearAllEvents',
                                         options: HttpsCallableOptions(
@@ -1168,11 +1166,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _isTestingNotification = true;
                               });
 
-                              if (context.mounted) {
-                                Navigator.pop(
-                                  context,
-                                ); // Close drawer immediately
-                              }
+                              if (!context.mounted) return;
+                              Navigator.pop(
+                                context,
+                              ); // Close drawer immediately
 
                               try {
                                 final callable = FirebaseFunctions.instanceFor(
@@ -1329,7 +1326,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final List<String> allGameNames = uniqueGamesSet.toList()
                   ..sort();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted &&
+                  if (!mounted) return;
+                  if (
                       _latestAllGameNames.length != allGameNames.length) {
                     setState(() {
                       _latestAllGameNames = allGameNames;
@@ -1524,22 +1522,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                   debugPrint(
                                     '$NativeAd loaded at index $index.',
                                   );
-                                  if (mounted) {
-                                    setState(() {
-                                      _nativeAdLoaded[index] = true;
-                                    });
-                                  }
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _nativeAdLoaded[index] = true;
+                                  });
                                 },
                                 onAdFailedToLoad: (ad, error) {
                                   debugPrint(
                                     '$NativeAd failedToLoad at index $index: $error',
                                   );
                                   ad.dispose();
-                                  if (mounted) {
-                                    setState(() {
-                                      _nativeAdFailed[index] = true;
-                                    });
-                                  }
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _nativeAdFailed[index] = true;
+                                  });
                                 },
                               ),
                               nativeTemplateStyle: NativeTemplateStyle(
@@ -1729,40 +1725,51 @@ class _EventCardItemState extends State<_EventCardItem> {
   }
 
   Future<void> _saveChanges() async {
-    Timestamp? parseDate(String text) {
+    Timestamp? parseDate(String text, String fieldName) {
       if (text.isEmpty) return null;
       final parsed = DateTime.tryParse(text.replaceAll('/', '-'));
-      return parsed != null ? Timestamp.fromDate(parsed) : null;
+      if (parsed == null) {
+        throw FormatException('$fieldNameのフォーマットが正しくありません。(例: 2024-01-01 12:00)');
+      }
+      return Timestamp.fromDate(parsed);
     }
 
-    final updateData = {
-      'gameName': _gameNameController.text,
-      'title': _titleController.text,
-      'summary': _summaryController.text,
-      'redeemCode': _redeemCodeController.text,
-      'startDate': parseDate(_startDateController.text),
-      'endDate': parseDate(_endDateController.text),
-      'eventUrl': _eventUrlController.text,
-      'tag': _selectedTag,
-      'subTag': _selectedSubTag,
-      'isUpdateLocked': _isUpdateLocked,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    Map<String, dynamic> updateData;
+    try {
+      updateData = {
+        'gameName': _gameNameController.text,
+        'title': _titleController.text,
+        'summary': _summaryController.text,
+        'redeemCode': _redeemCodeController.text,
+        'startDate': parseDate(_startDateController.text, '開始日時'),
+        'endDate': parseDate(_endDateController.text, '終了日時'),
+        'eventUrl': _eventUrlController.text,
+        'tag': _selectedTag,
+        'subTag': _selectedSubTag,
+        'isUpdateLocked': _isUpdateLocked,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('FormatException: ', ''))),
+        );
+      }
+      return;
+    }
 
     try {
       await widget.parsedEvent.doc.reference.update(updateData);
       await WidgetSyncService.syncTop5Events();
-      if (mounted) {
-        setState(() {
-          _isEditing = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isEditing = false;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save changes: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save changes: $e')));
     }
   }
 
@@ -1797,11 +1804,10 @@ class _EventCardItemState extends State<_EventCardItem> {
         });
         await WidgetSyncService.syncTop5Events();
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Failed to delete event: $e')));
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete event: $e')));
       }
     }
   }
@@ -1980,13 +1986,12 @@ class _EventCardItemState extends State<_EventCardItem> {
                                 mode: LaunchMode.externalApplication,
                               );
                             } else {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Could not launch URL'),
-                                  ),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Could not launch URL'),
+                                ),
+                              );
                             }
                           }
                         },

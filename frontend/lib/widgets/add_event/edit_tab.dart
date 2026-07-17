@@ -129,12 +129,11 @@ class EditTab extends HookConsumerWidget {
                       'tasks': tasks,
                       'updatedAt': FieldValue.serverTimestamp(),
                     });
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('イベントとタスクを更新しました')),
-                      );
-                    }
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('イベントとタスクを更新しました')),
+                    );
                   },
                   child: const Text('保存'),
                 ),

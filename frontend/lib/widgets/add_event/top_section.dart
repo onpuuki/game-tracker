@@ -56,13 +56,12 @@ class TopSection extends HookConsumerWidget {
 【インプット情報】
 （ここに攻略サイト等の情報をペーストしてください）''';
                       await Clipboard.setData(ClipboardData(text: text));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('プロンプトをクリップボードにコピーしました'),
-                          ),
-                        );
-                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('プロンプトをクリップボードにコピーしました'),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.copy),
                     label: const Text('Gemini作成依頼プロンプトをコピー'),

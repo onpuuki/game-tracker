@@ -66,17 +66,15 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
                 }
 
                 await Clipboard.setData(ClipboardData(text: buffer.toString()));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logs copied to clipboard')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Logs copied to clipboard')),
+                );
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to copy logs: $e')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to copy logs: $e')),
+                );
               }
             },
           ),
@@ -103,11 +101,10 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
 
               if (confirm == true) {
                 await DebugLogManager().clearLogs();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Logs cleared')));
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Logs cleared')));
               }
             },
           ),
@@ -178,13 +175,12 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
                               await Clipboard.setData(
                                 ClipboardData(text: buffer.toString()),
                               );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Copied to clipboard'),
-                                  ),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copied to clipboard'),
+                                ),
+                              );
                             },
                           ),
                         ],

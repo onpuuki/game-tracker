@@ -33,5 +33,18 @@ service cloud.firestore {
       allow create: if isAuthenticated(); // 一般ユーザーはフィードバック送信のみ可能
       allow read, update, delete: if isAdmin(); // 閲覧や削除は管理者のみ
     }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // Allow users to update their own document, but deny changes to customGames or isPremium
+      allow update: if isAuthenticated() && request.auth.uid == userId
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customGames', 'isPremium']));
+      allow create, delete: if false; // Creation/Deletion handled via backend or separate flow
+    }
+
+    match /premium_custom_games/{gameName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only updated via Cloud Functions
+    }
   }
 }

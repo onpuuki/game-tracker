@@ -286,15 +286,56 @@ export const processSyncRequest = onDocumentCreated({
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
 
-        // Replace full users scan with premium_custom_games scan
+        // Optimization: Only scan premium custom games for ACTIVE users
+        // For this, we assume a user is active if they have logged in recently.
+        // We'll collect UIDs from premium_custom_games, chunk them if large, and check their last active status.
+        // If no user associated with a custom game is active (e.g. within 7 days), we can skip the sync for that game to save costs.
         const customGamesSet = new Set<string>();
         const premiumGamesSnapshot = await db.collection('premium_custom_games').get();
+
+        // Define active threshold (e.g., 14 days)
+        // Since we don't track lastLogin by default everywhere yet, we might rely on the fact that
+        // we can check if they have valid token or premium status active.
+        // If we strictly want to filter inactive, we would check the users collection.
+        // To avoid massive reads, if the array of UIDs has any premium user, we assume it's active.
+        // But for absolute cost savings, maybe we just deduplicate and enqueue only up to a global batch limit,
+        // or check if users exist and have fcmToken (meaning they installed the app).
+
+        // A simple optimization: check if at least one UID has a valid fcmToken
+        const uidsToCheck = new Set<string>();
+        const gameUidsMap = new Map<string, string[]>();
+
         premiumGamesSnapshot.forEach(doc => {
             const data = doc.data();
             if (data && Array.isArray(data.uids) && data.uids.length > 0) {
-                customGamesSet.add(decodeURIComponent(doc.id));
+                const gameName = decodeURIComponent(doc.id);
+                gameUidsMap.set(gameName, data.uids);
+                data.uids.forEach(uid => uidsToCheck.add(uid));
             }
         });
+
+        const activeUids = new Set<string>();
+        const uidList = Array.from(uidsToCheck);
+
+        // Batch read users to find active ones (has fcmToken)
+        for (let i = 0; i < uidList.length; i += 100) {
+            const chunk = uidList.slice(i, i + 100);
+            const userSnapshots = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
+            userSnapshots.forEach(doc => {
+                const uData = doc.data();
+                // Consider active if they have FCM token (app installed) and are premium
+                if (uData.isPremium === true && (uData.fcmToken || uData.settings?.fcmToken)) {
+                    activeUids.add(doc.id);
+                }
+            });
+        }
+
+        for (const [gameName, uids] of gameUidsMap.entries()) {
+            const hasActiveUser = uids.some(uid => activeUids.has(uid));
+            if (hasActiveUser) {
+                customGamesSet.add(gameName);
+            }
+        }
 
         // Filter out those already in targetGames
         targetGames.forEach(tg => {
@@ -402,6 +443,21 @@ export const syncSingleGameTask = onTaskDispatched({
                     // Check if ended more than 3 days ago
                     if (now.diff(endDateJs, 'day') > 3) {
                         return false;
+                    }
+                }
+            } else {
+                // If endDate is null, prune based on updatedAt (older than 30 days) to prevent context explosion
+                const rawUpdated = d.updatedAt || d.createdAt;
+                let updatedJs;
+                if (rawUpdated && typeof rawUpdated.toDate === 'function') {
+                    updatedJs = dayjs(rawUpdated.toDate()).tz("Asia/Tokyo");
+                } else if (typeof rawUpdated === 'string') {
+                    updatedJs = dayjs(rawUpdated).tz("Asia/Tokyo");
+                }
+
+                if (updatedJs && updatedJs.isValid()) {
+                    if (now.diff(updatedJs, 'day') > 30) {
+                        return false; // Skip events updated more than 30 days ago
                     }
                 }
             }
@@ -2275,34 +2331,44 @@ export const addPremiumCustomGame = functions.region('asia-northeast1').https.on
         throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
     }
 
+    const encodedGameName = encodeURIComponent(gameName.replace(/\//g, '\uff0f'));
     const userRef = db.collection('users').doc(uid);
-    const userDoc = await userRef.get();
-    const userData = userDoc.data();
+    const customGameRef = db.collection('premium_custom_games').doc(encodedGameName);
 
-    if (!userData?.isPremium) {
-        throw new functions.https.HttpsError('permission-denied', 'Only premium users can add custom games.');
+    try {
+        await db.runTransaction(async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists) {
+                throw new functions.https.HttpsError('not-found', 'User data not found.');
+            }
+
+            const userData = userDoc.data();
+            if (!userData?.isPremium) {
+                throw new functions.https.HttpsError('permission-denied', 'Only premium users can add custom games.');
+            }
+
+            const customGames = userData.customGames || [];
+            if (customGames.length >= 3) {
+                throw new functions.https.HttpsError('resource-exhausted', 'You can register up to 3 custom games.');
+            }
+
+            if (customGames.includes(gameName)) {
+                throw new functions.https.HttpsError('already-exists', 'Game already registered.');
+            }
+
+            transaction.update(userRef, {
+                customGames: admin.firestore.FieldValue.arrayUnion(gameName)
+            });
+            transaction.set(customGameRef, {
+                uids: admin.firestore.FieldValue.arrayUnion(uid)
+            }, { merge: true });
+        });
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError('internal', error.message || 'Transaction failed');
     }
-
-    const customGames = userData.customGames || [];
-    if (customGames.length >= 3) {
-        throw new functions.https.HttpsError('resource-exhausted', 'You can register up to 3 custom games.');
-    }
-
-    if (customGames.includes(gameName)) {
-        throw new functions.https.HttpsError('already-exists', 'Game already registered.');
-    }
-
-    const customGameRef = db.collection('premium_custom_games').doc(encodeURIComponent(gameName));
-
-    const batch = db.batch();
-    batch.update(userRef, {
-        customGames: admin.firestore.FieldValue.arrayUnion(gameName)
-    });
-    batch.set(customGameRef, {
-        uids: admin.firestore.FieldValue.arrayUnion(uid)
-    }, { merge: true });
-
-    await batch.commit();
 
     return { success: true, message: 'Game added successfully.' };
 });
@@ -2318,18 +2384,25 @@ export const removePremiumCustomGame = functions.region('asia-northeast1').https
         throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
     }
 
+    const encodedGameName = encodeURIComponent(gameName.replace(/\//g, '\uff0f'));
     const userRef = db.collection('users').doc(uid);
-    const customGameRef = db.collection('premium_custom_games').doc(encodeURIComponent(gameName));
+    const customGameRef = db.collection('premium_custom_games').doc(encodedGameName);
 
-    const batch = db.batch();
-    batch.update(userRef, {
-        customGames: admin.firestore.FieldValue.arrayRemove(gameName)
-    });
-    batch.set(customGameRef, {
-        uids: admin.firestore.FieldValue.arrayRemove(uid)
-    }, { merge: true });
-
-    await batch.commit();
+    try {
+        await db.runTransaction(async (transaction) => {
+            transaction.update(userRef, {
+                customGames: admin.firestore.FieldValue.arrayRemove(gameName)
+            });
+            transaction.set(customGameRef, {
+                uids: admin.firestore.FieldValue.arrayRemove(uid)
+            }, { merge: true });
+        });
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError('internal', error.message || 'Transaction failed');
+    }
 
     return { success: true, message: 'Game removed successfully.' };
 });

@@ -10,7 +10,7 @@ class EditTab extends HookConsumerWidget {
     if (val == null) return null;
     if (val is Timestamp) return val;
     if (val is String) {
-      final dt = DateTime.tryParse(val);
+      final dt = DateTime.tryParse(val.replaceAll('/', '-'));
       if (dt != null) return Timestamp.fromDate(dt);
     }
     return null;

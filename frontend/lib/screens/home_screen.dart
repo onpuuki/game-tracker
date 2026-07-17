@@ -1,5 +1,6 @@
 import 'timeline_view.dart';
 import 'package:flutter/material.dart';
+import '../widgets/keep_alive_page.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -290,7 +291,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (rawUpdated is Timestamp) {
         updatedDt = rawUpdated.toDate();
       } else if (rawUpdated is String) {
-        updatedDt = DateTime.tryParse(rawUpdated);
+        updatedDt = DateTime.tryParse(
+          rawUpdated.toString().replaceAll('/', '-'),
+        );
       }
 
       String dateStr = '';
@@ -418,12 +421,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final startDateStr = prefs.getString('filterStartDate');
       _filterStartDate = startDateStr != null
-          ? DateTime.tryParse(startDateStr)
+          ? DateTime.tryParse(startDateStr.replaceAll('/', '-'))
           : null;
 
       final endDateStr = prefs.getString('filterEndDate');
       _filterEndDate = endDateStr != null
-          ? DateTime.tryParse(endDateStr)
+          ? DateTime.tryParse(endDateStr.replaceAll('/', '-'))
           : null;
 
       _excludeChecked = prefs.getBool('excludeChecked') ?? false;
@@ -1499,82 +1502,89 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 return TabBarView(
                   children: [
-                    ListView.builder(
-                      itemCount: _isPremium
-                          ? events.length
-                          : events.length + (events.length ~/ _adInterval),
-                      itemBuilder: (context, index) {
-                        if (_isPremium) {
-                          return _buildEventCard(events[index]);
-                        }
-
-                        final bool isAdIndex =
-                            (index + 1) % (_adInterval + 1) == 0;
-                        final int eventIndex =
-                            index - (index ~/ (_adInterval + 1));
-
-                        if (isAdIndex) {
-                          if (!_nativeAds.containsKey(index)) {
-                            _nativeAds[index] = NativeAd(
-                              adUnitId:
-                                  'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
-                              request: const AdRequest(),
-                              listener: NativeAdListener(
-                                onAdLoaded: (ad) {
-                                  debugPrint(
-                                    '$NativeAd loaded at index $index.',
-                                  );
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _nativeAdLoaded[index] = true;
-                                  });
-                                },
-                                onAdFailedToLoad: (ad, error) {
-                                  debugPrint(
-                                    '$NativeAd failedToLoad at index $index: $error',
-                                  );
-                                  ad.dispose();
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _nativeAdFailed[index] = true;
-                                  });
-                                },
-                              ),
-                              nativeTemplateStyle: NativeTemplateStyle(
-                                templateType: TemplateType.small,
-                              ),
-                            )..load();
+                    KeepAlivePage(
+                      child: ListView.builder(
+                        itemCount: _isPremium
+                            ? events.length
+                            : events.length + (events.length ~/ _adInterval),
+                        itemBuilder: (context, index) {
+                          if (_isPremium) {
+                            return _buildEventCard(events[index]);
                           }
 
-                          if (_nativeAdFailed[index] == true) {
-                            return const SizedBox.shrink();
+                          final bool isAdIndex =
+                              (index + 1) % (_adInterval + 1) == 0;
+                          final int eventIndex =
+                              index - (index ~/ (_adInterval + 1));
+
+                          if (isAdIndex) {
+                            if (!_nativeAds.containsKey(index)) {
+                              _nativeAds[index] = NativeAd(
+                                adUnitId:
+                                    'ca-app-pub-3940256099942544/2247696110', // Test Native ad ID
+                                request: const AdRequest(),
+                                listener: NativeAdListener(
+                                  onAdLoaded: (ad) {
+                                    debugPrint(
+                                      '$NativeAd loaded at index $index.',
+                                    );
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _nativeAdLoaded[index] = true;
+                                    });
+                                  },
+                                  onAdFailedToLoad: (ad, error) {
+                                    debugPrint(
+                                      '$NativeAd failedToLoad at index $index: $error',
+                                    );
+                                    ad.dispose();
+                                    _nativeAds.remove(index);
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _nativeAdFailed[index] = true;
+                                    });
+                                  },
+                                ),
+                                nativeTemplateStyle: NativeTemplateStyle(
+                                  templateType: TemplateType.small,
+                                ),
+                              )..load();
+                            }
+
+                            if (_nativeAdFailed[index] == true) {
+                              return const SizedBox.shrink();
+                            }
+
+                            if (_nativeAdLoaded[index] == true) {
+                              return Container(
+                                height: 120,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                  vertical: 8.0,
+                                ),
+                                child: AdWidget(ad: _nativeAds[index]!),
+                              );
+                            } else {
+                              return const SizedBox(
+                                height: 120,
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
                           }
 
-                          if (_nativeAdLoaded[index] == true) {
-                            return Container(
-                              height: 120,
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 8.0,
-                              ),
-                              child: AdWidget(ad: _nativeAds[index]!),
-                            );
-                          } else {
-                            return const SizedBox(
-                              height: 120,
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          }
-                        }
-
-                        return _buildEventCard(events[eventIndex]);
-                      },
+                          return _buildEventCard(events[eventIndex]);
+                        },
+                      ),
                     ),
-                    TimelineView(
-                      events: events,
-                      abbreviations: abbreviationsMap,
-                      buildEventCard: _buildEventCard,
-                      userCustomGames: _userCustomGames,
+                    KeepAlivePage(
+                      child: TimelineView(
+                        events: events,
+                        abbreviations: abbreviationsMap,
+                        buildEventCard: _buildEventCard,
+                        userCustomGames: _userCustomGames,
+                      ),
                     ),
                   ],
                 );

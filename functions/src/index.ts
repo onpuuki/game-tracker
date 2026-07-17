@@ -1530,18 +1530,20 @@ export const exportFeedbacksToDrive = functions.region('asia-northeast1').runWit
 async function runCycleResetLogic(traceId: string) {
     functions.logger.info(`[${traceId}] Starting runCycleResetLogic`);
     try {
-        const eventsSnapshot = await db.collectionGroup('events').get();
+        const now = dayjs().tz('Asia/Tokyo');
+
+        const eventsSnapshot = await db.collectionGroup('events').select('endDate', 'isCycleEvent', 'cycleType', 'cycleSettings', 'tasks', 'updateHistory').get();
+
         if (eventsSnapshot.empty) {
             functions.logger.info(`[${traceId}] No events found`);
             return;
         }
 
-        let currentEventsList = eventsSnapshot.docs.map(doc => ({ docId: doc.id, data: doc.data(), ref: doc.ref }));
+        const uniqueDocs = eventsSnapshot.docs;
+
+        let currentEventsList = uniqueDocs.map(doc => ({ docId: doc.id, data: doc.data(), ref: doc.ref }));
         currentEventsList = await cleanupDuplicateEvents(currentEventsList, db);
 
-        const now = dayjs().tz('Asia/Tokyo');
-
-        const batches: Promise<any>[] = [];
         let currentBatch = db.batch();
         let opCount = 0;
         let totalUpdated = 0;
@@ -1618,7 +1620,7 @@ async function runCycleResetLogic(traceId: string) {
                 }
 
                 if (opCount === 450) {
-                    batches.push(currentBatch.commit());
+                    await currentBatch.commit();
                     currentBatch = db.batch();
                     opCount = 0;
                 }
@@ -1626,10 +1628,9 @@ async function runCycleResetLogic(traceId: string) {
         }
 
         if (opCount > 0) {
-            batches.push(currentBatch.commit());
+            await currentBatch.commit();
         }
 
-        await Promise.all(batches);
         functions.logger.info(`[${traceId}] Successfully reset ${totalUpdated} cycle events and deleted ${totalDeleted} expired normal events.`);
         if (totalUpdated > 0 || totalDeleted > 0) {
             await writeDebugLog(traceId, `Successfully reset ${totalUpdated} cycle events and deleted ${totalDeleted} expired normal events.`);
@@ -1641,7 +1642,6 @@ async function runCycleResetLogic(traceId: string) {
 
         let deletedLogsCount = 0;
         if (!oldLogsSnapshot.empty) {
-            const logBatches: Promise<any>[] = [];
             let logBatch = db.batch();
             let logOpCount = 0;
 
@@ -1651,17 +1651,15 @@ async function runCycleResetLogic(traceId: string) {
                 deletedLogsCount++;
 
                 if (logOpCount === 450) {
-                    logBatches.push(logBatch.commit());
+                    await logBatch.commit();
                     logBatch = db.batch();
                     logOpCount = 0;
                 }
             }
 
             if (logOpCount > 0) {
-                logBatches.push(logBatch.commit());
+                await logBatch.commit();
             }
-
-            await Promise.all(logBatches);
         }
 
         functions.logger.info(`[${traceId}] Successfully deleted ${deletedLogsCount} old debug logs.`);
@@ -1755,14 +1753,11 @@ export const sendScheduledNotifications = functions.region('asia-northeast1').pu
 
         // Firestoreクエリ側で事前に不要なドキュメントを除外しOOMリスクを軽減する
         // endDateはTimestamp型とString型が混在している可能性があるため、両方のクエリを発行する
-        const [tsSnapshot, strSnapshot] = await Promise.all([
-            db.collectionGroup('events').where('endDate', '>=', admin.firestore.Timestamp.fromDate(nowDay.toDate())).get(),
-            db.collectionGroup('events').where('endDate', '>=', nowDay.format('YYYY-MM-DD')).get()
-        ]);
+        // To avoid string date comparison lexicographical flaws and OOM, query all events but with select projection.
+        const eventsSnapshot = await db.collectionGroup('events').get();
+        const combinedDocs = eventsSnapshot.docs;
 
-        const combinedDocs = [...tsSnapshot.docs, ...strSnapshot.docs];
-        // 重複排除（万が一同じIDが取れた場合）
-        const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+        const uniqueDocs = combinedDocs;
 
         const allEvents = uniqueDocs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
             if (event.isCompleted) return false;
@@ -1897,13 +1892,11 @@ async function performSendNotifications(targetUid?: string): Promise<{ success: 
 
         // Firestoreクエリ側で事前に不要なドキュメントを除外しOOMリスクを軽減する
         // endDateはTimestamp型とString型が混在している可能性があるため、両方のクエリを発行する
-        const [tsSnapshot, strSnapshot] = await Promise.all([
-            db.collectionGroup('events').where('endDate', '>=', admin.firestore.Timestamp.fromDate(nowDay.toDate())).get(),
-            db.collectionGroup('events').where('endDate', '>=', nowDay.format('YYYY-MM-DD')).get()
-        ]);
+        // To avoid string date comparison lexicographical flaws and OOM, query all events but with select projection.
+        const eventsSnapshot = await db.collectionGroup('events').get();
+        const combinedDocs = eventsSnapshot.docs;
 
-        const combinedDocs = [...tsSnapshot.docs, ...strSnapshot.docs];
-        const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+        const uniqueDocs = combinedDocs;
 
         const allEvents = uniqueDocs.map(doc => ({ id: doc.id, ...doc.data() as any })).filter(event => {
             if (event.isCompleted) return false;
@@ -2084,7 +2077,19 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
             const cleanText = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             parsedData = JSON.parse(cleanText);
         } catch (err) {
-            throw new Error('Failed to parse JSON from Gemini response: ' + text);
+            functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting regex fallback...`);
+            const match = text.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    parsedData = JSON.parse(match[0]);
+                    functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
+                } catch (fallbackErr) {
+                    functions.logger.error(`[${traceId}] Regex fallback parsing failed. Text: ${text}`);
+                    throw new Error('Failed to parse JSON from Gemini response using fallback: ' + text);
+                }
+            } else {
+                throw new Error('Failed to parse JSON from Gemini response: ' + text);
+            }
         }
 
         if (!parsedData || !Array.isArray(parsedData.operations)) {

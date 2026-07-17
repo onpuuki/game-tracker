@@ -523,12 +523,41 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 - "redeemCode": (文字列) ギフトコード または null
 - "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか
 - "eventUrl": (文字列) URL または null
-- "rewards": (文字列の配列) 報酬リスト。最大3件。`;
+- "rewards": (オブジェクトの配列) 報酬リスト。必ず以下の構造を持つオブジェクトの配列にすること： [{ "name": "アイテムの完全な固有名称", "quantity": "数量（文字列）" }] 。一般的な「アイテム」等に要約せず、公式の固有名称を抽出すること。数量が記載されている場合は絶対に省略しないこと。記載がない場合は空配列 [] を返すこと。推測による補完は厳禁。`;
 
         const generationConfig = {
             temperature: 0.0,
             tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json"
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "array",
+                items: {
+                    type: "object",
+                    properties: {
+                        date_extraction_reasoning: { type: "string" },
+                        existing_id: { type: "string", nullable: true },
+                        title: { type: "string" },
+                        summary: { type: "string" },
+                        startDate: { type: "string", nullable: true },
+                        endDate: { type: "string", nullable: true },
+                        redeemCode: { type: "string", nullable: true },
+                        tag: { type: "string" },
+                        eventUrl: { type: "string", nullable: true },
+                        rewards: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    name: { type: "string" },
+                                    quantity: { type: "string" }
+                                },
+                                required: ["name", "quantity"]
+                            }
+                        }
+                    },
+                    required: ["date_extraction_reasoning", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
+                }
+            }
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -609,7 +638,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         existing.startDate = event.startDate;
                     }
                     if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
-                    if ((!existing.rewards || existing.rewards.length === 0) && event.rewards && event.rewards.length > 0) {
+                    if (event.rewards && event.rewards.length > 0) {
                         existing.rewards = event.rewards;
                     }
                 }
@@ -681,8 +710,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
                     if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
-                    const newRewardsStr = Array.isArray(event.rewards) ? event.rewards.join(',') : '';
-                    const oldRewardsStr = Array.isArray(eData.rewards) ? eData.rewards.join(',') : '';
+                    const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
+                    const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
                     if (event.rewards && newRewardsStr !== oldRewardsStr) {
                         changes.push('報酬');
                     }
@@ -745,8 +774,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
                         if (event.tag && eData.tag !== event.tag) changes.push('タグ');
 
-                        const newRewardsStr = Array.isArray(event.rewards) ? event.rewards.join(',') : '';
-                        const oldRewardsStr = Array.isArray(eData.rewards) ? eData.rewards.join(',') : '';
+                        const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
+                        const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
                         if (event.rewards && newRewardsStr !== oldRewardsStr) {
                             changes.push('報酬');
                         }

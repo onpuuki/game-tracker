@@ -655,7 +655,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                         type: "object",
                                         properties: {
                                             name: { type: "string", description: "報酬の具体的な名称（例：原石、10連ガチャチケット、コイン等）" },
-                                            quantity: { type: "string", description: "数量" }
+                                            quantity: { type: "string", description: "数量（不明な場合は空文字を出力すること）" }
                                         },
                                         required: ["name", "quantity"]
                                     }

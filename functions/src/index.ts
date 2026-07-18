@@ -60,17 +60,25 @@ function normalizeString(str: string): string {
     if (!str) return '';
     return str
         .normalize('NFKC')
-        .replace(/[【】\[\]（）()「」『』〜~ー\-:：]/g, '')
-        .replace(/\s+/g, '')
-        .toLowerCase();
+        .toLowerCase()
+        // ノイズ記号の削除
+        .replace(/[【】\[\]（）()「」『』〜~ー\-:：!?！？\s]/g, '')
+        // 汎用キーワードの削除
+        .replace(/イベント/g, '')
+        .replace(/キャンペーン/g, '')
+        .replace(/開催のお知らせ/g, '')
+        .replace(/お知らせ/g, '')
+        .replace(/復刻/g, '');
 }
 
 function getBaseUrl(urlStr: string | null): string | null {
     if (!urlStr) return null;
     try {
+        // JavaScript の標準である URL オブジェクトを使用
         const u = new URL(urlStr);
         return u.origin + u.pathname;
     } catch (e) {
+        // パースエラー時は元の文字列を返す
         return urlStr;
     }
 }
@@ -498,7 +506,8 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
 
-        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
+        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。
+指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
 
 【既存のイベント一覧（参考）】
 ${existingMiniList || 'なし'}
@@ -506,35 +515,29 @@ ${existingMiniList || 'なし'}
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
-1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください。
-2. 【最重要: 抽出対象の厳格化】ハルシネーション（推測・捏造）は絶対に禁止です。「〇〇のお知らせ」「〇〇アップデート情報」「メンテナンス告知」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありません。また、単なる「ガチャ（祈願・跳躍等）」や「恒常コンテンツ」も除外してください。記事内で告知されている【実際にプレイ可能な期間限定ゲーム内イベント】のみを抽出対象とします。
-3. 【重要: ギフトコード・シリアルコードの完全抽出】ページ内に記載されている「ギフトコード（シリアルコード）」に関する情報は、通常イベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容（固有名称と数量）」や「有効期限」を確実に抽出してください。有効期限がサイト上に明記されていない場合は絶対に推測せず、nullとしてください。
-4. 【重要: 概要欄のAIの怠慢禁止】イベントの概要（summary）について、安易に「抽出できませんでした」と出力することを固く禁じます。ページ内の「具体的な世界観」「プレイ手順」「キャンペーンの参加条件」「報酬獲得のフロー」などのテキストを徹底的に探し出し、要約してください。ソースのどこを隅々まで読んでも本当に記載がない場合に限ってのみ「抽出できませんでした」を許可します。
-5. 【名寄せと更新の論理的判断】検索結果と【既存のイベント一覧（参考）】を比較し、「言語の違い（日本語と英語など）」や「表記ゆれ（略称や一部欠落）」があっても、実質的に同一のイベント・コードである場合は、新規登録とせずに必ず既存リストの該当ID（existing_id）を紐づけてください。
-6. 【自己修復(Liveness Audit)とパージ】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているイベント・期限切れのコード」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
+1. 【最重要: ハルシネーションと対象外の排除】
+   - 「〇〇のお知らせ」「アップデート情報」「メンテナンス告知」「プロデューサーレター」は単なるニュース記事であり、イベントではありません。絶対に除外してください。
+   - 「ガチャ（祈願・跳躍・ピックアップ等）」「恒常追加コンテンツ」も除外してください。
+   - 記事内で告知されている【実際にプレイ可能な期間限定のゲーム内・外イベント】のみを厳格に抽出してください。推測や捏造は固く禁じます。
+2. 【重要: ギフトコードの完全抽出】
+   - ページ内の「ギフトコード（シリアルコード）」は、通常イベントと同等の最重要度で抽出してください。
+   - コード文字列だけでなく、得られる「具体的な報酬内容（固有名称と数量）」と「有効期限」を確実に抽出してください。有効期限がサイト上に明記されていない場合は絶対に推測せず \`null\` としてください。
+3. 【重要: 概要欄での「AIの怠慢」禁止】
+   - イベント概要（summary）について、安易に「抽出できませんでした」と出力することを固く禁じます。
+   - ページ内の「世界観」「プレイ手順」「参加条件」「報酬獲得フロー」などを徹底的に探し出し、要約してください。
+   - ソースの隅々まで読んでも真に記載がない場合に限ってのみ「抽出できませんでした」を許可します。
+4. 【名寄せと更新の論理的判断】
+   - 検索結果と【既存のイベント一覧（参考）】を徹底的に比較してください。
+   - 「言語の違い（日本語と英語）」「表記ゆれ（略称や一部単語の欠落）」があっても、実質的に同一のイベント・コードである場合は、新規登録とせず必ず既存リストの該当ID（existing_id）を紐づけてください。二重登録は致命的なエラーです。
+5. 【自己修復(Liveness Audit)とパージ】
+   - 今回の検索と【既存のイベント一覧】を比較し、既存リストの中に「捏造・誤報イベント（実際には存在しない、または抽出対象外のガチャ・お知らせ）」や「すでに終了しているイベント・期限切れのコード」が残存している場合、それらを自動修復の対象とします。
+   - 該当する既存IDとその論理的な削除理由を \`liveness_audit_purges\` 配列に含めて返却してください。
 
-${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
+${keywords ? `【必須検索指定】以下のキーワードに関連するイベント情報は、必ず優先的に検索・調査して出力に含めてください：${keywords}` : ''}
 
-【追加禁止イベント】以下のイベント（類似する日課・週課等のコンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
+【追加禁止イベント】以下のイベント（類似コンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
 [ ${cycleEventTitles.join(', ')} ]
-
-【出力要件】
-（マークダウン使用禁止。純粋なJSONのみ）
-ルート要素は必ず \`events\` (配列) と \`invalid_existing_ids\` (文字列配列) を持つオブジェクトにしてください。
-\`events\` 配列内の各オブジェクトは、以下のプロパティを厳格に使用すること：
-- "event_validity_reasoning": (文字列) ※必須※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントや有効なコードなのかの論理的な理由。
-- "date_extraction_reasoning": (文字列) ※必須※ 検索結果から開始・終了日時を特定・推測した論理的な思考プロセス。
-- "content_extraction_reasoning": (文字列) ※必須※ ページ内からイベントの世界観、プレイ手順、キャンペーン内容等の具体的なテキストを「どこから拾って要約したか」の推論プロセス。このプロセスを経てからsummaryを作成すること。
-- "match_reason": (文字列) ※必須※ 言語差や表記ゆれを考慮し、既存IDを紐づけた理由、または完全新規とした理由。
-- "existing_id": (文字列) 既存一覧と同一（実質的に同じ）と判断した場合のID。完全に新規の場合は null。
-- "title": (文字列) 既存IDを出力した場合は一覧と一言一句同じタイトルを使用。新規の場合は正式名称。
-- "summary": (文字列) content_extraction_reasoningを元に生成した具体的な要約。
-- "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または null
-- "endDate": (文字列) 終了日時(YYYY-MM-DD HH:mm:00) または null
-- "redeemCode": (文字列) ギフトコード文字列 または null
-- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか。
-- "eventUrl": (文字列) URL または null
-- "rewards": (オブジェクトの配列) [{ "name": "アイテムの完全な固有名称", "quantity": "数量" }]。記載がない場合は空配列 [] を返すこと。`;
+`;
 
         const generationConfig = {
             temperature: 0.0,
@@ -543,19 +546,27 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             responseSchema: {
                 type: "object",
                 properties: {
-                    invalid_existing_ids: {
+                    liveness_audit_purges: {
                         type: "array",
-                        items: { type: "string" }
+                        description: "パージ（削除）すべき既存イベントのリスト",
+                        items: {
+                            type: "object",
+                            properties: {
+                                doc_id: { type: "string", description: "削除対象の既存イベントID" },
+                                purge_reason: { type: "string", description: "なぜ削除すべきかの論理的な理由（例：終了日時を過ぎているため、単なるガチャ告知でありイベントではないため、等）" }
+                            },
+                            required: ["doc_id", "purge_reason"]
+                        }
                     },
                     events: {
                         type: "array",
                         items: {
                             type: "object",
                             properties: {
-                                event_validity_reasoning: { type: "string" },
-                                date_extraction_reasoning: { type: "string" },
-                                content_extraction_reasoning: { type: "string" },
-                                match_reason: { type: "string" },
+                                event_validity_reasoning: { type: "string", description: "これが対象外（お知らせやガチャ）ではなく、プレイ可能な期間限定イベントや有効なコードであると判断した論理的な理由" },
+                                date_extraction_reasoning: { type: "string", description: "開始・終了日時を特定・推測した論理的な思考プロセス" },
+                                content_extraction_reasoning: { type: "string", description: "概要をどこから抽出したかの推論プロセス。記載がない場合は本当に記載がない理由を記述" },
+                                match_reason: { type: "string", description: "既存一覧と比較し、既存IDを紐づけた理由、または完全新規とした理由" },
                                 existing_id: { type: "string", nullable: true },
                                 title: { type: "string" },
                                 summary: { type: "string" },
@@ -580,7 +591,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         }
                     }
                 },
-                required: ["events", "invalid_existing_ids"]
+                required: ["events", "liveness_audit_purges"]
             }
         };
 
@@ -589,22 +600,22 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         const response = await generateContentWithRetry(ai, 'gemini-2.5-flash-lite', promptText, generationConfig, traceId);
 
         let extractedEvents: any[] = [];
-        let invalidExistingIds: string[] = [];
+        let livenessAuditPurges: { doc_id: string, purge_reason: string }[] = [];
         if (response.text) {
             let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
                 const parsedData = JSON.parse(cleanText) || {};
                 extractedEvents = parsedData.events || [];
-                invalidExistingIds = parsedData.invalid_existing_ids || [];
+                livenessAuditPurges = parsedData.liveness_audit_purges || [];
             } catch (e) {
                 functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting regex fallback...`);
                 try {
-                    const match = cleanText.match(/\{\s*"events"\s*:\s*\[[\s\S]*\]\s*,\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*\}/) ||
-                                  cleanText.match(/\{\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*,\s*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+                    const match = cleanText.match(/\{\s*"events"\s*:\s*\[[\s\S]*\]\s*,\s*"liveness_audit_purges"\s*:\s*\[[\s\S]*\]\s*\}/) ||
+                                  cleanText.match(/\{\s*"liveness_audit_purges"\s*:\s*\[[\s\S]*\]\s*,\s*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
                     if (match && match[0]) {
                         const parsedData = JSON.parse(match[0]) || {};
                         extractedEvents = parsedData.events || [];
-                        invalidExistingIds = parsedData.invalid_existing_ids || [];
+                        livenessAuditPurges = parsedData.liveness_audit_purges || [];
                         functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
                     } else {
                         throw new Error("Regex fallback failed to find a valid JSON object.");
@@ -638,13 +649,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             }
         };
             // パージ処理 (Liveness Audit)
-            if (invalidExistingIds.length > 0) {
-                functions.logger.info(`[${traceId}] Purging ${invalidExistingIds.length} invalid existing events for ${gameName}`);
+            if (livenessAuditPurges.length > 0) {
+                functions.logger.info(`[${traceId}] Purging ${livenessAuditPurges.length} invalid existing events for ${gameName}`);
                 // Batch delete processing for safety with firestore limits
                 let purgeBatch = db.batch();
                 let purgeBatchCount = 0;
 
-                for (const docId of invalidExistingIds) {
+                for (const purge of livenessAuditPurges) {
+                    const docId = purge.doc_id;
+                    const reason = purge.purge_reason;
                     if (docId) {
                         const existingDoc = currentEventsList.find(e => e.docId === docId);
                         if (existingDoc) {
@@ -663,7 +676,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 purgeBatchCount = 0;
                             }
 
-                            functions.logger.info(`[${traceId}] Purged invalid event: ${docId}`);
+                            functions.logger.info(`[${traceId}] Purged invalid event: ${docId} - Reason: ${reason}`);
                         }
                     }
                 }
@@ -691,9 +704,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     if (u.title && event.title) {
                         const normAI = normalizeString(event.title);
                         const normDB = normalizeString(u.title);
-                        if (calculateSimilarity(u.title, event.title) >= 0.85) return true;
-                        if (normDB.length >= 5 && normAI.includes(normDB)) return true;
-                        if (normAI.length >= 5 && normDB.includes(normAI)) return true;
+
+                        // 文字列が極端に短い場合は完全一致のみを許可
+                        if (normAI.length < 4 || normDB.length < 4) {
+                            if (normAI === normDB) return true;
+                        } else {
+                            if (calculateSimilarity(u.title, event.title) >= 0.85) return true;
+                            if (normDB.length >= 5 && normAI.includes(normDB)) return true;
+                            if (normAI.length >= 5 && normDB.includes(normAI)) return true;
+                        }
                     }
                     return false;
                 });
@@ -774,18 +793,23 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             const normAI = normalizeString(event.title);
                             const normDB = normalizeString(e.data.title);
 
-                            // 類似度が85%以上
-                            if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
-                                return true;
-                            }
+                            // 文字列が極端に短い場合は完全一致のみを許可
+                            if (normAI.length < 4 || normDB.length < 4) {
+                                if (normAI === normDB) return true;
+                            } else {
+                                // 類似度が85%以上
+                                if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
+                                    return true;
+                                }
 
-                            // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
-                            // 誤検知防止: 比較対象の文字列の長さが最低でも5文字以上であること
-                            if (normDB.length >= 5 && normAI.includes(normDB)) {
-                                return true;
-                            }
-                            if (normAI.length >= 5 && normDB.includes(normAI)) {
-                                return true;
+                                // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
+                                // 誤検知防止: 比較対象の文字列の長さが最低でも5文字以上であること
+                                if (normDB.length >= 5 && normAI.includes(normDB)) {
+                                    return true;
+                                }
+                                if (normAI.length >= 5 && normDB.includes(normAI)) {
+                                    return true;
+                                }
                             }
                         }
                         return false;

@@ -176,48 +176,38 @@ async function cleanupDuplicateEvents(eventsList: any[], firestoreDb: admin.fire
 }
 
 function calculateSimilarity(s1: string, s2: string): number {
-    let longer = s1.toLowerCase().replace(/[\s　]+/g, '');
-    let shorter = s2.toLowerCase().replace(/[\s　]+/g, '');
+    let longer = normalizeString(s1);
+    let shorter = normalizeString(s2);
+
     if (longer.length < shorter.length) {
-        const temp = longer; longer = shorter; shorter = temp;
+        let temp = longer;
+        longer = shorter;
+        shorter = temp;
     }
-    const longerLength = longer.length;
-    if (longerLength === 0) return 1.0;
-    const shorterLength = shorter.length;
-    if (shorterLength === 0) return 0.0;
-
-    // LCS (Longest Common Subsequence) based logic for 80% partial match
-    const dp = Array.from({ length: longerLength + 1 }, () => new Array(shorterLength + 1).fill(0));
-
-    for (let i = 1; i <= longerLength; i++) {
-        for (let j = 1; j <= shorterLength; j++) {
-            if (longer[i - 1] === shorter[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
-        }
-    }
-    const lcsLength = dp[longerLength][shorterLength];
-    if (shorterLength >= 5 && (lcsLength / shorterLength) >= 0.8) {
-        return 0.85; // Meets the 80% partial match criteria
+    let longerLength = longer.length;
+    if (longerLength === 0) {
+        return 1.0;
     }
 
-    const costs: number[] = [];
+    let costs: number[] = [];
     for (let i = 0; i <= longer.length; i++) {
         let lastValue = i;
         for (let j = 0; j <= shorter.length; j++) {
-            if (i === 0) costs[j] = j;
-            else if (j > 0) {
-                let newValue = costs[j - 1];
-                if (longer.charAt(i - 1) !== shorter.charAt(j - 1)) {
-                    newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+            if (i === 0)
+                costs[j] = j;
+            else {
+                if (j > 0) {
+                    let newValue = costs[j - 1];
+                    if (longer.charAt(i - 1) !== shorter.charAt(j - 1))
+                        newValue = Math.min(Math.min(newValue, lastValue),
+                            costs[j]) + 1;
+                    costs[j - 1] = lastValue;
+                    lastValue = newValue;
                 }
-                costs[j - 1] = lastValue;
-                lastValue = newValue;
             }
         }
-        if (i > 0) costs[shorter.length] = lastValue;
+        if (i > 0)
+            costs[shorter.length] = lastValue;
     }
     return (longerLength - costs[shorter.length]) / parseFloat(longerLength.toString());
 }
@@ -506,16 +496,17 @@ ${existingMiniList || 'なし'}
 
 【厳格な指示（Strict mandates）】
 1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください（検索クエリに lang:ja 等の演算子を含めて意図的に絞り込むこと）。英語や他言語のサイトは検索対象外です。
-2. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、ギフトコードを最新のウェブ検索結果から広く調査してください。
+2. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、【ギフトコード（シリアルコード）】を最新のウェブ検索結果から広く調査してください。
 3. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
-4. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
-5. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
-6. ハルシネーション（推測・捏造）は絶対に禁止です。情報源（公式サイト・公式X・大手攻略サイト等）に明確に記載されている【実際の正式なイベント名・ガチャ名】のみを抽出してください。テキストにない架空のイベント名や、AIによる独自の命名（例：「炎の試練」「夏イベント」など）は固く禁じます。確証が得られない場合は絶対に抽出（出力）しないでください。不明なURLや日時は無理に補完せずnullとしてください。
-7. 期限管理が命です。運営の「お知らせ記事の公開日」や「アップデート日」を、イベントの開始日として誤認しないように注意してください。必ず「ゲーム内でそのイベントが実際にプレイ可能になる開催期間」の記述を本文中から探し出して日付として採用してください。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
-8. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
-9. イベントの報酬を最大3つまで抽出し、配列として返してください。原石、星玉、ポリクローム、星声などのガチャ石（プレミアム通貨）やガチャチケットを最優先し、必ず配列の先頭（1番目）に配置してください。表記は簡潔にしてください（例: '💎 原石 x420', '🎁 限定武器', '💰 育成素材'）。報酬が不明、または攻略サイトに明確な記載がない場合は無理に抽出せず、空の配列を返してください（ハルシネーション厳禁）。
-10. 「〇〇のお知らせ」「〇〇アップデート情報」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありませんので、絶対に抽出しないでください。さらに、原神の『祈願』や、崩壊：スターレイルの『跳躍』のような単なるガチャ・ピックアップ施策、あるいは恒常的なキャンペーンは、プレイ可能なゲーム内イベントではないため絶対に抽出しないでください。抽出対象は、あくまでその記事内で告知されている【個別の期間限定ゲーム内イベントやコード】のみです。
-11. 【自己修復(Liveness Audit)】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているのに残っているイベント」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
+4. 【重要】ギフトコード・シリアルコードの情報は、通常のイベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容」や「有効期限」も確実に抽出対象としてください。
+5. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
+6. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
+7. 【抽出の正確性と幻覚の排除】ハルシネーション（推測・捏造）は絶対に禁止です。情報源（公式サイト・公式X・大手攻略サイト等）に明確に記載されている【実際の正式なイベント名・ガチャ名】のみを抽出してください。テキストにない架空のイベント名や、AIによる独自の命名（例：「炎の試練」「夏イベント」など）は固く禁じます。確証が得られない場合は絶対に抽出（出力）しないでください。不明なURLや日時は無理に補完せずnullとしてください。
+8. 期限管理が命です。運営の「お知らせ記事の公開日」や「アップデート日」を、イベントの開始日として誤認しないように注意してください。必ず「ゲーム内でそのイベントが実際にプレイ可能になる開催期間」の記述を本文中から探し出して日付として採用してください。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
+9. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）や使用期限切れのコードは絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
+10. イベントやコードの報酬を最大3つまで抽出し、配列として返してください。原石、星玉、ポリクローム、星声などのガチャ石（プレミアム通貨）やガチャチケットを最優先し、必ず配列の先頭（1番目）に配置してください。表記は簡潔にしてください（例: '💎 原石 x420', '🎁 限定武器', '💰 育成素材'）。報酬が不明、または攻略サイトに明確な記載がない場合は無理に抽出せず、空の配列を返してください（ハルシネーション厳禁）。
+11. 「〇〇のお知らせ」「〇〇アップデート情報」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありませんので、絶対に抽出しないでください。さらに、原神の『祈願』や、崩壊：スターレイルの『跳躍』のような単なるガチャ・ピックアップ施策、あるいは恒常的なキャンペーンは、プレイ可能なゲーム内イベントではないため絶対に抽出しないでください。抽出対象は、あくまでその記事内で告知されている【個別の期間限定ゲーム内イベントや有効なコード】のみです。
+12. 【自己修復(Liveness Audit)】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているのに残っているイベント・期限切れコード」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -526,16 +517,16 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 （マークダウン使用禁止。純粋なJSONのみ）
 ルート要素は必ず \`events\` (配列) と \`invalid_existing_ids\` (文字列配列) を持つオブジェクトにしてください。
 \`events\` 配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
-- "event_validity_reasoning": (文字列) ※最重要※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントなのかの論理的な理由。
+- "event_validity_reasoning": (文字列) ※最重要※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントや有効なコードなのかの論理的な理由。
 - "date_extraction_reasoning": (文字列) ※最重要※ 検索結果から日付を特定した理由。検索結果のテキストから、イベントの開始・終了日時を特定・推測するための論理的な思考プロセスや計算式（例:「開始日は〇日で期間が2週間だから終了日は〇日」）を記載すること。また必ず「この記事の公開日（〇日）ではなく、本文中の開催期間の記述（〇日〜〇日）を基準にした」など、公開日と実際の開催期間を明確に区別して判断したプロセスをここに記載すること。
 - "match_reason": (文字列) 既存IDを紐づけた理由、または新規とした理由（「言語が違うが内容は同じである」「表記ゆれだが同一イベントである」など）。
 - "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。検索結果が外国語（英語等）でも、既存の日本語イベントの和訳・意訳と思われる場合は『実質的に同じ』とみなし、既存のIDを紐づけること。また、省略形や一部欠落でも明らかに同じイベントを指している場合は新規にせず紐づけること。完全に新規の場合は null。
 - "title": (文字列) 既存IDを出力した場合は、一覧と「一言一句同じ」タイトルを使用すること。新規の場合は情報源に記載されている正式名称を一言一句そのまま使用すること。AIによる独自の命名、推測、要約は禁止。
-- "summary": (文字列) イベント概要
+- "summary": (文字列) 【重要】イベントやコードの概要。安易に「抽出できませんでした」と出力せず、ページ内の具体的な世界観、プレイ手順、キャンペーン内容などのテキストを徹底的に拾って要約すること。ただし、ソースのどこを読んでも本当に概要が記載されていない場合に限っては「抽出できませんでした（または記載なし）」と出力することを許可します。
 - "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または 'UNKNOWN'
 - "endDate": (文字列) 既存IDを出力し、かつ検索結果から終了日が判明しない場合は、絶対にnullにせず一覧にある（期限: xxx）の日付を引き継ぐこと。判明した場合は (YYYY-MM-DD HH:mm:00) または 'UNKNOWN'。
-- "redeemCode": (文字列) ギフトコード または null
-- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか
+- "redeemCode": (文字列) ギフトコード または null。抽出したコードの文字列そのものを出力すること。
+- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか。ギフトコードの場合は必ず "コード" を指定すること。
 - "eventUrl": (文字列) URL または null
 - "rewards": (オブジェクトの配列) 報酬リスト。必ず以下の構造を持つオブジェクトの配列にすること： [{ "name": "アイテムの完全な固有名称", "quantity": "数量（文字列）" }] 。一般的な「アイテム」等に要約せず、公式の固有名称を抽出すること。数量が記載されている場合は絶対に省略しないこと。記載がない場合は空配列 [] を返すこと。推測による補完は厳禁。`;
 
@@ -669,10 +660,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             // 1. AIレスポンス内の自己重複を排除する（より情報が多い方を優先してマージ）
             const uniqueExtractedEvents: any[] = [];
             for (const event of extractedEvents) {
-                const duplicateIdx = uniqueExtractedEvents.findIndex(u =>
-                    (event.eventUrl && u.eventUrl === event.eventUrl) ||
-                    (u.title && event.title && calculateSimilarity(u.title, event.title) >= 0.85)
-                );
+                const duplicateIdx = uniqueExtractedEvents.findIndex(u => {
+                    if ((event.tag === 'コード' || u.tag === 'コード') && event.redeemCode && u.redeemCode) {
+                        if (event.redeemCode.toUpperCase() === u.redeemCode.toUpperCase()) return true;
+                    }
+                    if (event.eventUrl && u.eventUrl && event.eventUrl === u.eventUrl) return true;
+                    if (u.title && event.title && calculateSimilarity(u.title, event.title) >= 0.85) return true;
+                    return false;
+                });
 
                 if (duplicateIdx === -1) {
                     uniqueExtractedEvents.push(event);

@@ -54,6 +54,16 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
     }
 }
 
+
+
+function normalizeString(str: string): string {
+    if (!str) return '';
+    return str
+        .replace(/[【】\[\]（）()「」『』]/g, '')
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/\s+/g, '')
+        .toLowerCase();
+}
 function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
     if (val.toDate && typeof val.toDate === 'function') return val.toDate();
@@ -122,7 +132,7 @@ async function cleanupDuplicateEvents(eventsList: any[], firestoreDb: admin.fire
                     }
                 } else if (e1.data.eventUrl && e2.data.eventUrl && e1.data.eventUrl === e2.data.eventUrl) {
                     isDuplicate = true;
-                } else if (e1.data.title && e2.data.title && calculateSimilarity(e1.data.title, e2.data.title) >= 0.85) {
+                } else if (e1.data.title && e2.data.title && calculateSimilarity(normalizeString(e1.data.title), normalizeString(e2.data.title)) >= 0.85) {
                     isDuplicate = true;
                 }
 
@@ -504,7 +514,8 @@ ${existingMiniList || 'なし'}
 7. 期限管理が命です。運営の「お知らせ記事の公開日」や「アップデート日」を、イベントの開始日として誤認しないように注意してください。必ず「ゲーム内でそのイベントが実際にプレイ可能になる開催期間」の記述を本文中から探し出して日付として採用してください。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
 8. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）は絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
 9. イベントの報酬を最大3つまで抽出し、配列として返してください。原石、星玉、ポリクローム、星声などのガチャ石（プレミアム通貨）やガチャチケットを最優先し、必ず配列の先頭（1番目）に配置してください。表記は簡潔にしてください（例: '💎 原石 x420', '🎁 限定武器', '💰 育成素材'）。報酬が不明、または攻略サイトに明確な記載がない場合は無理に抽出せず、空の配列を返してください（ハルシネーション厳禁）。
-10. 「〇〇のお知らせ」「〇〇アップデート情報」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありませんので、絶対に抽出しないでください。抽出対象は、あくまでその記事内で告知されている【個別のゲーム内イベントやガチャの実体】のみです。抽出するタイトルから「のお知らせ」等の文言は除外（または該当するものを無視）してください。
+10. 「〇〇のお知らせ」「〇〇アップデート情報」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありませんので、絶対に抽出しないでください。さらに、原神の『祈願』や、崩壊：スターレイルの『跳躍』のような単なるガチャ・ピックアップ施策、あるいは恒常的なキャンペーンは、プレイ可能なゲーム内イベントではないため絶対に抽出しないでください。抽出対象は、あくまでその記事内で告知されている【個別の期間限定ゲーム内イベントやコード】のみです。
+11. 【自己修復(Liveness Audit)】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているのに残っているイベント」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -512,9 +523,12 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 [ ${cycleEventTitles.join(', ')} ]
 
 【出力要件】
-（マークダウン使用禁止。純粋なJSON配列のみ）
-配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
+（マークダウン使用禁止。純粋なJSONのみ）
+ルート要素は必ず \`events\` (配列) と \`invalid_existing_ids\` (文字列配列) を持つオブジェクトにしてください。
+\`events\` 配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
+- "event_validity_reasoning": (文字列) ※最重要※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントなのかの論理的な理由。
 - "date_extraction_reasoning": (文字列) ※最重要※ 検索結果から日付を特定した理由。検索結果のテキストから、イベントの開始・終了日時を特定・推測するための論理的な思考プロセスや計算式（例:「開始日は〇日で期間が2週間だから終了日は〇日」）を記載すること。また必ず「この記事の公開日（〇日）ではなく、本文中の開催期間の記述（〇日〜〇日）を基準にした」など、公開日と実際の開催期間を明確に区別して判断したプロセスをここに記載すること。
+- "match_reason": (文字列) 既存IDを紐づけた理由、または新規とした理由（「言語が違うが内容は同じである」「表記ゆれだが同一イベントである」など）。
 - "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。検索結果が外国語（英語等）でも、既存の日本語イベントの和訳・意訳と思われる場合は『実質的に同じ』とみなし、既存のIDを紐づけること。また、省略形や一部欠落でも明らかに同じイベントを指している場合は新規にせず紐づけること。完全に新規の場合は null。
 - "title": (文字列) 既存IDを出力した場合は、一覧と「一言一句同じ」タイトルを使用すること。新規の場合は情報源に記載されている正式名称を一言一句そのまま使用すること。AIによる独自の命名、推測、要約は禁止。
 - "summary": (文字列) イベント概要
@@ -530,33 +544,45 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             tools: [{ googleSearch: {} }],
             responseMimeType: "application/json",
             responseSchema: {
-                type: "array",
-                items: {
-                    type: "object",
-                    properties: {
-                        date_extraction_reasoning: { type: "string" },
-                        existing_id: { type: "string", nullable: true },
-                        title: { type: "string" },
-                        summary: { type: "string" },
-                        startDate: { type: "string", nullable: true },
-                        endDate: { type: "string", nullable: true },
-                        redeemCode: { type: "string", nullable: true },
-                        tag: { type: "string" },
-                        eventUrl: { type: "string", nullable: true },
-                        rewards: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    name: { type: "string" },
-                                    quantity: { type: "string" }
-                                },
-                                required: ["name", "quantity"]
-                            }
-                        }
+                type: "object",
+                properties: {
+                    invalid_existing_ids: {
+                        type: "array",
+                        items: { type: "string" }
                     },
-                    required: ["date_extraction_reasoning", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
-                }
+                    events: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                event_validity_reasoning: { type: "string" },
+                                date_extraction_reasoning: { type: "string" },
+                                match_reason: { type: "string" },
+                                existing_id: { type: "string", nullable: true },
+                                title: { type: "string" },
+                                summary: { type: "string" },
+                                startDate: { type: "string", nullable: true },
+                                endDate: { type: "string", nullable: true },
+                                redeemCode: { type: "string", nullable: true },
+                                tag: { type: "string" },
+                                eventUrl: { type: "string", nullable: true },
+                                rewards: {
+                                    type: "array",
+                                    items: {
+                                        type: "object",
+                                        properties: {
+                                            name: { type: "string" },
+                                            quantity: { type: "string" }
+                                        },
+                                        required: ["name", "quantity"]
+                                    }
+                                }
+                            },
+                            required: ["event_validity_reasoning", "date_extraction_reasoning", "match_reason", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
+                        }
+                    }
+                },
+                required: ["events", "invalid_existing_ids"]
             }
         };
 
@@ -565,51 +591,78 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         const response = await generateContentWithRetry(ai, 'gemini-2.5-flash-lite', promptText, generationConfig, traceId);
 
         let extractedEvents: any[] = [];
+        let invalidExistingIds: string[] = [];
         if (response.text) {
             let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
-                extractedEvents = JSON.parse(cleanText);
+                const parsedData = JSON.parse(cleanText);
+                extractedEvents = parsedData.events || [];
+                invalidExistingIds = parsedData.invalid_existing_ids || [];
             } catch (e) {
                 functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting regex fallback...`);
                 try {
-                    // 正規表現で [ { ... } ] の形を強引に抽出するフォールバック
-                    const arrayMatch = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-                    if (arrayMatch && arrayMatch[0]) {
-                        extractedEvents = JSON.parse(arrayMatch[0]);
+                    const match = cleanText.match(/\{\s*"events"\s*:\s*\[[\s\S]*\]\s*,\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*\}/) ||
+                                  cleanText.match(/\{\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*,\s*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+                    if (match && match[0]) {
+                        const parsedData = JSON.parse(match[0]);
+                        extractedEvents = parsedData.events || [];
+                        invalidExistingIds = parsedData.invalid_existing_ids || [];
                         functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
                     } else {
-                        throw new Error("Regex fallback failed to find a valid JSON array.");
+                        throw new Error("Regex fallback failed to find a valid JSON object.");
                     }
                 } catch (fallbackError) {
-                    functions.logger.error(`[${traceId}] Failed to parse JSON array from response.`, { text: response.text });
-                    throw new Error("Failed to parse JSON array from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+                    functions.logger.error(`[${traceId}] Failed to parse JSON object from response.`, { text: response.text });
+                    throw new Error("Failed to parse JSON object from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
                 }
             }
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
+
+
         } else {
             throw new Error("Gemini response text was empty.");
         }
 
         let totalTokens = response.usageMetadata?.totalTokenCount || 0;
 
+        let batch = db.batch();
+        let batchCount = 0;
+        let addedCount = 0;
+        let updatedCount = 0;
+        let deletedCount = 0;
+        let unchangedCount = 0;
+
+        const commitBatchIfNeeded = async () => {
+            if (batchCount >= 450) {
+                await batch.commit();
+                batch = db.batch();
+                batchCount = 0;
+            }
+        };
+            // パージ処理 (Liveness Audit)
+            if (invalidExistingIds.length > 0) {
+                functions.logger.info(`[${traceId}] Purging ${invalidExistingIds.length} invalid existing events for ${gameName}`);
+                for (const docId of invalidExistingIds) {
+                    if (docId) {
+                        const existingDoc = currentEventsList.find(e => e.docId === docId);
+                        if (existingDoc) {
+                            const eData = existingDoc.data;
+                            // 保護されているイベントは削除しない
+                            if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isCreationLocked === true) {
+                                continue;
+                            }
+                            batch.delete(eventsCollection.doc(docId));
+                            batchCount++;
+                            deletedCount++;
+                            await commitBatchIfNeeded();
+                            functions.logger.info(`[${traceId}] Purged invalid event: ${docId}`);
+                        }
+                    }
+                }
+            }
+
         if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
             const matchedDocIds = new Set<string>();
-
-            let batch = db.batch();
-            let batchCount = 0;
-
-            let addedCount = 0;
-            let updatedCount = 0;
-            let deletedCount = 0;
-            let unchangedCount = 0;
-
-            const commitBatchIfNeeded = async () => {
-                if (batchCount >= 450) {
-                    await batch.commit();
-                    batch = db.batch();
-                    batchCount = 0;
-                }
-            };
 
             const nowMs = new Date().getTime();
 
@@ -682,7 +735,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         if (event.tag === 'コード' || e.data.tag === 'コード') {
                             return event.redeemCode && e.data.redeemCode && event.redeemCode.toUpperCase() === e.data.redeemCode.toUpperCase();
                         }
-                        if (e.data.title && event.title && calculateSimilarity(e.data.title, event.title) >= 0.85) return true;
+                        if (e.data.title && event.title && calculateSimilarity(normalizeString(e.data.title), normalizeString(event.title)) >= 0.85) return true;
                         return false;
                     });
                 }
@@ -1234,6 +1287,7 @@ export const clearAllEvents = functions.region('asia-northeast1').runWith({ memo
 
         while (true) {
             let query = db.collectionGroup('events').limit(450);
+
             if (lastDoc) {
                 query = query.startAfter(lastDoc);
             }
@@ -1241,16 +1295,23 @@ export const clearAllEvents = functions.region('asia-northeast1').runWith({ memo
             if (snapshot.empty) break;
 
             const bulkWriter = db.bulkWriter();
+            let deletedInBatch = 0;
             snapshot.docs.forEach((doc) => {
+                const docData = doc.data();
+                // isLocked, isCreationLocked, isUpdateLocked, isCycleEventをチェックして手動イベントを保護
+                if (docData.isCycleEvent === true || docData.isLocked === true || docData.isCreationLocked === true || docData.isUpdateLocked === true) {
+                    return;
+                }
                 bulkWriter.delete(doc.ref);
+                deletedInBatch++;
             });
 
             await bulkWriter.close();
-            totalDeleted += snapshot.docs.length;
+            totalDeleted += deletedInBatch;
             lastDoc = snapshot.docs[snapshot.docs.length - 1] as admin.firestore.QueryDocumentSnapshot;
         }
 
-        functions.logger.info(`Successfully deleted ${totalDeleted} events from all games.`);
+        functions.logger.info(`Successfully deleted ${totalDeleted} non-manual/non-cycle events from all games.`);
         return { success: true, deletedCount: totalDeleted };
     } catch (error) {
         functions.logger.error('Error clearing events from Firestore:', error instanceof Error ? error.stack : String(error));

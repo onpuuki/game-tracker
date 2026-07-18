@@ -41,7 +41,38 @@ class EditTab extends HookConsumerWidget {
       }
     }
 
+
+    String? cycleType = data['cycleType']?.toString();
+    Map<String, dynamic> cycleSettings = data['cycleSettings'] != null
+        ? Map<String, dynamic>.from(data['cycleSettings'])
+        : {};
+
+    TimeOfDay? time;
+    if (cycleSettings['hour'] != null && cycleSettings['minute'] != null) {
+      time = TimeOfDay(
+        hour: cycleSettings['hour'] as int,
+        minute: cycleSettings['minute'] as int,
+      );
+    }
+
+    String? weeklyDayOfWeek;
+    if (cycleSettings['dayOfWeek'] != null) {
+      final days = ['月', '火', '水', '木', '金', '土', '日'];
+      final idx = (cycleSettings['dayOfWeek'] as int) - 1;
+      if (idx >= 0 && idx < days.length) {
+        weeklyDayOfWeek = days[idx];
+      }
+    }
+
+    DateTime? startDate;
+    if (cycleSettings['startDate'] != null) {
+      startDate = _parseTimestamp(cycleSettings['startDate'])?.toDate();
+    }
+
+    int? dayOfMonth = cycleSettings['dayOfMonth'] as int?;
+
     await showDialog(
+
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -66,10 +97,134 @@ class EditTab extends HookConsumerWidget {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'スケジュールの編集は現在のところサポートされていません。必要に応じて削除し、再作成してください。',
-                      style: TextStyle(color: Colors.red, fontSize: 12),
-                    ),
+                    if (cycleType == 'daily')
+                      Row(
+                        children: [
+                          const Text('実行時刻: '),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: time ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  time = picked;
+                                });
+                              }
+                            },
+                            child: Text(time?.format(context) ?? '選択してください'),
+                          ),
+                        ],
+                      ),
+                    if (cycleType == 'weekly')
+                      Row(
+                        children: [
+                          const Text('実行曜日: '),
+                          DropdownButton<String>(
+                            value: weeklyDayOfWeek,
+                            items: ['月', '火', '水', '木', '金', '土', '日']
+                                .map((day) => DropdownMenuItem(
+                                      value: day,
+                                      child: Text(day),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setDialogState(() {
+                                weeklyDayOfWeek = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: time ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  time = picked;
+                                });
+                              }
+                            },
+                            child: Text(time?.format(context) ?? '時刻選択'),
+                          ),
+                        ],
+                      ),
+                    if (cycleType == 'biweekly')
+                      Row(
+                        children: [
+                          const Text('起点日: '),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: startDate ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  startDate = picked;
+                                });
+                              }
+                            },
+                            child: Text(startDate != null
+                                ? "${startDate!.year}-${startDate!.month.toString().padLeft(2, '0')}-${startDate!.day.toString().padLeft(2, '0')}"
+                                : '日付選択'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: time ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  time = picked;
+                                });
+                              }
+                            },
+                            child: Text(time?.format(context) ?? '時刻選択'),
+                          ),
+                        ],
+                      ),
+                    if (cycleType == 'monthly')
+                      Row(
+                        children: [
+                          const Text('日付: '),
+                          DropdownButton<int>(
+                            value: dayOfMonth,
+                            items: List.generate(31, (i) => i + 1)
+                                .map((day) => DropdownMenuItem(
+                                      value: day,
+                                      child: Text('$day日'),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setDialogState(() {
+                                dayOfMonth = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: time ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  time = picked;
+                                });
+                              }
+                            },
+                            child: Text(time?.format(context) ?? '時刻選択'),
+                          ),
+                        ],
+                      ),
                     const Divider(),
                     const Text(
                       'タスク',
@@ -122,13 +277,75 @@ class EditTab extends HookConsumerWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    await doc.reference.update({
+                    DateTime now = DateTime.now();
+                    DateTime newEndDate = now;
+                    bool scheduleUpdated = false;
+
+                    if (time != null && cycleType != null) {
+                      if (cycleType == 'daily') {
+                        newEndDate = DateTime(now.year, now.month, now.day, time!.hour, time!.minute);
+                        if (newEndDate.isBefore(now)) {
+                          newEndDate = DateTime(now.year, now.month, now.day + 1, time!.hour, time!.minute);
+                        }
+                        cycleSettings['hour'] = time!.hour;
+                        cycleSettings['minute'] = time!.minute;
+                        scheduleUpdated = true;
+                      } else if (cycleType == 'weekly' && weeklyDayOfWeek != null) {
+                        final daysOfWeek = ['月', '火', '水', '木', '金', '土', '日'];
+                        final targetWeekday = daysOfWeek.indexOf(weeklyDayOfWeek!) + 1;
+                        newEndDate = DateTime(now.year, now.month, now.day, time!.hour, time!.minute);
+                        while (newEndDate.weekday != targetWeekday || newEndDate.isBefore(now)) {
+                          newEndDate = DateTime(newEndDate.year, newEndDate.month, newEndDate.day + 1, time!.hour, time!.minute);
+                        }
+                        cycleSettings['dayOfWeek'] = targetWeekday;
+                        cycleSettings['hour'] = time!.hour;
+                        cycleSettings['minute'] = time!.minute;
+                        scheduleUpdated = true;
+                      } else if (cycleType == 'biweekly' && startDate != null) {
+                        newEndDate = DateTime(startDate!.year, startDate!.month, startDate!.day, time!.hour, time!.minute);
+                        while (newEndDate.isBefore(now)) {
+                          newEndDate = DateTime(newEndDate.year, newEndDate.month, newEndDate.day + 14, time!.hour, time!.minute);
+                        }
+                        cycleSettings['startDate'] = Timestamp.fromDate(startDate!);
+                        cycleSettings['hour'] = time!.hour;
+                        cycleSettings['minute'] = time!.minute;
+                        scheduleUpdated = true;
+                      } else if (cycleType == 'monthly' && dayOfMonth != null) {
+                        int maxDaysInCurrentMonth = DateTime(now.year, now.month + 1, 0).day;
+                        int currentMonthDay = dayOfMonth! > maxDaysInCurrentMonth ? maxDaysInCurrentMonth : dayOfMonth!;
+                        newEndDate = DateTime(now.year, now.month, currentMonthDay, time!.hour, time!.minute);
+                        if (newEndDate.isBefore(now)) {
+                          int nextMonth = now.month + 1;
+                          int nextYear = now.year;
+                          if (nextMonth > 12) {
+                            nextMonth = 1;
+                            nextYear += 1;
+                          }
+                          int maxDaysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+                          int nextMonthDay = dayOfMonth! > maxDaysInNextMonth ? maxDaysInNextMonth : dayOfMonth!;
+                          newEndDate = DateTime(nextYear, nextMonth, nextMonthDay, time!.hour, time!.minute);
+                        }
+                        cycleSettings['dayOfMonth'] = dayOfMonth;
+                        cycleSettings['hour'] = time!.hour;
+                        cycleSettings['minute'] = time!.minute;
+                        scheduleUpdated = true;
+                      }
+                    }
+
+                    final updateData = <String, dynamic>{
                       'title': titleCtrl.text.trim(),
                       'redeemCode': codeCtrl.text.trim(),
                       'summary': summaryCtrl.text.trim(),
                       'tasks': tasks,
                       'updatedAt': FieldValue.serverTimestamp(),
-                    });
+                    };
+
+                    if (scheduleUpdated) {
+                      updateData['endDate'] = Timestamp.fromDate(newEndDate);
+                      updateData['cycleSettings'] = cycleSettings;
+                    }
+
+                    await doc.reference.update(updateData);
                     if (!context.mounted) return;
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(

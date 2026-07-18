@@ -853,7 +853,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
                             const numsAI = extractVersionMarkers(event.title || '');
                             const numsDB = extractVersionMarkers(u.title || '');
-                            if (numsAI && numsDB && numsAI !== numsDB) {
+                            if (numsAI !== numsDB) {
                                 return false;
                             }
                             return true;
@@ -862,7 +862,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             // 【A-2】バージョン（数字）違いの誤マージ防止
                             const numsAI = extractVersionMarkers(event.title || '');
                             const numsDB = extractVersionMarkers(u.title || '');
-                            if (numsAI && numsDB && numsAI !== numsDB) {
+                            if (numsAI !== numsDB) {
                                 return false; // 数字が異なる場合はマージしない
                             }
                             return true;
@@ -873,7 +873,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             if (normAI.includes(normDB) || normDB.includes(normAI)) {
                                 const numsAI = extractVersionMarkers(event.title || '');
                                 const numsDB = extractVersionMarkers(u.title || '');
-                                if (numsAI && numsDB && numsAI !== numsDB) {
+                                if (numsAI !== numsDB) {
                                     return false;
                                 }
                                 return true;
@@ -957,7 +957,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     if (existingEvent) {
                         const aiMarkers = extractVersionMarkers(event.title || '');
                         const dbMarkers = extractVersionMarkers(existingEvent.data.title || '');
-                        if (aiMarkers && dbMarkers && aiMarkers !== dbMarkers) {
+                        if (aiMarkers !== dbMarkers) {
                             functions.logger.warn(`[${traceId}] Rejecting AI existing_id ${event.existing_id} due to version mismatch. AI: ${aiMarkers}, DB: ${dbMarkers}`);
                             existingEvent = undefined; // バージョン違いの場合は強制的に棄却し、新規扱い・名寄せルートへ回す
                         }
@@ -984,7 +984,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
                                 const numsAI = extractVersionMarkers(event.title || '');
                                 const numsDB = extractVersionMarkers(e.data.title || '');
-                                if (numsAI && numsDB && numsAI !== numsDB) {
+                                if (numsAI !== numsDB) {
                                     return false;
                                 }
                                 return true;
@@ -994,7 +994,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             // 【A-2】バージョン（数字）違いの誤マージ防止
                             const numsAI = extractVersionMarkers(event.title || '');
                             const numsDB = extractVersionMarkers(e.data.title || '');
-                            if (numsAI && numsDB && numsAI !== numsDB) {
+                            if (numsAI !== numsDB) {
                                 return false; // 数字が異なる場合はマージしない
                             }
 
@@ -1007,7 +1007,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 if (normAI.includes(normDB) || normDB.includes(normAI)) {
                                     const numsAI = extractVersionMarkers(event.title || '');
                                     const numsDB = extractVersionMarkers(e.data.title || '');
-                                    if (numsAI && numsDB && numsAI !== numsDB) {
+                                    if (numsAI !== numsDB) {
                                         return false;
                                     }
                                     return true;
@@ -1151,8 +1151,17 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         updatedCount++;
                         await commitBatchIfNeeded();
                     } else {
+                        // 【防御的要件5】新規イベント登録時のサマリー手抜き防止
+                        let safeNewSummary = event.summary || '';
+                        const isShort = safeNewSummary.length < 50;
+                        const hasFailureKeywords = /抽出不可|記載なし|不明|ありません|記載されていません/.test(safeNewSummary);
+                        if (isShort || hasFailureKeywords) {
+                            safeNewSummary = '詳細は公式サイトやゲーム内のお知らせ等でご確認ください。';
+                        }
+
                         batch.set(docRef, {
                             ...event,
+                            summary: safeNewSummary,
                             gameName: gameName,
                             subTag: null,
                             imageUrl: null,

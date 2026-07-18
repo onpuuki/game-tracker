@@ -852,8 +852,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
                         // 【防御的要件1】誤検知防止: 短い場合は完全一致のみを許可、包含判定は文字列長5以上の場合のみ
                         if (normDB.length >= 5 && normAI.length >= 5) {
-                            if (normAI.includes(normDB)) return true;
-                            if (normDB.includes(normAI)) return true;
+                            if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                                const numsAI = extractVersionMarkers(event.title || '');
+                                const numsDB = extractVersionMarkers(u.title || '');
+                                if (numsAI && numsDB && numsAI !== numsDB) {
+                                    return false;
+                                }
+                                return true;
+                            }
                         }
                     }
                     return false;
@@ -972,8 +978,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
                             // 【防御的要件1】誤検知防止: 短い場合は完全一致のみを許可、包含判定は文字列長5以上の場合のみ
                             if (normDB.length >= 5 && normAI.length >= 5) {
-                                if (normAI.includes(normDB)) return true;
-                                if (normDB.includes(normAI)) return true;
+                                if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                                    const numsAI = extractVersionMarkers(event.title || '');
+                                    const numsDB = extractVersionMarkers(e.data.title || '');
+                                    if (numsAI && numsDB && numsAI !== numsDB) {
+                                        return false;
+                                    }
+                                    return true;
+                                }
                             }
                         }
                         return false;
@@ -1127,7 +1139,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             for (const existingEvent of currentEventsList) {
                 if (!matchedDocIds.has(existingEvent.docId)) {
                     const eData = existingEvent.data;
-                    if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isDeleted === true) {
+                    if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isCreationLocked === true || eData.isDeleted === true) {
                         continue;
                     }
 

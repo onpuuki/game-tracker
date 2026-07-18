@@ -60,7 +60,7 @@ function normalizeString(str: string): string {
     if (!str) return '';
     return str
         .normalize('NFKC')
-        .replace(/[【】\[\]（）()「」『』〜~ー-]/g, '')
+        .replace(/[【】\[\]（）()「」『』〜~ー\-:：]/g, '')
         .replace(/\s+/g, '')
         .toLowerCase();
 }
@@ -71,7 +71,7 @@ function getBaseUrl(urlStr: string | null): string | null {
         const u = new URL(urlStr);
         return u.origin + u.pathname;
     } catch (e) {
-        return urlStr.split('?')[0].split('#')[0];
+        return urlStr;
     }
 }
 function getSafeDateObj(val: any): Date | null {
@@ -499,24 +499,19 @@ export const syncSingleGameTask = onTaskDispatched({
         const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
 
         const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
+
 【既存のイベント一覧（参考）】
 ${existingMiniList || 'なし'}
 
 【現在日時】 ${currentDate}
 
 【厳格な指示（Strict mandates）】
-1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください（検索クエリに lang:ja 等の演算子を含めて意図的に絞り込むこと）。英語や他言語のサイトは検索対象外です。
-2. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、【ギフトコード（シリアルコード）】を最新のウェブ検索結果から広く調査してください。
-3. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
-4. 【重要】ギフトコード・シリアルコードの情報は、通常のイベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容」や「有効期限」も確実に抽出対象としてください。有効期限がサイト上に明記されていない場合は、絶対に推測せず null として抽出すること。
-5. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
-6. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
-7. 【抽出の正確性と幻覚の排除】ハルシネーション（推測・捏造）は絶対に禁止です。情報源（公式サイト・公式X・大手攻略サイト等）に明確に記載されている【実際の正式なイベント名・ガチャ名】のみを抽出してください。テキストにない架空のイベント名や、AIによる独自の命名（例：「炎の試練」「夏イベント」など）は固く禁じます。確証が得られない場合は絶対に抽出（出力）しないでください。不明なURLや日時は無理に補完せずnullとしてください。
-8. 期限管理が命です。運営の「お知らせ記事の公開日」や「アップデート日」を、イベントの開始日として誤認しないように注意してください。必ず「ゲーム内でそのイベントが実際にプレイ可能になる開催期間」の記述を本文中から探し出して日付として採用してください。「アップデート後」などの曖昧な表記は具体的な日付に変換してください。時間不明ならYYYY-MM-DDのみ。年省略時は今年を補完。
-9. 現在日時（${currentDate}）を基準とし、すでに終了した過去のイベント（前年などの古いデータ）や使用期限切れのコードは絶対に除外してください。出力するイベントは必ず終了日が本日の日付以降、または未定（null）のもののみにすること。
-10. イベントやコードの報酬を最大3つまで抽出し、配列として返してください。原石、星玉、ポリクローム、星声などのガチャ石（プレミアム通貨）やガチャチケットを最優先し、必ず配列の先頭（1番目）に配置してください。表記は簡潔にしてください（例: '💎 原石 x420', '🎁 限定武器', '💰 育成素材'）。報酬が不明、または攻略サイトに明確な記載がない場合は無理に抽出せず、空の配列を返してください（ハルシネーション厳禁）。
-11. 「〇〇のお知らせ」「〇〇アップデート情報」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありませんので、絶対に抽出しないでください。さらに、原神の『祈願』や、崩壊：スターレイルの『跳躍』のような単なるガチャ・ピックアップ施策、あるいは恒常的なキャンペーンは、プレイ可能なゲーム内イベントではないため絶対に抽出しないでください。抽出対象は、あくまでその記事内で告知されている【個別の期間限定ゲーム内イベントや有効なコード】のみです。
-12. 【自己修復(Liveness Audit)】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているのに残っているイベント・期限切れコード」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
+1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください。
+2. 【最重要: 抽出対象の厳格化】ハルシネーション（推測・捏造）は絶対に禁止です。「〇〇のお知らせ」「〇〇アップデート情報」「メンテナンス告知」「プロデューサーレター」のような【告知記事やニュースそのもの】はイベントではありません。また、単なる「ガチャ（祈願・跳躍等）」や「恒常コンテンツ」も除外してください。記事内で告知されている【実際にプレイ可能な期間限定ゲーム内イベント】のみを抽出対象とします。
+3. 【重要: ギフトコード・シリアルコードの完全抽出】ページ内に記載されている「ギフトコード（シリアルコード）」に関する情報は、通常イベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容（固有名称と数量）」や「有効期限」を確実に抽出してください。有効期限がサイト上に明記されていない場合は絶対に推測せず、nullとしてください。
+4. 【重要: 概要欄のAIの怠慢禁止】イベントの概要（summary）について、安易に「抽出できませんでした」と出力することを固く禁じます。ページ内の「具体的な世界観」「プレイ手順」「キャンペーンの参加条件」「報酬獲得のフロー」などのテキストを徹底的に探し出し、要約してください。ソースのどこを隅々まで読んでも本当に記載がない場合に限ってのみ「抽出できませんでした」を許可します。
+5. 【名寄せと更新の論理的判断】検索結果と【既存のイベント一覧（参考）】を比較し、「言語の違い（日本語と英語など）」や「表記ゆれ（略称や一部欠落）」があっても、実質的に同一のイベント・コードである場合は、新規登録とせずに必ず既存リストの該当ID（existing_id）を紐づけてください。
+6. 【自己修復(Liveness Audit)とパージ】今回の検索結果と【既存のイベント一覧（参考）】を比較し、既存リストの中に「今回の検索結果には存在しない捏造・誤報イベント」や「すでに終了しているイベント・期限切れのコード」があれば、その既存IDを \`invalid_existing_ids\` 配列に含めて返却してください。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベントやガチャ情報は、必ず優先的に検索・調査して出力結果に含めてください：${keywords}` : ''}
 
@@ -526,19 +521,20 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 【出力要件】
 （マークダウン使用禁止。純粋なJSONのみ）
 ルート要素は必ず \`events\` (配列) と \`invalid_existing_ids\` (文字列配列) を持つオブジェクトにしてください。
-\`events\` 配列内の各オブジェクトは、必ず以下のプロパティキーを厳格な順序で使用すること：
-- "event_validity_reasoning": (文字列) ※最重要※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントや有効なコードなのかの論理的な理由。
-- "date_extraction_reasoning": (文字列) ※最重要※ 検索結果から日付を特定した理由。検索結果のテキストから、イベントの開始・終了日時を特定・推測するための論理的な思考プロセスや計算式（例:「開始日は〇日で期間が2週間だから終了日は〇日」）を記載すること。また必ず「この記事の公開日（〇日）ではなく、本文中の開催期間の記述（〇日〜〇日）を基準にした」など、公開日と実際の開催期間を明確に区別して判断したプロセスをここに記載すること。
-- "match_reason": (文字列) 既存IDを紐づけた理由、または新規とした理由（「言語が違うが内容は同じである」「表記ゆれだが同一イベントである」など）。
-- "existing_id": (文字列) 既存のイベント一覧と同一（または実質的に同じ）イベントと判断した場合、一覧にある [ID: xxx] の xxx の文字列を必ず出力すること。検索結果が外国語（英語等）でも、既存の日本語イベントの和訳・意訳と思われる場合は『実質的に同じ』とみなし、既存のIDを紐づけること。また、省略形や一部欠落でも明らかに同じイベントを指している場合は新規にせず紐づけること。完全に新規の場合は null。
-- "title": (文字列) 既存IDを出力した場合は、一覧と「一言一句同じ」タイトルを使用すること。新規の場合は情報源に記載されている正式名称を一言一句そのまま使用すること。AIによる独自の命名、推測、要約は禁止。
-- "summary": (文字列) 【重要】イベントやコードの概要。安易に「抽出できませんでした」と出力せず、ページ内の具体的な世界観、プレイ手順、キャンペーン内容などのテキストを徹底的に拾って要約すること。ただし、ソースのどこを読んでも本当に概要が記載されていない場合に限っては「抽出できませんでした（または記載なし）」と出力することを許可します。
-- "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または 'UNKNOWN'
-- "endDate": (文字列) 既存IDを出力し、かつ検索結果から終了日が判明しない場合は、絶対にnullにせず一覧にある（期限: xxx）の日付を引き継ぐこと。判明した場合は (YYYY-MM-DD HH:mm:00) または 'UNKNOWN'。
-- "redeemCode": (文字列) ギフトコード または null。抽出したコードの文字列そのものを出力すること。
-- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか。ギフトコードの場合は必ず "コード" を指定すること。
+\`events\` 配列内の各オブジェクトは、以下のプロパティを厳格に使用すること：
+- "event_validity_reasoning": (文字列) ※必須※ なぜこれが単なるお知らせやガチャではなく、プレイ可能な期間限定イベントや有効なコードなのかの論理的な理由。
+- "date_extraction_reasoning": (文字列) ※必須※ 検索結果から開始・終了日時を特定・推測した論理的な思考プロセス。
+- "content_extraction_reasoning": (文字列) ※必須※ ページ内からイベントの世界観、プレイ手順、キャンペーン内容等の具体的なテキストを「どこから拾って要約したか」の推論プロセス。このプロセスを経てからsummaryを作成すること。
+- "match_reason": (文字列) ※必須※ 言語差や表記ゆれを考慮し、既存IDを紐づけた理由、または完全新規とした理由。
+- "existing_id": (文字列) 既存一覧と同一（実質的に同じ）と判断した場合のID。完全に新規の場合は null。
+- "title": (文字列) 既存IDを出力した場合は一覧と一言一句同じタイトルを使用。新規の場合は正式名称。
+- "summary": (文字列) content_extraction_reasoningを元に生成した具体的な要約。
+- "startDate": (文字列) 開始日時(YYYY-MM-DD HH:mm:00) または null
+- "endDate": (文字列) 終了日時(YYYY-MM-DD HH:mm:00) または null
+- "redeemCode": (文字列) ギフトコード文字列 または null
+- "tag": (文字列) "ゲーム内", "ゲーム外", "コード" のいずれか。
 - "eventUrl": (文字列) URL または null
-- "rewards": (オブジェクトの配列) 報酬リスト。必ず以下の構造を持つオブジェクトの配列にすること： [{ "name": "アイテムの完全な固有名称", "quantity": "数量（文字列）" }] 。一般的な「アイテム」等に要約せず、公式の固有名称を抽出すること。数量が記載されている場合は絶対に省略しないこと。記載がない場合は空配列 [] を返すこと。推測による補完は厳禁。`;
+- "rewards": (オブジェクトの配列) [{ "name": "アイテムの完全な固有名称", "quantity": "数量" }]。記載がない場合は空配列 [] を返すこと。`;
 
         const generationConfig = {
             temperature: 0.0,
@@ -558,6 +554,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             properties: {
                                 event_validity_reasoning: { type: "string" },
                                 date_extraction_reasoning: { type: "string" },
+                                content_extraction_reasoning: { type: "string" },
                                 match_reason: { type: "string" },
                                 existing_id: { type: "string", nullable: true },
                                 title: { type: "string" },
@@ -579,7 +576,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                     }
                                 }
                             },
-                            required: ["event_validity_reasoning", "date_extraction_reasoning", "match_reason", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
+                            required: ["event_validity_reasoning", "date_extraction_reasoning", "content_extraction_reasoning", "match_reason", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
                         }
                     }
                 },
@@ -596,7 +593,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         if (response.text) {
             let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
-                const parsedData = JSON.parse(cleanText);
+                const parsedData = JSON.parse(cleanText) || {};
                 extractedEvents = parsedData.events || [];
                 invalidExistingIds = parsedData.invalid_existing_ids || [];
             } catch (e) {
@@ -605,7 +602,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     const match = cleanText.match(/\{\s*"events"\s*:\s*\[[\s\S]*\]\s*,\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*\}/) ||
                                   cleanText.match(/\{\s*"invalid_existing_ids"\s*:\s*\[[\s\S]*\]\s*,\s*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
                     if (match && match[0]) {
-                        const parsedData = JSON.parse(match[0]);
+                        const parsedData = JSON.parse(match[0]) || {};
                         extractedEvents = parsedData.events || [];
                         invalidExistingIds = parsedData.invalid_existing_ids || [];
                         functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
@@ -685,10 +682,19 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             for (const event of extractedEvents) {
                 const duplicateIdx = uniqueExtractedEvents.findIndex(u => {
                     if ((event.tag === 'コード' || u.tag === 'コード') && event.redeemCode && u.redeemCode) {
-                        if (event.redeemCode.toUpperCase() === u.redeemCode.toUpperCase()) return true;
+                        const normA = event.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
+                        const normB = u.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
+                        if (normA === normB) return true;
                     }
                     if (event.eventUrl && u.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(u.eventUrl)) return true;
-                    if (u.title && event.title && calculateSimilarity(u.title, event.title) >= 0.85) return true;
+
+                    if (u.title && event.title) {
+                        const normAI = normalizeString(event.title);
+                        const normDB = normalizeString(u.title);
+                        if (calculateSimilarity(u.title, event.title) >= 0.85) return true;
+                        if (normDB.length >= 5 && normAI.includes(normDB)) return true;
+                        if (normAI.length >= 5 && normDB.includes(normAI)) return true;
+                    }
                     return false;
                 });
 
@@ -745,15 +751,43 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 if (event.existing_id) {
                     existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
                 }
+
                 // 2. IDがない場合（新規扱い）でも、保険としてURLまたは類似度(85%以上)で照合する
                 if (!existingEvent) {
                     existingEvent = currentEventsList.find(e => {
-                        if (event.eventUrl && getBaseUrl(e.data.eventUrl) === getBaseUrl(event.eventUrl)) return true;
-                        // コードの場合はタイトル類似度を無視し、コードの一致のみで判定する
+                        // ギフトコードの場合はコード文字列の一致を優先
                         if (event.tag === 'コード' || e.data.tag === 'コード') {
-                            return event.redeemCode && e.data.redeemCode && event.redeemCode.toUpperCase() === e.data.redeemCode.toUpperCase();
+                            if (event.redeemCode && e.data.redeemCode) {
+                                const normAI = event.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
+                                const normDB = e.data.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
+                                return normAI === normDB;
+                            }
+                        } else {
+                            // URLが完全に一致していれば同一イベント
+                            if (event.eventUrl && e.data.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(e.data.eventUrl)) {
+                                return true;
+                            }
                         }
-                        if (e.data.title && event.title && calculateSimilarity(normalizeString(e.data.title), normalizeString(event.title)) >= 0.85) return true;
+
+                        // タイトルによる高度な類似度判定
+                        if (event.title && e.data.title) {
+                            const normAI = normalizeString(event.title);
+                            const normDB = normalizeString(e.data.title);
+
+                            // 類似度が85%以上
+                            if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
+                                return true;
+                            }
+
+                            // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
+                            // 誤検知防止: 比較対象の文字列の長さが最低でも5文字以上であること
+                            if (normDB.length >= 5 && normAI.includes(normDB)) {
+                                return true;
+                            }
+                            if (normAI.length >= 5 && normDB.includes(normAI)) {
+                                return true;
+                            }
+                        }
                         return false;
                     });
                 }

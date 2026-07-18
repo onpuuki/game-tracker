@@ -59,10 +59,20 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
 function normalizeString(str: string): string {
     if (!str) return '';
     return str
-        .replace(/[【】\[\]（）()「」『』]/g, '')
-        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .normalize('NFKC')
+        .replace(/[【】\[\]（）()「」『』〜~ー-]/g, '')
         .replace(/\s+/g, '')
         .toLowerCase();
+}
+
+function getBaseUrl(urlStr: string | null): string | null {
+    if (!urlStr) return null;
+    try {
+        const u = new URL(urlStr);
+        return u.origin + u.pathname;
+    } catch (e) {
+        return urlStr.split('?')[0].split('#')[0];
+    }
 }
 function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
@@ -130,7 +140,7 @@ async function cleanupDuplicateEvents(eventsList: any[], firestoreDb: admin.fire
                     if (e1.data.redeemCode && e2.data.redeemCode && e1.data.redeemCode.toUpperCase() === e2.data.redeemCode.toUpperCase()) {
                         isDuplicate = true;
                     }
-                } else if (e1.data.eventUrl && e2.data.eventUrl && e1.data.eventUrl === e2.data.eventUrl) {
+                } else if (e1.data.eventUrl && e2.data.eventUrl && getBaseUrl(e1.data.eventUrl) === getBaseUrl(e2.data.eventUrl)) {
                     isDuplicate = true;
                 } else if (e1.data.title && e2.data.title && calculateSimilarity(normalizeString(e1.data.title), normalizeString(e2.data.title)) >= 0.85) {
                     isDuplicate = true;
@@ -498,7 +508,7 @@ ${existingMiniList || 'なし'}
 1. Google検索機能を利用する際、必ず日本語の検索クエリを発行し、日本語で書かれた公式・攻略ウェブサイトのみを情報源としてください（検索クエリに lang:ja 等の演算子を含めて意図的に絞り込むこと）。英語や他言語のサイトは検索対象外です。
 2. Google検索機能を最大限に活用し、【現在開催中】および【近日開催予定】の期間限定イベント、ガチャ、コラボ情報、【ギフトコード（シリアルコード）】を最新のウェブ検索結果から広く調査してください。
 3. 一つの検索結果で妥協せず、内部で複数の検索クエリを発行して深掘りしてください。
-4. 【重要】ギフトコード・シリアルコードの情報は、通常のイベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容」や「有効期限」も確実に抽出対象としてください。
+4. 【重要】ギフトコード・シリアルコードの情報は、通常のイベントと同等の重要度で抽出してください。コード文字列そのものだけでなく、それによって得られる「具体的な報酬内容」や「有効期限」も確実に抽出対象としてください。有効期限がサイト上に明記されていない場合は、絶対に推測せず null として抽出すること。
 5. 些細なログインボーナスやキャンペーン、コードであっても、独自の判断で省略・要約せず必ずすべて列挙してください。
 6. 常設コンテンツ、恒常ガチャ、毎月定期開催されるものは除外してください。
 7. 【抽出の正確性と幻覚の排除】ハルシネーション（推測・捏造）は絶対に禁止です。情報源（公式サイト・公式X・大手攻略サイト等）に明確に記載されている【実際の正式なイベント名・ガチャ名】のみを抽出してください。テキストにない架空のイベント名や、AIによる独自の命名（例：「炎の試練」「夏イベント」など）は固く禁じます。確証が得られない場合は絶対に抽出（出力）しないでください。不明なURLや日時は無理に補完せずnullとしてください。
@@ -633,6 +643,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             // パージ処理 (Liveness Audit)
             if (invalidExistingIds.length > 0) {
                 functions.logger.info(`[${traceId}] Purging ${invalidExistingIds.length} invalid existing events for ${gameName}`);
+                // Batch delete processing for safety with firestore limits
+                let purgeBatch = db.batch();
+                let purgeBatchCount = 0;
+
                 for (const docId of invalidExistingIds) {
                     if (docId) {
                         const existingDoc = currentEventsList.find(e => e.docId === docId);
@@ -642,13 +656,22 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isCreationLocked === true) {
                                 continue;
                             }
-                            batch.delete(eventsCollection.doc(docId));
-                            batchCount++;
+                            purgeBatch.delete(eventsCollection.doc(docId));
+                            purgeBatchCount++;
                             deletedCount++;
-                            await commitBatchIfNeeded();
+
+                            if (purgeBatchCount >= 450) {
+                                await purgeBatch.commit();
+                                purgeBatch = db.batch();
+                                purgeBatchCount = 0;
+                            }
+
                             functions.logger.info(`[${traceId}] Purged invalid event: ${docId}`);
                         }
                     }
+                }
+                if (purgeBatchCount > 0) {
+                    await purgeBatch.commit();
                 }
             }
 
@@ -664,7 +687,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     if ((event.tag === 'コード' || u.tag === 'コード') && event.redeemCode && u.redeemCode) {
                         if (event.redeemCode.toUpperCase() === u.redeemCode.toUpperCase()) return true;
                     }
-                    if (event.eventUrl && u.eventUrl && event.eventUrl === u.eventUrl) return true;
+                    if (event.eventUrl && u.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(u.eventUrl)) return true;
                     if (u.title && event.title && calculateSimilarity(u.title, event.title) >= 0.85) return true;
                     return false;
                 });
@@ -725,7 +748,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 // 2. IDがない場合（新規扱い）でも、保険としてURLまたは類似度(85%以上)で照合する
                 if (!existingEvent) {
                     existingEvent = currentEventsList.find(e => {
-                        if (event.eventUrl && e.data.eventUrl === event.eventUrl) return true;
+                        if (event.eventUrl && getBaseUrl(e.data.eventUrl) === getBaseUrl(event.eventUrl)) return true;
                         // コードの場合はタイトル類似度を無視し、コードの一致のみで判定する
                         if (event.tag === 'コード' || e.data.tag === 'コード') {
                             return event.redeemCode && e.data.redeemCode && event.redeemCode.toUpperCase() === e.data.redeemCode.toUpperCase();

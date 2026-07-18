@@ -849,7 +849,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         const normAI = normalizeString(event.title);
                         const normDB = normalizeString(u.title);
 
-                        if (normAI === normDB) return true;
+                        if (normAI === normDB) {
+                            // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
+                            const numsAI = extractVersionMarkers(event.title || '');
+                            const numsDB = extractVersionMarkers(u.title || '');
+                            if (numsAI && numsDB && numsAI !== numsDB) {
+                                return false;
+                            }
+                            return true;
+                        }
                         if (calculateSimilarity(u.title, event.title) >= 0.85) {
                             // 【A-2】バージョン（数字）違いの誤マージ防止
                             const numsAI = extractVersionMarkers(event.title || '');
@@ -972,7 +980,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             const normAI = normalizeString(event.title);
                             const normDB = normalizeString(e.data.title);
 
-                            if (normAI === normDB) return true;
+                            if (normAI === normDB) {
+                                // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
+                                const numsAI = extractVersionMarkers(event.title || '');
+                                const numsDB = extractVersionMarkers(e.data.title || '');
+                                if (numsAI && numsDB && numsAI !== numsDB) {
+                                    return false;
+                                }
+                                return true;
+                            }
                             // 類似度が85%以上
                             if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
                             // 【A-2】バージョン（数字）違いの誤マージ防止
@@ -1036,9 +1052,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         continue;
                     }
 
+                    // 【防御的要件5】AIの手抜き（極端に短い概要）による既存良質データの上書きを防止
+                    let safeSummary = event.summary;
+                    if (eData.summary && (!event.summary || event.summary.length < 50)) {
+                        safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
+                    }
+
                     const updateData: any = {
                         title: newTitle,
-                        summary: event.summary || eData.summary,
+                        summary: safeSummary || eData.summary,
                         startDate: formattedStart || null,
                         endDate: formattedEnd || null,
                         redeemCode: event.redeemCode || eData.redeemCode || null,
@@ -1100,9 +1122,15 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             continue;
                         }
 
+                        // 【防御的要件5】AIの手抜き（極端に短い概要）による既存良質データの上書きを防止
+                        let safeSummary = event.summary;
+                        if (eData.summary && (!event.summary || event.summary.length < 50)) {
+                            safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
+                        }
+
                         const updateData: any = {
                             title: newTitle,
-                            summary: event.summary || eData.summary,
+                            summary: safeSummary || eData.summary,
                             startDate: formattedStart || null,
                             endDate: formattedEnd || null,
                             redeemCode: event.redeemCode || eData.redeemCode || null,

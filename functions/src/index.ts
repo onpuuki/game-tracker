@@ -71,7 +71,7 @@ function normalizeString(str: string): string {
         .replace(/復刻/g, '');
 }
 
-function getBaseUrl(urlStr: string | null): string | null {
+function getBaseUrl(urlStr: string | null | undefined): string | null {
     if (!urlStr) return null;
     try {
         // JavaScript の標準である URL オブジェクトを使用
@@ -506,37 +506,48 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
 
-        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門AIです。
-指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・コードをGoogle検索で網羅的に抽出しなさい。
+        const promptText = `あなたはゲーム『${gameName}』の公式最新情報を正確に調査し、最終的なJSONデータを出力する専門のデータ抽出AIです。
+指定されたゲームの【現在開催中】および【近日開催予定】のイベント・キャンペーン・シリアルコードを網羅的に抽出しなさい。
 
 【既存のイベント一覧（参考）】
 ${existingMiniList || 'なし'}
 
 【現在日時】 ${currentDate}
 
-【厳格な指示（Strict mandates）】
-1. 【最重要: ハルシネーションと対象外の排除】
-   - 「〇〇のお知らせ」「アップデート情報」「メンテナンス告知」「プロデューサーレター」は単なるニュース記事であり、イベントではありません。絶対に除外してください。
-   - 「ガチャ（祈願・跳躍・ピックアップ等）」「恒常追加コンテンツ」も除外してください。
-   - 記事内で告知されている【実際にプレイ可能な期間限定のゲーム内・外イベント】のみを厳格に抽出してください。推測や捏造は固く禁じます。
-2. 【重要: ギフトコードの完全抽出】
-   - ページ内の「ギフトコード（シリアルコード）」は、通常イベントと同等の最重要度で抽出してください。
-   - コード文字列だけでなく、得られる「具体的な報酬内容（固有名称と数量）」と「有効期限」を確実に抽出してください。有効期限がサイト上に明記されていない場合は絶対に推測せず \`null\` としてください。
-3. 【重要: 概要欄での「AIの怠慢」禁止】
-   - イベント概要（summary）について、安易に「抽出できませんでした」と出力することを固く禁じます。
-   - ページ内の「世界観」「プレイ手順」「参加条件」「報酬獲得フロー」などを徹底的に探し出し、要約してください。
-   - ソースの隅々まで読んでも真に記載がない場合に限ってのみ「抽出できませんでした」を許可します。
-4. 【名寄せと更新の論理的判断】
-   - 検索結果と【既存のイベント一覧（参考）】を徹底的に比較してください。
-   - 「言語の違い（日本語と英語）」「表記ゆれ（略称や一部単語の欠落）」があっても、実質的に同一のイベント・コードである場合は、新規登録とせず必ず既存リストの該当ID（existing_id）を紐づけてください。二重登録は致命的なエラーです。
-5. 【自己修復(Liveness Audit)とパージ】
-   - 今回の検索と【既存のイベント一覧】を比較し、既存リストの中に「捏造・誤報イベント（実際には存在しない、または抽出対象外のガチャ・お知らせ）」や「すでに終了しているイベント・期限切れのコード」が残存している場合、それらを自動修復の対象とします。
-   - 該当する既存IDとその論理的な削除理由を \`liveness_audit_purges\` 配列に含めて返却してください。
+【厳格な抽出・除外ルール（ハルシネーション・ノイズ排除）】
+1. 抽出対象は「実際にプレイ可能な期間限定のゲーム内・外イベント」および「ギフトコード（シリアルコード）」のみです。
+2. 以下の情報は絶対に除外してください（これらはイベントではありません）。
+   - 「〇〇のお知らせ」「バージョンアップ情報」「不具合・メンテナンス告知」「プロデューサーレター」
+   - 「ガチャ（祈願・跳躍・ピックアップ等）」「恒常追加コンテンツ」「グッズ販売のみの告知」
+3. 情報元（ソースURL）に明記されていない情報の推測や捏造（ハルシネーション）は固く禁じます。
+
+【ギフトコード抽出の特例と徹底】
+- ギフトコード（シリアルコード、プロモーションコード等）は通常イベントと同等の最重要度で扱います。
+- ページ内にコードの記載がある場合、対象のコード文字列そのものを \`redeemCode\` に正確に抽出してください。
+- そのコードによって得られる「具体的な報酬内容（アイテム名と数量）」を必ず抽出してください。
+- 有効期限が明記されている場合は正確に抽出し、明記されていない場合は絶対に推測せず \`null\` にしてください。
+
+【イベント概要（summary）における「怠慢」の禁止】
+- 概要欄で安易に「抽出できませんでした」と出力することは致命的なエラーとみなします。
+- ソースページ内の「世界観・あらすじ」「具体的なプレイ手順」「参加条件」「報酬獲得フロー」「キャンペーン内容」に関連するテキストを徹底的に探し出し、具体的に要約してください。
+- 情報元のどこをどう読んでも真に該当する説明文が一切存在しない場合に限り、「記載なし」と出力することを許可します。
+
+【名寄せ・更新の論理的判断と重複排除】
+- 検索結果のイベントやコードが、【既存のイベント一覧】にすでに存在するかを徹底的に比較・検証してください。
+- 「言語の違い（日本語と英語等の混在）」「表記ゆれ（略称、一部単語の欠落、【】等の記号の有無）」があっても、実質的に同一のイベント・コードである場合は、絶対に新規登録（二重登録）せず、必ず既存リストの該当ID (\`existing_id\`) を紐づけてください。
+
+【自己修復 (Liveness Audit) とパージ処理】
+- 今回の調査過程で、【既存のイベント一覧】の中に以下に該当する無効なデータを発見した場合、それらを自動修復（パージ）の対象とします。
+   1. すでに終了日時を過ぎているイベントや、期限切れのコード
+   2. ガチャ告知、単なるお知らせなど、本来抽出対象外である誤報データ
+   3. 実際には存在しない捏造イベント
+- 該当する既存IDと、具体的な削除理由を \`liveness_audit_purges\` 配列に含めて返却してください。
 
 ${keywords ? `【必須検索指定】以下のキーワードに関連するイベント情報は、必ず優先的に検索・調査して出力に含めてください：${keywords}` : ''}
 
-【追加禁止イベント】以下のイベント（類似コンテンツ含む）はシステムで独自管理しているため、絶対に出力結果に含めず、新規追加しないでください：
+【追加禁止イベント（システム管理外）】
 [ ${cycleEventTitles.join(', ')} ]
+これらに関連するイベントは絶対に追加・更新しないでください。
 `;
 
         const generationConfig = {
@@ -553,7 +564,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             type: "object",
                             properties: {
                                 doc_id: { type: "string", description: "削除対象の既存イベントID" },
-                                purge_reason: { type: "string", description: "なぜ削除すべきかの論理的な理由（例：終了日時を過ぎているため、単なるガチャ告知でありイベントではないため、等）" }
+                                purge_reason: { type: "string", description: "なぜ削除すべきかの論理的な理由（例：現在日時と比較して期限切れ、対象外コンテンツである、等）" }
                             },
                             required: ["doc_id", "purge_reason"]
                         }
@@ -563,16 +574,17 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         items: {
                             type: "object",
                             properties: {
-                                event_validity_reasoning: { type: "string", description: "これが対象外（お知らせやガチャ）ではなく、プレイ可能な期間限定イベントや有効なコードであると判断した論理的な理由" },
-                                date_extraction_reasoning: { type: "string", description: "開始・終了日時を特定・推測した論理的な思考プロセス" },
-                                content_extraction_reasoning: { type: "string", description: "概要をどこから抽出したかの推論プロセス。記載がない場合は本当に記載がない理由を記述" },
-                                match_reason: { type: "string", description: "既存一覧と比較し、既存IDを紐づけた理由、または完全新規とした理由" },
-                                existing_id: { type: "string", nullable: true },
-                                title: { type: "string" },
-                                summary: { type: "string" },
-                                startDate: { type: "string", nullable: true },
-                                endDate: { type: "string", nullable: true },
-                                redeemCode: { type: "string", nullable: true },
+                                is_valid_event: { type: "boolean", description: "これがガチャやお知らせではなく、対象となるイベント・コードであるか" },
+                                event_validity_reasoning: { type: "string", description: "対象イベント/コードであると判定した根拠" },
+                                source_text_for_summary: { type: "string", description: "要約を作成するために抽出した、ページ内の具体的な説明文（怠慢防止用。見つからない場合はその理由）" },
+                                match_reason: { type: "string", description: "既存IDと紐付けた理由（表記ゆれの吸収など）、または完全新規とした理由" },
+                                existing_id: { type: "string", nullable: true, description: "既存リストに該当するものがあればそのID。完全新規ならnull" },
+                                title: { type: "string", description: "イベントまたはコードのタイトル" },
+                                summary: { type: "string", description: "source_text_for_summaryをもとに作成した、具体的で詳細な要約" },
+                                startDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ" },
+                                endDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ" },
+                                is_gift_code: { type: "boolean", description: "これがギフトコード/シリアルコード情報であるかどうか" },
+                                redeemCode: { type: "string", nullable: true, description: "ギフトコードの文字列（is_gift_codeがtrueの場合は必須）" },
                                 tag: { type: "string" },
                                 eventUrl: { type: "string", nullable: true },
                                 rewards: {
@@ -580,14 +592,18 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                     items: {
                                         type: "object",
                                         properties: {
-                                            name: { type: "string" },
-                                            quantity: { type: "string" }
+                                            name: { type: "string", description: "報酬の具体的な固有名称" },
+                                            quantity: { type: "string", description: "数量" }
                                         },
                                         required: ["name", "quantity"]
                                     }
                                 }
                             },
-                            required: ["event_validity_reasoning", "date_extraction_reasoning", "content_extraction_reasoning", "match_reason", "existing_id", "title", "summary", "startDate", "endDate", "redeemCode", "tag", "eventUrl", "rewards"]
+                            required: [
+                                "is_valid_event", "event_validity_reasoning", "source_text_for_summary", "match_reason",
+                                "existing_id", "title", "summary", "startDate", "endDate",
+                                "is_gift_code", "redeemCode", "tag", "eventUrl", "rewards"
+                            ]
                         }
                     }
                 },
@@ -625,6 +641,11 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     throw new Error("Failed to parse JSON object from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
                 }
             }
+
+            // LLMの不調による undefined 防止 (デフォルト値設定)
+            extractedEvents = extractedEvents || [];
+            livenessAuditPurges = livenessAuditPurges || [];
+
             await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
 
 
@@ -765,25 +786,43 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     }
                 }
 
-                let existingEvent = undefined;
-                // 1. AIが既存イベントと判定し、IDを返した場合
-                if (event.existing_id) {
+                // 【防御的要件3】対象外データの確実な除外
+                if (event.is_valid_event === false) {
+                    functions.logger.info(`[${traceId}] Skipping invalid event/news: ${event.title}`);
+                    continue;
+                }
+
+                let existingEvent: any = undefined;
+
+                // 【B】重複登録を防ぐロジック: ギフトコード判定
+                if (event.is_gift_code === true || event.redeemCode) {
+                    const extractedCode = event.redeemCode?.trim();
+                    if (extractedCode) {
+                        const normAI = extractedCode.replace(/[\s\-]/g, '').toUpperCase();
+                        existingEvent = currentEventsList.find(d => {
+                            if (d.data.redeemCode) {
+                                const normDB = d.data.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
+                                return normAI === normDB;
+                            }
+                            return false;
+                        });
+                        if (existingEvent) {
+                            functions.logger.info(`[${traceId}] Found exact redeemCode match for: ${event.title} -> ${existingEvent.docId}`);
+                        }
+                    }
+                }
+
+                if (!existingEvent && event.existing_id) {
                     existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
                 }
 
-                // 2. IDがない場合（新規扱い）でも、保険としてURLまたは類似度(85%以上)で照合する
                 if (!existingEvent) {
                     existingEvent = currentEventsList.find(e => {
-                        // ギフトコードの場合はコード文字列の一致を優先
-                        if (event.tag === 'コード' || e.data.tag === 'コード') {
-                            if (event.redeemCode && e.data.redeemCode) {
-                                const normAI = event.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
-                                const normDB = e.data.redeemCode.replace(/[\s\-]/g, '').toUpperCase();
-                                return normAI === normDB;
-                            }
-                        } else {
-                            // URLが完全に一致していれば同一イベント
-                            if (event.eventUrl && e.data.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(e.data.eventUrl)) {
+                        // URLが完全に一致していれば同一イベント
+                        if (event.eventUrl && e.data.eventUrl) {
+                            const extractedBaseUrl = getBaseUrl(event.eventUrl);
+                            const dbBaseUrl = getBaseUrl(e.data.eventUrl);
+                            if (extractedBaseUrl && dbBaseUrl && extractedBaseUrl === dbBaseUrl) {
                                 return true;
                             }
                         }
@@ -803,7 +842,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 }
 
                                 // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
-                                // 誤検知防止: 比較対象の文字列の長さが最低でも5文字以上であること
+                                // 【防御的要件1】誤検知防止: 比較対象の文字列の長さが最低でも5文字以上であること
                                 if (normDB.length >= 5 && normAI.includes(normDB)) {
                                     return true;
                                 }

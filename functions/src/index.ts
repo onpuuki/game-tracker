@@ -58,23 +58,33 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
 
 
 function extractVersionMarkers(str: string): string {
+    if (!str) return '';
     // スペース等の装飾を除去して厳密に比較できる形にする
-    const normalizeForVersion = str.normalize('NFKC').toUpperCase().replace(/[\s\.]/g, '');
+    let normalizeForVersion = str.normalize('NFKC').toUpperCase().replace(/[\s\.]/g, '');
+
+    // 漢数字をアラビア数字に変換（一〜十）
+    const kanjiMap: { [key: string]: string } = {
+        '一': '1', '二': '2', '三': '3', '四': '4', '五': '5',
+        '六': '6', '七': '7', '八': '8', '九': '9', '十': '10'
+    };
+    normalizeForVersion = normalizeForVersion.replace(/[一二三四五六七八九十]/g, m => kanjiMap[m] || m);
+
     const markers: string[] = [];
 
-    // 1. アラビア数字
+    // 1. アラビア数字 (第一弾、シーズン2、Vol.3 などすべての数字をシンプルに拾う)
     const numbers = normalizeForVersion.match(/\d+/g);
     if (numbers) markers.push(...numbers);
 
-    // 2. ローマ数字 (連続するローマ数字のみ。単独のIやVやXはコラボ等の記号と誤認しやすいため除外)
+    // 2. ローマ数字 (連続するローマ数字のみ)
     const romanNumerals = normalizeForVersion.match(/(II{1,2}|IV|VI{1,3}|IX)/g);
     if (romanNumerals) markers.push(...romanNumerals);
 
-    // 3. 日本語のバージョン表記 (VOL等の表記ブレは正規化済みの文字列に対して検索)
-    const jpMarkers = normalizeForVersion.match(/(前編|後編|中編|第.弾|第.部|VOL\d+|シーズン\d+)/g);
+    // 3. 日本語のバージョン表記 (前編・後編など。第○弾は数字で拾えるため除外)
+    const jpMarkers = normalizeForVersion.match(/(前編|後編|中編)/g);
     if (jpMarkers) markers.push(...jpMarkers);
 
-    return markers.join(',');
+    // 重複を排除してソートして結合
+    return [...new Set(markers)].sort().join('_');
 }
 
 function normalizeString(str: string): string {

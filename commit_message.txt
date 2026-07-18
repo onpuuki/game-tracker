@@ -1,0 +1,7 @@
+refactor(functions): improve event extraction accuracy and robustness
+
+- Updated the Gemini prompt with a redefined system role to enforce a Chain-of-Thought approach (`thought_process`).
+- Enhanced `normalizeString` by removing emojis and stripping generic terms like `記念`, `ピックアップ`, `祈願`, `跳躍`, `ガチャ`, `ログインボーナス`.
+- Tightened similarity and deduplication logic for titles (now requiring a minimum of 5 characters for `includes` subset checks).
+- Adjusted the JSON schema format to ensure the `thought_process` field is extracted, guiding logic before deciding on extraction output.
+- Enforced safe skips for `is_valid_event === false` items, added fallback defaults `[]` for arrays in JSON processing, and verified that Purge commits happen correctly in batch chunks.

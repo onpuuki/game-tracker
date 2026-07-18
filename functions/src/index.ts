@@ -56,7 +56,29 @@ async function writeDebugLog(traceId: string, message: string, detailObj: any = 
 
 
 
+
+function extractVersionMarkers(str: string): string {
+    // スペース等の装飾を除去して厳密に比較できる形にする
+    const normalizeForVersion = str.normalize('NFKC').toUpperCase().replace(/[\s\.]/g, '');
+    const markers: string[] = [];
+
+    // 1. アラビア数字
+    const numbers = normalizeForVersion.match(/\d+/g);
+    if (numbers) markers.push(...numbers);
+
+    // 2. ローマ数字 (連続するローマ数字のみ。単独のIやVやXはコラボ等の記号と誤認しやすいため除外)
+    const romanNumerals = normalizeForVersion.match(/(II{1,2}|IV|VI{1,3}|IX)/g);
+    if (romanNumerals) markers.push(...romanNumerals);
+
+    // 3. 日本語のバージョン表記 (VOL等の表記ブレは正規化済みの文字列に対して検索)
+    const jpMarkers = normalizeForVersion.match(/(前編|後編|中編|第.弾|第.部|VOL\d+|シーズン\d+)/g);
+    if (jpMarkers) markers.push(...jpMarkers);
+
+    return markers.join(',');
+}
+
 function normalizeString(str: string): string {
+
     if (!str) return '';
     const baseNormalized = str
         .normalize('NFKC')
@@ -548,7 +570,7 @@ ${existingMiniList || 'なし'}
 - \`liveness_audit_purges\` で指定する \`doc_id\` は、必ず上記【既存のイベント一覧】に実在するIDのみを使用してください。架空のIDを捏造することは厳禁です。
 - 以下に該当する既存イベントは \`liveness_audit_purges\` に必ずリストアップし、パージ対象としてください：
   1. 【EXPIRED】すでに終了日時を過ぎているイベントや、有効期限切れのギフトコード
-  2. 【NOISE】実はガチャ告知や単なるお知らせなど、本来対象外であるノイズデータ
+  2. 【NOISE】実はガチャ告知や単なるお知らせ、期間限定ではない恒常追加コンテンツや常設ガチャなど、本来対象外であるノイズデータ
   3. 【HALLUCINATION】現実の公式ソースに照らし合わせて存在しない、明らかに捏造されたイベント
 - なぜ削除すべきか（現在日時との比較結果や証拠）を \`purge_reason\` に明確に記述してください。
 
@@ -608,9 +630,9 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 existing_id: { type: "string", nullable: true, description: "既存リストに該当するものがあればそのID。完全新規ならnull" },
                                 match_reason: { type: "string", description: "既存IDと紐付けた理由、または完全新規とした理由" },
                                 title: { type: "string", description: "イベントまたはコードのタイトル（情報元の通り、一言一句違わず）" },
-                                summary: { type: "string", description: "具体的なプレイ手順やキャンペーン内容の詳細な要約（最低150文字）。安易な『記載なし』『抽出不可』等の怠慢な回答はシステムエラーとなるため絶対禁止。画像のみで本当にテキストが存在しない場合のみその旨を記載すること。" },
+                                summary: { type: "string", description: "世界観、参加条件、具体的なプレイ手順、報酬獲得フローなどを繋ぎ合わせた、プレイヤー向けの詳細な要約（最低150文字）。安易な『記載なし』『抽出不可』等の怠慢な回答はシステムエラーとなるため絶対禁止。画像のみで本当にテキストが存在しない場合のみその旨を記載すること。" },
                                 evidence_snippet: { type: "string", description: "抽出の根拠となった情報元の実際のテキスト抜粋。【重要】絶対に要約・意訳せず、元のテキストをそのままコピー＆ペーストすること。" },
-                                startDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ" },
+                                startDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ (運営の告知日や記事公開日ではなく、本文中から読み取れる『実際のプレイ可能期間の開始日』を厳密に抽出すること。開始時刻が不明な場合は 00:00:00Z とすること。)" },
                                 endDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ" },
                                 is_gift_code: { type: "boolean", description: "これがギフトコード情報であるか（少しでもコード要素があれば true にすること）" },
                                 redeemCode: { type: "string", nullable: true, description: "ギフトコードの文字列（空白やハイフンを除去した英数字）" },
@@ -820,12 +842,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         if (normAI === normDB) return true;
                         if (calculateSimilarity(u.title, event.title) >= 0.85) {
                             // 【A-2】バージョン（数字）違いの誤マージ防止
-                            const extractNumbers = (str: string) => {
-                                const matches = str.match(/\d+/g);
-                                return matches ? matches.join(',') : '';
-                            };
-                            const numsAI = extractNumbers(normAI);
-                            const numsDB = extractNumbers(normDB);
+                            const numsAI = extractVersionMarkers(event.title || '');
+                            const numsDB = extractVersionMarkers(u.title || '');
                             if (numsAI && numsDB && numsAI !== numsDB) {
                                 return false; // 数字が異なる場合はマージしない
                             }
@@ -910,8 +928,16 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     }
                 }
 
-                if (!existingEvent && event.existing_id) {
+                if (!existingEvent && event.existing_id && !matchedDocIds.has(event.existing_id)) {
                     existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
+                    if (existingEvent) {
+                        const aiMarkers = extractVersionMarkers(event.title || '');
+                        const dbMarkers = extractVersionMarkers(existingEvent.data.title || '');
+                        if (aiMarkers && dbMarkers && aiMarkers !== dbMarkers) {
+                            functions.logger.warn(`[${traceId}] Rejecting AI existing_id ${event.existing_id} due to version mismatch. AI: ${aiMarkers}, DB: ${dbMarkers}`);
+                            existingEvent = undefined; // バージョン違いの場合は強制的に棄却し、新規扱い・名寄せルートへ回す
+                        }
+                    }
                 }
 
                 if (!existingEvent) {
@@ -934,12 +960,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             // 類似度が85%以上
                             if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
                             // 【A-2】バージョン（数字）違いの誤マージ防止
-                            const extractNumbers = (str: string) => {
-                                const matches = str.match(/\d+/g);
-                                return matches ? matches.join(',') : '';
-                            };
-                            const numsAI = extractNumbers(normAI);
-                            const numsDB = extractNumbers(normDB);
+                            const numsAI = extractVersionMarkers(event.title || '');
+                            const numsDB = extractVersionMarkers(e.data.title || '');
                             if (numsAI && numsDB && numsAI !== numsDB) {
                                 return false; // 数字が異なる場合はマージしない
                             }

@@ -74,6 +74,11 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _checkedEventIds = [];
   Map<String, String> _codeUrls = {};
 
+  bool _showDaily = true;
+  bool _showWeekly = true;
+  bool _showBiweekly = true;
+  bool _showMonthly = true;
+
   // Sort State
   String _primarySortField = 'gameName';
   String _primarySortOrder = 'asc';
@@ -512,6 +517,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _ongoingOnly = prefs.getBool('ongoingOnly') ?? false;
       _checkedEventIds = prefs.getStringList('checkedEventIds') ?? [];
 
+      _showDaily = prefs.getBool('showDaily') ?? true;
+      _showWeekly = prefs.getBool('showWeekly') ?? true;
+      _showBiweekly = prefs.getBool('showBiweekly') ?? true;
+      _showMonthly = prefs.getBool('showMonthly') ?? true;
+
       _showOnlyCustomGames = prefs.getBool('showOnlyCustomGames') ?? false;
 
       _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
@@ -641,6 +651,11 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setStringList('checkedEventIds', _checkedEventIds);
     await prefs.setBool('showOnlyCustomGames', _showOnlyCustomGames);
 
+    await prefs.setBool('showDaily', _showDaily);
+    await prefs.setBool('showWeekly', _showWeekly);
+    await prefs.setBool('showBiweekly', _showBiweekly);
+    await prefs.setBool('showMonthly', _showMonthly);
+
     await prefs.setString('primarySortField', _primarySortField);
     await prefs.setString('primarySortOrder', _primarySortOrder);
   }
@@ -746,6 +761,71 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                           );
                         }).toList(),
+                      ),
+                    ),
+                    const Divider(),
+
+                    // Cycle Events
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      child: Text(
+                        'サイクルイベント',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        children: [
+                          FilterChip(
+                            label: const Text('デイリー'),
+                            selected: _showDaily,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                _showDaily = selected;
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('ウィークリー'),
+                            selected: _showWeekly,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                _showWeekly = selected;
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('隔週'),
+                            selected: _showBiweekly,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                _showBiweekly = selected;
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('マンスリー'),
+                            selected: _showMonthly,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                _showMonthly = selected;
+                              });
+                              setState(() {});
+                              _savePreferences();
+                            },
+                          ),
+                        ],
                       ),
                     ),
                     const Divider(),
@@ -1446,6 +1526,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       !_selectedTags.contains(event.data['tag'])) {
                     return false;
                   }
+
+                  // Cycle Event Filter
+                  if (event.data['isCycleEvent'] == true) {
+                    final cycleType = event.data['cycleType'];
+                    if (cycleType == 'daily' && !_showDaily) return false;
+                    if (cycleType == 'weekly' && !_showWeekly) return false;
+                    if (cycleType == 'biweekly' && !_showBiweekly) return false;
+                    if (cycleType == 'monthly' && !_showMonthly) return false;
+                  }
+
                   // Custom Games Visibility and Filter
                   final isCustom = event.data['isCustomGame'] == true;
                   if (isCustom && !_userCustomGames.contains(event.gameName)) {
@@ -2407,87 +2497,65 @@ class _EventCardItemState extends State<_EventCardItem> {
                                     (widget.eventData['tasks'] as List)
                                         .isNotEmpty) ...[
                                   const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8.0,
-                                    runSpacing: -8.0,
-                                    children: (widget.eventData['tasks'] as List).asMap().entries.map((
-                                      entry,
-                                    ) {
-                                      final taskIndex = entry.key;
-                                      final task =
-                                          entry.value as Map<String, dynamic>;
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisExtent: 40,
+                                      crossAxisSpacing: 8,
+                                      mainAxisSpacing: 0,
+                                    ),
+                                    itemCount: (widget.eventData['tasks'] as List).length,
+                                    itemBuilder: (context, taskIndex) {
+                                      final task = (widget.eventData['tasks'] as List)[taskIndex] as Map<String, dynamic>;
                                       final taskName = task['name'] ?? '';
-                                      final isTaskCompleted =
-                                          task['isCompleted'] == true;
+                                      final isTaskCompleted = task['isCompleted'] == true;
 
-                                      return IntrinsicWidth(
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Checkbox(
+                                      return Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 24,
+                                            child: Checkbox(
+                                              visualDensity: VisualDensity.compact,
                                               value: isTaskCompleted,
                                               onChanged: (bool? value) async {
                                                 if (value == null) return;
 
                                                 final updatedTasks =
-                                                    (widget.eventData['tasks']
-                                                            as List)
-                                                        .map(
-                                                          (t) =>
-                                                              Map<
-                                                                String,
-                                                                dynamic
-                                                              >.from(t),
-                                                        )
+                                                    (widget.eventData['tasks'] as List)
+                                                        .map((t) => Map<String, dynamic>.from(t))
                                                         .toList();
-                                                updatedTasks[taskIndex]['isCompleted'] =
-                                                    value;
+                                                updatedTasks[taskIndex]['isCompleted'] = value;
 
                                                 setState(() {
-                                                  widget.eventData['tasks'] =
-                                                      updatedTasks;
+                                                  widget.eventData['tasks'] = updatedTasks;
                                                 });
 
-                                                final allCompleted =
-                                                    updatedTasks.every(
-                                                      (t) =>
-                                                          t['isCompleted'] ==
-                                                          true,
-                                                    );
+                                                final allCompleted = updatedTasks.every(
+                                                  (t) => t['isCompleted'] == true,
+                                                );
 
-                                                await widget
-                                                    .parsedEvent
-                                                    .doc
-                                                    .reference
-                                                    .update({
-                                                      'tasks': updatedTasks,
-                                                      'isCompleted':
-                                                          allCompleted,
-                                                    });
+                                                await widget.parsedEvent.doc.reference.update({
+                                                  'tasks': updatedTasks,
+                                                  'isCompleted': allCompleted,
+                                                });
 
                                                 try {
                                                   await WidgetSyncService.syncTop5Events(
                                                     excludedIds: allCompleted
-                                                        ? [
-                                                            widget
-                                                                .parsedEvent
-                                                                .doc
-                                                                .id,
-                                                          ]
+                                                        ? [widget.parsedEvent.doc.id]
                                                         : [],
                                                     throwError: true,
                                                   );
                                                 } catch (e) {
-                                                  debugPrint(
-                                                    'WidgetSync Error: $e',
-                                                  );
+                                                  debugPrint('WidgetSync Error: $e');
                                                   FirebaseFirestore.instanceFor(
                                                     app: Firebase.app(),
                                                     databaseId: 'default',
                                                   ).collection('debug_logs').add({
                                                     'error': e.toString(),
-                                                    'timestamp':
-                                                        FieldValue.serverTimestamp(),
+                                                    'timestamp': FieldValue.serverTimestamp(),
                                                   });
                                                   if (!context.mounted) return;
                                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2496,8 +2564,13 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                 }
                                               },
                                             ),
-                                            Text(
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
                                               taskName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 decoration: isTaskCompleted
@@ -2508,10 +2581,10 @@ class _EventCardItemState extends State<_EventCardItem> {
                                                     : null,
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       );
-                                    }).toList(),
+                                    },
                                   ),
                                 ],
                               ],

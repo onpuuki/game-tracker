@@ -941,6 +941,56 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
                 let existingEvent: any = undefined;
 
+                // 【B-0】サイクルイベントの「タスク名」との名寄せ（タスク名とAI抽出タイトルが一致する場合はスキップ）
+                let matchedWithCycleTask = false;
+                if (event.title) {
+                    const normAI = normalizeString(event.title);
+                    for (const existingDoc of currentEventsList) {
+                        const eData = existingDoc.data;
+                        if (eData.isCycleEvent === true && Array.isArray(eData.tasks)) {
+                            for (const task of eData.tasks) {
+                                if (task && task.name) {
+                                    const normDB = normalizeString(task.name);
+                                    let isMatch = false;
+
+                                    if (normAI === normDB) {
+                                        const numsAI = extractVersionMarkers(event.title || '');
+                                        const numsDB = extractVersionMarkers(task.name || '');
+                                        if (numsAI === numsDB) {
+                                            isMatch = true;
+                                        }
+                                    } else if (calculateSimilarity(task.name, event.title) >= 0.85) {
+                                        const numsAI = extractVersionMarkers(event.title || '');
+                                        const numsDB = extractVersionMarkers(task.name || '');
+                                        if (numsAI === numsDB) {
+                                            isMatch = true;
+                                        }
+                                    } else if (normDB.length >= 5 && normAI.length >= 5) {
+                                        if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                                            const numsAI = extractVersionMarkers(event.title || '');
+                                            const numsDB = extractVersionMarkers(task.name || '');
+                                            if (numsAI === numsDB) {
+                                                isMatch = true;
+                                            }
+                                        }
+                                    }
+
+                                    if (isMatch) {
+                                        functions.logger.info(`[${traceId}] Found match with existing cycle event task: ${event.title} -> ${existingDoc.docId} (Task: ${task.name})`);
+                                        matchedWithCycleTask = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (matchedWithCycleTask) break;
+                    }
+                }
+
+                if (matchedWithCycleTask) {
+                    continue; // サイクルイベントのタスクと重複した場合は抽出イベントを破棄
+                }
+
                 // 【B】重複登録を防ぐロジック: ギフトコード判定
                 if (event.is_gift_code === true || event.redeemCode) {
                     const normAI = normalizeCode(event.redeemCode);

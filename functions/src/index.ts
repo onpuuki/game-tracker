@@ -458,8 +458,9 @@ export const syncSingleGameTask = onTaskDispatched({
     memory: '512MiB'
 }, async (request) => {
     const { gameName, keywords, requestId, traceId } = request.data;
+    const safeGameName = gameName.replace(/\//g, '／');
 
-    functions.logger.info(`[${traceId}] Starting worker for ${gameName}`, { traceId, gameName });
+    functions.logger.info(`[${traceId}] Starting worker for ${gameName} (safe: ${safeGameName})`, { traceId, gameName, safeGameName });
 
     try {
         const configDoc = await db.collection('settings').doc('config').get();
@@ -475,7 +476,7 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
 
-        const eventsCollection = db.collection(`games/${gameName}/events`);
+        const eventsCollection = db.collection(`games/${safeGameName}/events`);
         const currentEventsSnapshot = await eventsCollection.get();
 
         let currentEventsList = currentEventsSnapshot.docs.map(doc => ({ docId: doc.id, data: doc.data(), ref: doc.ref }));
@@ -598,75 +599,54 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 【追加禁止イベント（システム管理外）】
 [ ${cycleEventTitles.join(', ')} ]
 これらに関連するイベントは絶対に追加・更新しないでください。
+
+【出力フォーマットの厳格な制約】
+出力は必ず以下の指定したJSONフォーマットのみとし、Markdownのバッククォート（\`\`\`json 〜 \`\`\`）で囲んで出力すること。それ以外の解説テキストなどは一切含めないこと。
+
+\`\`\`json
+{
+  "liveness_audit_purges": [
+    {
+      "doc_id": "削除対象の既存イベントID",
+      "purge_type": "EXPIRED: 期限切れ, NOISE: 対象外, HALLUCINATION: 捏造",
+      "purge_reason": "削除すべき具体的な理由。現在日時と比較した結果や、なぜノイズ・捏造と判断したか等"
+    }
+  ],
+  "events": [
+    {
+      "thought_process": {
+        "validity_check": "これがガチャやお知らせではなく、真にプレイ可能なイベントや実在するコードである理由",
+        "deduplication_analysis": "言語差や表記ゆれを考慮した既存リストとの名寄せ判断。既存IDと紐づけた理由、または完全新規である理由",
+        "gift_code_analysis": "コードの場合、その報酬と期限をどう特定したか",
+        "summary_extraction_logic": "概要をどのように見つけて150文字以上で要約したか。（記載なしとする場合の正当な理由）"
+      },
+      "is_valid_event": true,
+      "existing_id": "既存リストに該当するものがあればそのID。完全新規ならnull",
+      "match_reason": "既存IDと紐付けた理由、または完全新規とした理由",
+      "title": "イベントまたはコードのタイトル（情報元の通り、一言一句違わず）",
+      "summary": "世界観、参加条件、具体的なプレイ手順、報酬獲得フローなどを繋ぎ合わせた、プレイヤー向けの詳細な要約（最低150文字）。安易な『記載なし』『抽出不可』等の怠慢な回答はシステムエラーとなるため絶対禁止。画像のみで本当にテキストが存在しない場合のみその旨を記載すること。",
+      "evidence_snippet": "抽出の根拠となった情報元の実際のテキスト抜粋。【重要】絶対に要約・意訳せず、元のテキストをそのままコピー＆ペーストすること。",
+      "startDate": "YYYY-MM-DDTHH:mm:ssZ (運営の告知日や記事公開日ではなく、本文中から読み取れる『実際のプレイ可能期間の開始日』を厳密に抽出すること。開始時刻が不明な場合は 00:00:00Z とすること。)",
+      "endDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
+      "is_gift_code": false,
+      "redeemCode": "ギフトコードの文字列（空白やハイフンを除去した英数字、不明な場合はnull）",
+      "tag": "タグ",
+      "eventUrl": "URL (不明な場合はnull)",
+      "rewards": [
+        {
+          "name": "報酬の具体的な名称（例：原石、10連ガチャチケット、コイン等）",
+          "quantity": "数量（不明な場合は空文字を出力すること）"
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
 `;
 
         const generationConfig = {
             temperature: 0.0,
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: "object",
-                properties: {
-                    liveness_audit_purges: {
-                        type: "array",
-                        description: "パージ（削除）すべき既存イベントのリスト",
-                        items: {
-                            type: "object",
-                            properties: {
-                                doc_id: { type: "string", description: "削除対象の既存イベントID" },
-                                purge_type: { type: "string", description: "EXPIRED: 期限切れ, NOISE: 対象外, HALLUCINATION: 捏造" },
-                                purge_reason: { type: "string", description: "削除すべき具体的な理由。現在日時と比較した結果や、なぜノイズ・捏造と判断したか等" }
-                            },
-                            required: ["doc_id", "purge_type", "purge_reason"]
-                        }
-                    },
-                    events: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                thought_process: {
-                                    type: "object",
-                                    description: "抽出・判定の論理的思考プロセス。結論を出す前に必ず各ステップを記述すること",
-                                    properties: {
-                                        validity_check: { type: "string", description: "これがガチャやお知らせではなく、真にプレイ可能なイベントや実在するコードである理由" },
-                                        deduplication_analysis: { type: "string", description: "言語差や表記ゆれを考慮した既存リストとの名寄せ判断。既存IDと紐づけた理由、または完全新規である理由" },
-                                        gift_code_analysis: { type: "string", description: "コードの場合、その報酬と期限をどう特定したか" },
-                                        summary_extraction_logic: { type: "string", description: "概要をどのように見つけて150文字以上で要約したか。（記載なしとする場合の正当な理由）" }
-                                    },
-                                    required: ["validity_check", "deduplication_analysis", "summary_extraction_logic"]
-                                },
-                                is_valid_event: { type: "boolean", description: "真に対象となるイベント・コードであるか（ガチャ・お知らせ・捏造はfalse）" },
-                                existing_id: { type: "string", nullable: true, description: "既存リストに該当するものがあればそのID。完全新規ならnull" },
-                                match_reason: { type: "string", description: "既存IDと紐付けた理由、または完全新規とした理由" },
-                                title: { type: "string", description: "イベントまたはコードのタイトル（情報元の通り、一言一句違わず）" },
-                                summary: { type: "string", description: "世界観、参加条件、具体的なプレイ手順、報酬獲得フローなどを繋ぎ合わせた、プレイヤー向けの詳細な要約（最低150文字）。安易な『記載なし』『抽出不可』等の怠慢な回答はシステムエラーとなるため絶対禁止。画像のみで本当にテキストが存在しない場合のみその旨を記載すること。" },
-                                evidence_snippet: { type: "string", description: "抽出の根拠となった情報元の実際のテキスト抜粋。【重要】絶対に要約・意訳せず、元のテキストをそのままコピー＆ペーストすること。" },
-                                startDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ (運営の告知日や記事公開日ではなく、本文中から読み取れる『実際のプレイ可能期間の開始日』を厳密に抽出すること。開始時刻が不明な場合は 00:00:00Z とすること。)" },
-                                endDate: { type: "string", nullable: true, description: "YYYY-MM-DDTHH:mm:ssZ" },
-                                is_gift_code: { type: "boolean", description: "これがギフトコード情報であるか（少しでもコード要素があれば true にすること）" },
-                                redeemCode: { type: "string", nullable: true, description: "ギフトコードの文字列（空白やハイフンを除去した英数字）" },
-                                tag: { type: "string" },
-                                eventUrl: { type: "string", nullable: true },
-                                rewards: {
-                                    type: "array",
-                                    description: "具体的な報酬内容。明記がない場合は推測せず、空配列 [] を出力すること。",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            name: { type: "string", description: "報酬の具体的な名称（例：原石、10連ガチャチケット、コイン等）" },
-                                            quantity: { type: "string", description: "数量（不明な場合は空文字を出力すること）" }
-                                        },
-                                        required: ["name", "quantity"]
-                                    }
-                                }
-                            },
-                            required: ["thought_process", "is_valid_event", "title", "summary", "evidence_snippet", "is_gift_code", "tag", "rewards"]
-                        }
-                    }
-                },
-                required: ["liveness_audit_purges", "events"]
-            }
+            tools: [{ googleSearch: {} }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -2636,7 +2616,9 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
 
             if (!gameId) continue;
 
-            const eventsCol = db.collection(`games/${gameId}/events`);
+            const safeGameId = gameId.replace(/\//g, '／');
+
+            const eventsCol = db.collection(`games/${safeGameId}/events`);
 
             if (op.operation === 'delete') {
                 if (!eventId) continue;

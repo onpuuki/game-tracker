@@ -505,6 +505,51 @@ class AddEventNotifier extends Notifier<AddEventState> {
       tag = 'マンスリー';
     }
 
+    DateTime calculatedStartDate = now;
+    if (s.cycleType == 'daily') {
+      calculatedStartDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day - 1,
+        endDate.hour,
+        endDate.minute,
+      );
+    } else if (s.cycleType == 'weekly') {
+      calculatedStartDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day - 7,
+        endDate.hour,
+        endDate.minute,
+      );
+    } else if (s.cycleType == 'biweekly') {
+      calculatedStartDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day - 14,
+        endDate.hour,
+        endDate.minute,
+      );
+    } else if (s.cycleType == 'monthly') {
+      int prevMonth = endDate.month - 1;
+      int prevYear = endDate.year;
+      if (prevMonth < 1) {
+        prevMonth = 12;
+        prevYear -= 1;
+      }
+      int maxDaysInPrevMonth = DateTime(prevYear, prevMonth + 1, 0).day;
+      int dayOfMonth = s.monthlyStartDate?.day ?? 1;
+      int prevMonthDay = dayOfMonth > maxDaysInPrevMonth ? maxDaysInPrevMonth : dayOfMonth;
+
+      calculatedStartDate = DateTime(
+        prevYear,
+        prevMonth,
+        prevMonthDay,
+        endDate.hour,
+        endDate.minute,
+      );
+    }
+
     final String timeStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
 
     final data = {
@@ -513,7 +558,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
       'tag': tag,
       'subTag': s.subTag,
       'redeemCode': s.code,
-      'startDate': Timestamp.fromDate(now),
+      'startDate': Timestamp.fromDate(calculatedStartDate),
       'endDate': Timestamp.fromDate(endDate),
       'isCycleEvent': true,
       'cycleType': s.cycleType,

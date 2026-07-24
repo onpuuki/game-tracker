@@ -560,6 +560,7 @@ class AddEventNotifier extends Notifier<AddEventState> {
       'redeemCode': s.code,
       'startDate': Timestamp.fromDate(calculatedStartDate),
       'endDate': Timestamp.fromDate(endDate),
+      'isStandard': true,
       'isCycleEvent': true,
       'cycleType': s.cycleType,
       'cycleSettings': cycleSettings,

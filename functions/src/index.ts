@@ -1098,6 +1098,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         tag: event.tag || eData.tag || null,
                         rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
                         isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
+                        isStandard: !isCustomGame ? true : admin.firestore.FieldValue.delete(),
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     };
 
@@ -1168,6 +1169,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             tag: event.tag || eData.tag || null,
                             rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
                             isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
+                        isStandard: !isCustomGame ? true : admin.firestore.FieldValue.delete(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                         };
 
@@ -1201,7 +1203,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             isDeleted: false,
                             tasks: [],
                             isCycleEvent: false,
-                            ...(isCustomGame ? { isCustomGame: true } : {}),
+                            ...(isCustomGame ? { isCustomGame: true } : { isStandard: true }),
                             createdAt: admin.firestore.FieldValue.serverTimestamp(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                             updateHistory: [`[${currentDate}] Created by AI Sync`]
@@ -1629,6 +1631,9 @@ export const clearAllEvents = functions.region('asia-northeast1').runWith({ memo
                 const docData = doc.data();
                 // isLocked, isCreationLocked, isUpdateLocked, isCycleEventをチェックして手動イベントを保護
                 if (docData.isCycleEvent === true || docData.isLocked === true || docData.isCreationLocked === true || docData.isUpdateLocked === true) {
+                    if (docData.isCustomGame !== true && docData.isStandard !== true) {
+                        bulkWriter.update(doc.ref, { isStandard: true });
+                    }
                     return;
                 }
                 bulkWriter.delete(doc.ref);

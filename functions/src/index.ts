@@ -123,12 +123,6 @@ function getBaseUrl(urlStr: string | null | undefined): string | null {
     }
 }
 
-function parseAndConvertToTimestamp(dateStr: string | null | undefined): admin.firestore.Timestamp | null {
-    if (!dateStr || dateStr === 'UNKNOWN') return null;
-    const dateObj = getSafeDateObj(dateStr);
-    return dateObj ? admin.firestore.Timestamp.fromDate(dateObj) : null;
-}
-
 function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
     if (val.toDate && typeof val.toDate === 'function') return val.toDate();
@@ -1101,11 +1095,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
                     }
 
+                    const startObj = getSafeDateObj(formattedStart);
+                    const endObj = getSafeDateObj(formattedEnd);
+
                     const updateData: any = {
                         title: newTitle,
                         summary: safeSummary || eData.summary,
-                        startDate: parseAndConvertToTimestamp(formattedStart),
-                        endDate: parseAndConvertToTimestamp(formattedEnd),
+                        startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+                        endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
                         redeemCode: event.redeemCode || eData.redeemCode || null,
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
@@ -1172,11 +1169,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
                         }
 
+                        const startObj = getSafeDateObj(formattedStart);
+                        const endObj = getSafeDateObj(formattedEnd);
+
                         const updateData: any = {
                             title: newTitle,
                             summary: safeSummary || eData.summary,
-                            startDate: parseAndConvertToTimestamp(formattedStart),
-                            endDate: parseAndConvertToTimestamp(formattedEnd),
+                            startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+                            endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
                             redeemCode: event.redeemCode || eData.redeemCode || null,
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
@@ -1204,10 +1204,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             safeNewSummary = '詳細は公式サイトやゲーム内のお知らせ等でご確認ください。';
                         }
 
+                        const startObj = getSafeDateObj(event.startDate);
+                        const endObj = getSafeDateObj(event.endDate);
+                        const { startDate: _sd, endDate: _ed, ...eventWithoutDates } = event;
+
                         batch.set(docRef, {
-                            ...event,
-                            startDate: parseAndConvertToTimestamp(event.startDate),
-                            endDate: parseAndConvertToTimestamp(event.endDate),
+                            ...eventWithoutDates,
+                            startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+                            endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
                             summary: safeNewSummary,
                             gameName: gameName,
                             subTag: null,

@@ -122,6 +122,13 @@ function getBaseUrl(urlStr: string | null | undefined): string | null {
         return urlStr;
     }
 }
+
+function parseAndConvertToTimestamp(dateStr: string | null | undefined): admin.firestore.Timestamp | null {
+    if (!dateStr || dateStr === 'UNKNOWN') return null;
+    const dateObj = getSafeDateObj(dateStr);
+    return dateObj ? admin.firestore.Timestamp.fromDate(dateObj) : null;
+}
+
 function getSafeDateObj(val: any): Date | null {
     if (!val) return null;
     if (val.toDate && typeof val.toDate === 'function') return val.toDate();
@@ -1097,8 +1104,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                     const updateData: any = {
                         title: newTitle,
                         summary: safeSummary || eData.summary,
-                        startDate: formattedStart || null,
-                        endDate: formattedEnd || null,
+                        startDate: parseAndConvertToTimestamp(formattedStart),
+                        endDate: parseAndConvertToTimestamp(formattedEnd),
                         redeemCode: event.redeemCode || eData.redeemCode || null,
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
@@ -1168,8 +1175,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         const updateData: any = {
                             title: newTitle,
                             summary: safeSummary || eData.summary,
-                            startDate: formattedStart || null,
-                            endDate: formattedEnd || null,
+                            startDate: parseAndConvertToTimestamp(formattedStart),
+                            endDate: parseAndConvertToTimestamp(formattedEnd),
                             redeemCode: event.redeemCode || eData.redeemCode || null,
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
@@ -1199,6 +1206,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
                         batch.set(docRef, {
                             ...event,
+                            startDate: parseAndConvertToTimestamp(event.startDate),
+                            endDate: parseAndConvertToTimestamp(event.endDate),
                             summary: safeNewSummary,
                             gameName: gameName,
                             subTag: null,

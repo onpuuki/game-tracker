@@ -2709,12 +2709,12 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
 
 export const searchIGDBGames = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 60 }).https.onCall(async (data, context) => {
     if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+        return { success: false, message: 'User must be authenticated.' };
     }
 
     const query = data.query;
     if (!query || typeof query !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'Query is required.');
+        return { success: false, message: 'Query is required.' };
     }
 
     const traceId = 'igdb-search-' + Date.now();
@@ -2727,7 +2727,7 @@ export const searchIGDBGames = functions.region('asia-northeast1').runWith({ mem
 
         if (!clientId || !clientSecret) {
             functions.logger.error(`[${traceId}] Missing Twitch API credentials.`);
-            throw new functions.https.HttpsError('failed-precondition', 'API credentials are not configured.');
+            return { success: false, message: 'API credentials are not configured.' };
         }
 
 
@@ -2773,7 +2773,7 @@ export const searchIGDBGames = functions.region('asia-northeast1').runWith({ mem
 
     } catch (error: any) {
         functions.logger.error(`[${traceId}] Error in searchIGDBGames: ${error.message}`);
-        throw new functions.https.HttpsError('internal', '内部エラーが発生しました', error.message);
+        return { success: false, message: '内部エラーが発生しました: ' + error.message };
     }
 });
 

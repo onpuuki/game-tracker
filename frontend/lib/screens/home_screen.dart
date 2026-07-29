@@ -179,13 +179,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   late Stream<DocumentSnapshot> _configStream;
-  StreamController<List<QueryDocumentSnapshot>>? _eventsStreamController;
-  final List<StreamSubscription> _eventSubscriptions = [];
+  List<QueryDocumentSnapshot>? _currentEvents;
+    final List<StreamSubscription> _eventSubscriptions = [];
   final Map<String, List<QueryDocumentSnapshot>> _eventSnapshotsMap = {};
 
   void _initEventsStream() {
-    _eventsStreamController?.close();
-    _eventsStreamController = StreamController<List<QueryDocumentSnapshot>>.broadcast();
+
     for (var sub in _eventSubscriptions) {
       sub.cancel();
     }
@@ -206,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _eventSnapshotsMap['standard'] = snapshot.docs;
       _emitEvents();
     }, onError: (e) {
-      _eventsStreamController?.addError(e);
+      debugPrint('Error loading events: $e');
     });
     _eventSubscriptions.add(standardSub);
 
@@ -223,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _eventSnapshotsMap['custom_$gameName'] = snapshot.docs;
           _emitEvents();
         }, onError: (e) {
-          _eventsStreamController?.addError(e);
+          debugPrint('Error loading events: $e');
         });
         _eventSubscriptions.add(customSub);
       }
@@ -231,12 +230,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _emitEvents() {
-    if (_eventsStreamController?.isClosed == true) return;
     final List<QueryDocumentSnapshot> allDocs = [];
     for (final docs in _eventSnapshotsMap.values) {
       allDocs.addAll(docs);
     }
-    _eventsStreamController?.add(allDocs);
+    if (mounted) {
+      setState(() {
+        _currentEvents = allDocs;
+      });
+    }
   }
 
   Widget _buildEventCard(ParsedEvent parsedEvent) {
@@ -491,8 +493,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (var sub in _eventSubscriptions) {
       sub.cancel();
     }
-    _eventsStreamController?.close();
-    super.dispose();
+        super.dispose();
   }
 
   Future<void> _loadPreferences() async {
@@ -1460,23 +1461,15 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            return StreamBuilder<List<QueryDocumentSnapshot>>(
-              stream: _eventsStreamController?.stream,
-              builder: (context, eventSnapshot) {
-                if (eventSnapshot.hasError) {
-                  return Center(
-                    child: Text('Error loading events: ${eventSnapshot.error}'),
-                  );
-                }
-                if (eventSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            if (_currentEvents == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-                final docs = eventSnapshot.data ?? [];
+            final docs = _currentEvents!;
 
-                if (docs.isEmpty) {
-                  return const Center(child: Text('No events found.'));
-                }
+            if (docs.isEmpty) {
+              return const Center(child: Text('No events found.'));
+            }
 
                 List<ParsedEvent> parsedEvents = docs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
@@ -1769,8 +1762,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 );
-              },
-            );
           },
         ),
       ),

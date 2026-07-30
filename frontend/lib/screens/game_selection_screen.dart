@@ -3,19 +3,13 @@ import 'package:flutter/material.dart';
 class GameSelectionScreen extends StatefulWidget {
   final List<String> allGames;
   final List<String> selectedGames;
-  final List<String> userCustomGames;
-  final bool showOnlyCustomGames;
   final Function(List<String>) onSelectionChanged;
-  final Function(bool) onToggleShowOnlyCustomGames;
 
   const GameSelectionScreen({
     super.key,
     required this.allGames,
     required this.selectedGames,
-    required this.userCustomGames,
-    required this.showOnlyCustomGames,
     required this.onSelectionChanged,
-    required this.onToggleShowOnlyCustomGames,
   });
 
   @override
@@ -24,22 +18,14 @@ class GameSelectionScreen extends StatefulWidget {
 
 class _GameSelectionScreenState extends State<GameSelectionScreen> {
   late List<String> _currentSelectedGames;
-  late bool _showOnlyCustomGames;
   late List<String> _displayGames;
 
   @override
   void initState() {
     super.initState();
     _currentSelectedGames = List.from(widget.selectedGames);
-    _showOnlyCustomGames = widget.showOnlyCustomGames;
 
-    final defaultGames = widget.allGames
-        .where((g) => !widget.userCustomGames.contains(g))
-        .toList();
-    final customGames = widget.allGames
-        .where((g) => widget.userCustomGames.contains(g))
-        .toList();
-    _displayGames = [...defaultGames, ...customGames];
+    _displayGames = List.from(widget.allGames);
   }
 
   void _selectAll() {
@@ -82,14 +68,14 @@ class _GameSelectionScreenState extends State<GameSelectionScreen> {
               children: [
                 Expanded(
                   child: TextButton(
-                    onPressed: _showOnlyCustomGames ? null : _selectAll,
+                    onPressed: _selectAll,
                     child: const Text('すべて選択'),
                   ),
                 ),
                 const SizedBox(width: 8.0),
                 Expanded(
                   child: TextButton(
-                    onPressed: _showOnlyCustomGames ? null : _clearAll,
+                    onPressed: _clearAll,
                     child: const Text('すべて解除'),
                   ),
                 ),
@@ -102,28 +88,15 @@ class _GameSelectionScreenState extends State<GameSelectionScreen> {
               itemCount: _displayGames.length,
               itemBuilder: (context, index) {
                 final game = _displayGames[index];
-                final isCustom = widget.userCustomGames.contains(game);
                 return CheckboxListTile(
-                  title: Text(isCustom ? '👑 $game' : game),
+                  title: Text(game),
                   value: _currentSelectedGames.contains(game),
-                  onChanged: _showOnlyCustomGames
-                      ? null
-                      : (bool? checked) => _toggleGame(game, checked),
+                  onChanged: (bool? checked) => _toggleGame(game, checked),
                 );
               },
             ),
           ),
-          const Divider(height: 1),
-          SwitchListTile(
-            title: const Text('👑 追加したゲームのイベントのみ'),
-            value: _showOnlyCustomGames,
-            onChanged: (bool value) {
-              setState(() {
-                _showOnlyCustomGames = value;
-              });
-              widget.onToggleShowOnlyCustomGames(value);
-            },
-          ),
+
         ],
       ),
     );

@@ -64,8 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Filter State
   String _filterKeyword = '';
   List<String> _selectedGames = [];
-  List<String> _userCustomGames = [];
-  bool _showOnlyCustomGames = false;
   List<String> _selectedTags = [];
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
@@ -208,25 +206,6 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Error loading events: $e');
     });
     _eventSubscriptions.add(standardSub);
-
-    // Custom games events
-    for (final gameName in _userCustomGames) {
-      if (gameName.isNotEmpty) {
-        final safeGameName = Uri.encodeComponent(gameName.replaceAll('/', '／'));
-        final customSub = db
-            .collection('games')
-            .doc(safeGameName)
-            .collection('events')
-            .snapshots()
-            .listen((snapshot) {
-          _eventSnapshotsMap['custom_$gameName'] = snapshot.docs;
-          _emitEvents();
-        }, onError: (e) {
-          debugPrint('Error loading events: $e');
-        });
-        _eventSubscriptions.add(customSub);
-      }
-    }
   }
 
   void _emitEvents() {
@@ -387,9 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
         isPremium: _isPremium,
         parsedEvent: parsedEvent,
         eventData: eventData,
-        eventGameName: _userCustomGames.contains(eventGameName)
-            ? '👑 $eventGameName'
-            : eventGameName,
+        eventGameName: eventGameName,
         title: title,
         tag: tag,
         subTag: subTag,
@@ -523,8 +500,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _showBiweekly = prefs.getBool('showBiweekly') ?? true;
       _showMonthly = prefs.getBool('showMonthly') ?? true;
 
-      _showOnlyCustomGames = prefs.getBool('showOnlyCustomGames') ?? false;
-
       _primarySortField = prefs.getString('primarySortField') ?? 'gameName';
       _primarySortOrder = prefs.getString('primarySortOrder') ?? 'asc';
     });
@@ -550,24 +525,14 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             }
             if (!mounted) return;
-            bool customGamesChanged = false;
             setState(() {
-              if (data.containsKey('customGames')) {
-                final newCustomGames = List<String>.from(data['customGames'] ?? []);
-                if (newCustomGames.join(',') != _userCustomGames.join(',')) {
-                  _userCustomGames = newCustomGames;
-                  customGamesChanged = true;
-                }
-              }
+
               if (data.containsKey('checkedEvents')) {
                 _checkedEventIds = List<String>.from(
                   data['checkedEvents'] ?? [],
                 );
               }
             });
-            if (customGamesChanged) {
-              _initEventsStream();
-            }
           }
         }
       });
@@ -650,7 +615,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('excludeChecked', _excludeChecked);
     await prefs.setBool('ongoingOnly', _ongoingOnly);
     await prefs.setStringList('checkedEventIds', _checkedEventIds);
-    await prefs.setBool('showOnlyCustomGames', _showOnlyCustomGames);
 
     await prefs.setBool('showDaily', _showDaily);
     await prefs.setBool('showWeekly', _showWeekly);
@@ -847,8 +811,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             builder: (context) => GameSelectionScreen(
                               allGames: allGameNames,
                               selectedGames: _selectedGames,
-                              userCustomGames: _userCustomGames,
-                              showOnlyCustomGames: _showOnlyCustomGames,
                               onSelectionChanged: (List<String> newSelection) {
                                 setModalState(() {
                                   _selectedGames = newSelection;
@@ -856,13 +818,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 setState(() {});
                                 _savePreferences();
                               },
-                              onToggleShowOnlyCustomGames: (bool value) {
-                                setModalState(() {
-                                  _showOnlyCustomGames = value;
-                                });
-                                setState(() {});
-                                _savePreferences();
-                              },
+
                             ),
                           ),
                         );
@@ -1528,18 +1484,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (cycleType == 'biweekly' && !_showBiweekly) return false;
                     if (cycleType == 'monthly' && !_showMonthly) return false;
                   }
-
-                  // Custom Games Visibility and Filter
-                  final isCustom = event.data['isCustomGame'] == true;
-                  if (isCustom && !_userCustomGames.contains(event.gameName)) {
-                    return false;
-                  }
-
-                  if (_showOnlyCustomGames) {
-                    if (!_userCustomGames.contains(event.gameName)) {
-                      return false;
-                    }
-                  } else {
+                  {
                     // Game Filter
                     if (_selectedGames.isNotEmpty &&
                         !_selectedGames.contains(event.gameName)) {
@@ -1757,7 +1702,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         events: events,
                         abbreviations: abbreviationsMap,
                         buildEventCard: _buildEventCard,
-                        userCustomGames: _userCustomGames,
+
                       ),
                     ),
                   ],

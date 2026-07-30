@@ -350,72 +350,6 @@ export const processSyncRequest = onDocumentCreated({
         const configData = configDoc?.data();
         const targetGames: ConfigItem[] = configData?.targets || [];
 
-        // Optimization: Only scan premium custom games for ACTIVE users
-        // For this, we assume a user is active if they have logged in recently.
-        // We'll collect UIDs from premium_custom_games, chunk them if large, and check their last active status.
-        // If no user associated with a custom game is active (e.g. within 7 days), we can skip the sync for that game to save costs.
-        const customGamesSet = new Set<string>();
-        const premiumGamesSnapshot = await db.collection('premium_custom_games').get();
-
-        // Define active threshold (e.g., 14 days)
-        // Since we don't track lastLogin by default everywhere yet, we might rely on the fact that
-        // we can check if they have valid token or premium status active.
-        // If we strictly want to filter inactive, we would check the users collection.
-        // To avoid massive reads, if the array of UIDs has any premium user, we assume it's active.
-        // But for absolute cost savings, maybe we just deduplicate and enqueue only up to a global batch limit,
-        // or check if users exist and have fcmToken (meaning they installed the app).
-
-        // A simple optimization: check if at least one UID has a valid fcmToken
-        const uidsToCheck = new Set<string>();
-        const gameUidsMap = new Map<string, string[]>();
-
-        premiumGamesSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data && Array.isArray(data.uids) && data.uids.length > 0) {
-                const gameName = decodeURIComponent(doc.id);
-                gameUidsMap.set(gameName, data.uids);
-                data.uids.forEach(uid => uidsToCheck.add(uid));
-            }
-        });
-
-        const activeUids = new Set<string>();
-        const uidList = Array.from(uidsToCheck);
-
-        // Batch read users to find active ones (has fcmToken)
-        for (let i = 0; i < uidList.length; i += 100) {
-            const chunk = uidList.slice(i, i + 100);
-            const userSnapshots = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
-            userSnapshots.forEach(doc => {
-                const uData = doc.data();
-                // Consider active if they have FCM token (app installed) and are premium
-                if (uData.isPremium === true && (uData.fcmToken || uData.settings?.fcmToken)) {
-                    activeUids.add(doc.id);
-                }
-            });
-        }
-
-        for (const [gameName, uids] of gameUidsMap.entries()) {
-            const hasActiveUser = uids.some(uid => activeUids.has(uid));
-            if (hasActiveUser) {
-                customGamesSet.add(gameName);
-            }
-        }
-
-        // Filter out those already in targetGames
-        targetGames.forEach(tg => {
-            if (tg && tg.gameName) {
-                customGamesSet.delete(tg.gameName);
-            }
-        });
-
-        // Add to targetGames
-        customGamesSet.forEach(customGame => {
-            targetGames.push({
-                gameName: customGame,
-                keywords: ''
-            });
-        });
-
         if (targetGames.length === 0) {
             await writeDebugLog(traceId, 'Sync failed: Invalid config or no target games');
             await snapshot.ref.update({ status: 'error', error: 'No target games', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -472,8 +406,6 @@ export const syncSingleGameTask = onTaskDispatched({
         const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];
-        const targetGames: ConfigItem[] = configData?.targets || [];
-        const isCustomGame = !targetGames.some(tg => tg.gameName === gameName);
         const geminiApiKey = configData?.geminiApiKey;
 
         if (!geminiApiKey) {
@@ -1107,8 +1039,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         eventUrl: event.eventUrl || eData.eventUrl || null,
                         tag: event.tag || eData.tag || null,
                         rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
-                        isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
-                        isStandard: !isCustomGame ? true : admin.firestore.FieldValue.delete(),
+                        isCustomGame: admin.firestore.FieldValue.delete(),
+                        isStandard: true,
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     };
 
@@ -1181,8 +1113,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             eventUrl: event.eventUrl || eData.eventUrl || null,
                             tag: event.tag || eData.tag || null,
                             rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
-                            isCustomGame: isCustomGame ? true : admin.firestore.FieldValue.delete(),
-                        isStandard: !isCustomGame ? true : admin.firestore.FieldValue.delete(),
+                            isCustomGame: admin.firestore.FieldValue.delete(),
+                        isStandard: true,
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                         };
 
@@ -1222,7 +1154,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                             isDeleted: false,
                             tasks: [],
                             isCycleEvent: false,
-                            ...(isCustomGame ? { isCustomGame: true } : { isStandard: true }),
+                            isStandard: true,
                             createdAt: admin.firestore.FieldValue.serverTimestamp(),
                             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                             updateHistory: [`[${currentDate}] Created by AI Sync`]
@@ -1650,7 +1582,7 @@ export const clearAllEvents = functions.region('asia-northeast1').runWith({ memo
                 const docData = doc.data();
                 // isLocked, isCreationLocked, isUpdateLocked, isCycleEventをチェックして手動イベントを保護
                 if (docData.isCycleEvent === true || docData.isLocked === true || docData.isCreationLocked === true || docData.isUpdateLocked === true) {
-                    if (docData.isCustomGame !== true && docData.isStandard !== true) {
+                    if (docData.isStandard !== true) {
                         bulkWriter.update(doc.ref, { isStandard: true });
                     }
                     return;
@@ -2706,161 +2638,3 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
     }
 });
 
-
-export const searchIGDBGames = functions.region('asia-northeast1').runWith({ memory: '256MB', timeoutSeconds: 60 }).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        return { success: false, message: 'User must be authenticated.' };
-    }
-
-    const query = data.query;
-    if (!query || typeof query !== 'string') {
-        return { success: false, message: 'Query is required.' };
-    }
-
-    const traceId = 'igdb-search-' + Date.now();
-    try {
-
-        const configDoc = await db.collection('settings').doc('config').get();
-        const configData = configDoc?.data();
-        const clientId = process.env.TWITCH_CLIENT_ID || configData?.twitchClientId;
-        const clientSecret = process.env.TWITCH_CLIENT_SECRET || configData?.twitchClientSecret;
-
-        if (!clientId || !clientSecret) {
-            functions.logger.error(`[${traceId}] Missing Twitch API credentials.`);
-            return { success: false, message: 'API credentials are not configured.' };
-        }
-
-
-        // 1. Get Access Token
-        const tokenResponse = await fetch('https://id.twitch.tv/oauth2/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                'client_id': clientId,
-                'client_secret': clientSecret,
-                'grant_type': 'client_credentials'
-            })
-        });
-
-        if (!tokenResponse.ok) {
-            functions.logger.error(`[${traceId}] Failed to get Twitch token: ${tokenResponse.status}`);
-            return { success: false, message: 'トークンの取得に失敗しました' };
-        }
-
-        const tokenData = await tokenResponse.json();
-        const accessToken = tokenData.access_token;
-
-        // 2. Search Games via IGDB API
-        const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        const searchResponse = await fetch('https://api.igdb.com/v4/games', {
-            method: 'POST',
-            headers: {
-                'Client-ID': clientId,
-                'Authorization': `Bearer ${accessToken}`,
-                'Accept': 'application/json',
-                'Content-Type': 'text/plain'
-            },
-            body: `search "${escapedQuery}"; fields name, first_release_date; limit 10;`
-        });
-
-        if (!searchResponse.ok) {
-            functions.logger.error(`[${traceId}] Failed to search IGDB: ${searchResponse.status}`);
-            return { success: false, message: 'ゲームの検索に失敗しました' };
-        }
-
-        const games = await searchResponse.json();
-        return { success: true, games: games };
-
-    } catch (error: any) {
-        functions.logger.error(`[${traceId}] Error in searchIGDBGames: ${error.message}`);
-        return { success: false, message: '内部エラーが発生しました: ' + error.message };
-    }
-});
-
-
-export const addPremiumCustomGame = functions.region('asia-northeast1').https.onCall(async (data, context) => {
-    const uid = context.auth?.uid;
-    if (!uid) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
-    }
-
-    const gameName = data.gameName;
-    if (!gameName || typeof gameName !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
-    }
-
-    const encodedGameName = encodeURIComponent(gameName.replace(/\//g, '\uff0f'));
-    const userRef = db.collection('users').doc(uid);
-    const customGameRef = db.collection('premium_custom_games').doc(encodedGameName);
-
-    try {
-        await db.runTransaction(async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists) {
-                throw new functions.https.HttpsError('not-found', 'User data not found.');
-            }
-
-            const userData = userDoc.data();
-            if (!userData?.isPremium) {
-                throw new functions.https.HttpsError('permission-denied', 'Only premium users can add custom games.');
-            }
-
-            const customGames = userData.customGames || [];
-            if (customGames.length >= 3) {
-                throw new functions.https.HttpsError('resource-exhausted', 'You can register up to 3 custom games.');
-            }
-
-            if (customGames.includes(gameName)) {
-                throw new functions.https.HttpsError('already-exists', 'Game already registered.');
-            }
-
-            transaction.update(userRef, {
-                customGames: admin.firestore.FieldValue.arrayUnion(gameName)
-            });
-            transaction.set(customGameRef, {
-                uids: admin.firestore.FieldValue.arrayUnion(uid)
-            }, { merge: true });
-        });
-    } catch (error: any) {
-        if (error instanceof functions.https.HttpsError) {
-            throw error;
-        }
-        throw new functions.https.HttpsError('internal', error.message || 'Transaction failed');
-    }
-
-    return { success: true, message: 'Game added successfully.' };
-});
-
-export const removePremiumCustomGame = functions.region('asia-northeast1').https.onCall(async (data, context) => {
-    const uid = context.auth?.uid;
-    if (!uid) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
-    }
-
-    const gameName = data.gameName;
-    if (!gameName || typeof gameName !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'Game name is required.');
-    }
-
-    const encodedGameName = encodeURIComponent(gameName.replace(/\//g, '\uff0f'));
-    const userRef = db.collection('users').doc(uid);
-    const customGameRef = db.collection('premium_custom_games').doc(encodedGameName);
-
-    try {
-        await db.runTransaction(async (transaction) => {
-            transaction.update(userRef, {
-                customGames: admin.firestore.FieldValue.arrayRemove(gameName)
-            });
-            transaction.set(customGameRef, {
-                uids: admin.firestore.FieldValue.arrayRemove(uid)
-            }, { merge: true });
-        });
-    } catch (error: any) {
-        if (error instanceof functions.https.HttpsError) {
-            throw error;
-        }
-        throw new functions.https.HttpsError('internal', error.message || 'Transaction failed');
-    }
-
-    return { success: true, message: 'Game removed successfully.' };
-});

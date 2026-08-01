@@ -1655,8 +1655,13 @@ async function performExportToDrive(folderId: string, traceId: string): Promise<
                 media: media
             });
 
+            const configDoc = await db.collection('settings').doc('config').get();
+            const configData = configDoc?.data();
+            const targets: ConfigItem[] = configData?.targets || [];
+            const targetGames = targets.map(t => t.gameName).filter(name => !!name);
+
             // Feed data to the stream
-            passThrough.write('[\n');
+            passThrough.write(`{\n  "targetGames": ${JSON.stringify(targetGames)},\n  "events": [\n`);
             let isFirst = true;
             const stream = db.collectionGroup('events').stream();
 
@@ -1683,7 +1688,7 @@ async function performExportToDrive(folderId: string, traceId: string): Promise<
                 isFirst = false;
                 exportedCount++;
             }
-            passThrough.write('\n]');
+            passThrough.write('\n  ]\n}');
             passThrough.end();
 
             // Wait for the upload to finish

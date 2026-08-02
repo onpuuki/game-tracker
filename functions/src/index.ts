@@ -520,11 +520,10 @@ ${existingMiniList || 'なし'}
 【現在日時】 ${currentDate}
 
 【A-1. 抽出・除外の絶対ルール（ハルシネーション・ノイズ排除）】
-1. 抽出対象: 「実際にプレイ可能な期間限定のイベント」「キャンペーン」「ギフトコード（シリアルコード）」のみ。
+1. 抽出対象: ゲーム内イベントだけでなく、ゲーム外のwebイベント、オフラインイベント、ガチャ（祈願・跳躍・ピックアップ等）、開催前（開催予定）のイベントも抽出対象です。
    ※ゲーム特有の『24:59』や『25:00』等の深夜帯表記は、必ず日付を1日進めて翌日の正しい時刻フォーマット（例: 翌日の00:59や01:00）に変換して出力すること。時刻に24以上の数値を使用することはシステムエラーとなるため厳禁とする。
 2. 徹底除外（これらは絶対に抽出せず、該当した場合は is_valid_event: false とすること）:
-   - 「〇〇のお知らせ」「アップデート情報」「メンテナンス告知」「不具合告知」「プロデューサーレター」
-   - 「ガチャ（祈願・跳躍・ピックアップ・スカウト・召喚等）」
+   - 「アップデート情報」「メンテナンス告知や不具合告知などのプレイ不可能な情報（※『イベント開催のお知らせ』等の実際のイベント情報は抽出すること）」「プロデューサーレター」
    - 「恒常追加コンテンツ（メインストーリー追加、恒常ミッション追加など）」
    - 「グッズ販売・リアルイベントのみの告知」
 3. **【重要：捏造の完全禁止】** 抽出する情報は、必ず提供されたソース上に記載されている事実のみに基づいてください。記載のないイベントやコードを推測で生成することは厳禁です。提供されたソース上に存在しないURLやギフトコードをAIが推測して生成することは厳禁です。
@@ -552,6 +551,7 @@ ${existingMiniList || 'なし'}
 【B-1. ギフトコード・シリアルコードの最重要抽出】
 - ギフトコード情報は通常イベントと同等の「最重要データ」として扱います。ギフトコードから得られる『具体的な報酬（アイテム名と数）』および『有効期限（endDate）』は極めて重要な情報です。ギフトコードには、ユーザーが最も知りたい「何がもらえるか(具体的な報酬)」と「いつまで使えるか(有効期限)」がセットで記載されていることがほとんどです。ページ内の小さな注意書きや画像内の代替テキストも含めて徹底的に探し出し、確実に抽出してください。
 - コード文字列（空白や不要な記号を除去）を \`redeemCode\` に抽出し、得られる「具体的な報酬（アイテム名と数量）」を \`rewards\` 配列に必ず抽出してください。
+- 報酬アイテムの数量（quantity）は「多数」などの曖昧な言葉は厳禁とし、具体的な数・量（例: "60個", "10回", "1個" 等）を明確に記載してください。
 - 期限が明記されている場合は正確に抽出し、明記がない場合は推測せず \`null\` としてください。
 
 【B-2. イベント概要（summary）での「AIの怠慢」の完全禁止】
@@ -565,7 +565,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 これらに関連するイベントは絶対に追加・更新しないでください。
 
 【出力フォーマットの厳格な制約】
-出力は必ず以下の指定したJSONフォーマットのみとし、Markdownのバッククォート（\`\`\`json 〜 \`\`\`）で囲んで出力すること。それ以外の解説テキストなどは一切含めないこと。
+出力は必ず JSON形式のみ とし、挨拶や解説、Markdown記号（\`\`\`json 等）は一切含めないでください。
 
 \`\`\`json
 {
@@ -1261,12 +1261,14 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                  const doc = await t.get(syncRequestRef);
                  if (doc.exists) {
                      const docData = doc.data()!;
+                     const newTotalTokens = (docData.totalTokens || 0) + totalTokens;
                      const newCompletedTasks = (docData.completedTasks || 0) + 1;
                      const totalTasks = docData.totalTasks || 0;
 
                      const updateData: any = {
+                         totalTokens: newTotalTokens,
                          completedTasks: newCompletedTasks,
-                         debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Processed', game: gameName, message: 'No events found' }),
+                         debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Processed', game: gameName, message: 'No events found', tokens: totalTokens }),
                          updatedAt: admin.firestore.FieldValue.serverTimestamp()
                      };
 

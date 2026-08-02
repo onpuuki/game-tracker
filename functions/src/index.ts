@@ -356,26 +356,51 @@ export const processSyncRequest = onDocumentCreated({
             return;
         }
 
+        let oldestGame: ConfigItem | null = null;
+        let oldestTime = Infinity;
+
+        for (const game of targetGames) {
+            const safeGameName = game.gameName.replace(/\//g, '／');
+            const gameDoc = await db.collection('games').doc(safeGameName).get();
+            let checkTime = 0;
+
+            if (gameDoc.exists) {
+                const gameData = gameDoc.data();
+                if (gameData && gameData.lastCheckedAt) {
+                    checkTime = typeof gameData.lastCheckedAt.toMillis === 'function'
+                        ? gameData.lastCheckedAt.toMillis()
+                        : new Date(gameData.lastCheckedAt).getTime();
+                }
+            }
+
+            if (checkTime < oldestTime) {
+                oldestTime = checkTime;
+                oldestGame = game;
+            }
+        }
+
+        if (!oldestGame) {
+            oldestGame = targetGames[0];
+        }
+
         const queue = getFunctions().taskQueue('locations/asia-northeast1/functions/syncSingleGameTask');
 
         const debugInfo: any[] = [];
 
-        for (const game of targetGames) {
-            await queue.enqueue({
-                gameName: game.gameName,
-                keywords: game.keywords,
-                requestId,
-                traceId
-            });
-            debugInfo.push({ stage: 'Dispatch', game: game.gameName, message: 'Task enqueued' });
-            functions.logger.info(`[${traceId}] Enqueued task for ${game.gameName}`);
-        }
+        await queue.enqueue({
+            gameName: oldestGame.gameName,
+            keywords: oldestGame.keywords,
+            requestId,
+            traceId
+        });
+        debugInfo.push({ stage: 'Dispatch', game: oldestGame.gameName, message: 'Task enqueued' });
+        functions.logger.info(`[${traceId}] Enqueued task for ${oldestGame.gameName}`);
 
         await writeDebugLog(traceId, 'All tasks dispatched successfully.');
         await snapshot.ref.update({
             status: 'dispatched',
             debugInfo,
-            totalTasks: targetGames.length,
+            totalTasks: 1,
             completedTasks: 0,
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -1285,6 +1310,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         });
 
         throw error;
+    } finally {
+        await db.collection('games').doc(safeGameName).set({
+            lastCheckedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
     }
 });
 

@@ -23,7 +23,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
     _configStream = FirebaseFirestore.instanceFor(
       app: Firebase.app(),
       databaseId: 'default',
-    ).collection('settings').doc('notification_config').snapshots();
+    ).collection('settings').doc('sync_config').snapshots();
   }
 
   Future<void> _addTime(BuildContext context) async {
@@ -90,7 +90,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       final docRef = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
         databaseId: 'default',
-      ).collection('settings').doc('notification_config');
+      ).collection('settings').doc('sync_config');
 
       final scanTimesStrings = _selectedTimes.map((t) {
         return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';

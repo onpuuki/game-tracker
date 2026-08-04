@@ -1445,9 +1445,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 }).toList();
 
                 final Set<String> uniqueGamesSet = {};
+
+                // 設定されている対象ゲームをすべて追加
+                for (var target in targets) {
+                  final gName = target['gameName'] as String?;
+                  if (gName != null && gName.isNotEmpty) {
+                    uniqueGamesSet.add(gName);
+                  }
+                }
+
+                // イベントにのみ存在するゲーム（古いデータなど）も追加
                 for (var event in parsedEvents) {
                   uniqueGamesSet.add(event.gameName);
                 }
+
                 final List<String> allGameNames = uniqueGamesSet.toList()
                   ..sort();
                 WidgetsBinding.instance.addPostFrameCallback((_) {

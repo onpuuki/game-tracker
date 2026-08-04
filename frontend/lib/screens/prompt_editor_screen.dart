@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 
 class PromptEditorScreen extends StatefulWidget {
   const PromptEditorScreen({super.key});
@@ -149,6 +150,135 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     });
   }
 
+  void _clearAllTargets() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('確認'),
+          content: const Text('すべての対象ゲームを削除しますか？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  for (var item in _targetItems) {
+                    item.dispose();
+                  }
+                  _targetItems.clear();
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('削除', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showImportDialog() {
+    final TextEditingController importController = TextEditingController();
+    const String formatText = "ゲーム名: \n略称: \nURL: \n";
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('テキストインポート'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(const ClipboardData(text: formatText));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('フォーマットをコピーしました')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('フォーマットをコピー'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: importController,
+                  maxLines: 15,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'ここにテキストを貼り付けてください',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () {
+                _parseImportText(importController.text);
+                Navigator.pop(context);
+              },
+              child: const Text('インポート'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _parseImportText(String text) {
+    if (text.trim().isEmpty) return;
+
+    final lines = text.split('\n');
+    String? gameName;
+    String? abbreviation;
+    String? url;
+
+    void addCurrentItem() {
+      if (gameName != null || abbreviation != null || url != null) {
+        _targetItems.add(_TargetItem(
+          gameName: gameName ?? '',
+          abbreviation: abbreviation ?? '',
+          url: url ?? '',
+        ));
+      }
+      gameName = null;
+      abbreviation = null;
+      url = null;
+    }
+
+    setState(() {
+      for (final line in lines) {
+        final trimmed = line.trim();
+
+        if (trimmed.isEmpty || trimmed.startsWith('---')) {
+          addCurrentItem();
+          continue;
+        }
+
+        if (trimmed.startsWith('ゲーム名:')) {
+          gameName = trimmed.replaceFirst('ゲーム名:', '').trim();
+        } else if (trimmed.startsWith('略称:')) {
+          abbreviation = trimmed.replaceFirst('略称:', '').trim();
+        } else if (trimmed.startsWith('URL:')) {
+          url = trimmed.replaceFirst('URL:', '').trim();
+        }
+      }
+      addCurrentItem();
+    });
+  }
+
   @override
   void dispose() {
     for (var item in _targetItems) {
@@ -188,10 +318,25 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: _addTarget,
-                          tooltip: 'Add Target Game',
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.download),
+                              onPressed: _showImportDialog,
+                              tooltip: 'インポート',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_sweep),
+                              color: Colors.red,
+                              onPressed: _clearAllTargets,
+                              tooltip: '一括削除',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: _addTarget,
+                              tooltip: 'Add Target Game',
+                            ),
+                          ],
                         ),
                       ],
                     ),

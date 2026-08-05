@@ -290,12 +290,12 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
     while (attempt < maxRetries) {
         try {
-            return await ai.interactions.create({
+            return await (ai.interactions as any).create({
                 model: model,
                 input: contents,
                 store: true,
-                generation_config: options.generation_config,
-                response_format: options.response_format,
+                temperature: options.temperature,
+                responseFormat: options.responseFormat,
                 tools: options.tools
             });
         } catch (err: any) {
@@ -660,8 +660,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 `;
 
         const interactionsOptions = {
-            generation_config: { temperature: 0.0 },
-            response_format: { type: "text", mime_type: "application/json" },
+            temperature: 0.0,
+            responseFormat: { type: "json_object" },
             tools: [{ type: "google_search" }]
         };
 
@@ -671,7 +671,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         let extractedEvents: any[] = [];
         let livenessAuditPurges: { doc_id: string, purge_type?: string, purge_reason: string }[] = [];
-        const responseText = response.output_text || response.text || response.steps?.[response.steps?.length - 1]?.content?.[0]?.text;
+        const responseText = response?.output_text || response?.text || response?.steps?.[response.steps?.length - 1]?.content?.[0]?.text || "";
 
         if (responseText) {
             let cleanText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();

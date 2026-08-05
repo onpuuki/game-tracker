@@ -1385,17 +1385,25 @@ export const triggerScheduledSync = functions.region('asia-northeast1').https.on
     functions.logger.info(`[${traceId}] triggerScheduledSync triggered by Cloud Scheduler`, { traceId });
 
     try {
+        const syncConfigDoc = await db.collection('settings').doc('sync_config').get();
+        const syncConfigData = syncConfigDoc.data();
+        const isAllScan = syncConfigData?.is_all_scan === true;
+        const scanType = isAllScan ? 'all' : 'single';
+
+        functions.logger.info(`[${traceId}] triggerScheduledSync retrieved config`, { is_all_scan: isAllScan, type: scanType });
+
         await db.collection('sync_requests').add({
             status: 'pending',
+            type: scanType,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             debugInfo: [
                 {
                     timestamp: new Date().toISOString(),
-                    message: 'Sync requested via scheduled background job'
+                    message: `Sync requested via scheduled background job (type: ${scanType})`
                 }
             ]
         });
-        await writeDebugLog(traceId, 'Scheduled sync request added successfully.');
+        await writeDebugLog(traceId, `Scheduled sync request added successfully. (type: ${scanType})`);
         res.status(200).send('Scheduled sync triggered');
     } catch (error: any) {
         functions.logger.error(`[${traceId}] Failed to trigger scheduled sync`, { error: error.message, stack: error instanceof Error ? error.stack : String(error) });

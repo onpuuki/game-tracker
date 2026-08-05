@@ -378,15 +378,17 @@ export const processSyncRequest = onDocumentCreated({
 
             gamesWithTime.sort((a, b) => a.time - b.time);
 
+            let delayIndex = 0;
             for (const item of gamesWithTime) {
                 await queue.enqueue({
                     gameName: item.game.gameName,
                     keywords: item.game.keywords,
                     requestId,
                     traceId
-                });
-                debugInfo.push({ stage: 'Dispatch', game: item.game.gameName, message: 'Task enqueued' });
-                functions.logger.info(`[${traceId}] Enqueued task for ${item.game.gameName}`);
+                }, { scheduleDelaySeconds: delayIndex * 180 });
+                debugInfo.push({ stage: 'Dispatch', game: item.game.gameName, message: `Task enqueued with ${delayIndex * 180}s delay` });
+                functions.logger.info(`[${traceId}] Enqueued task for ${item.game.gameName} with ${delayIndex * 180}s delay`);
+                delayIndex++;
             }
 
             await writeDebugLog(traceId, 'All tasks dispatched successfully.');
@@ -784,6 +786,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                                 continue;
                             }
                             purgeBatch.delete(eventsCollection.doc(docId));
+                            currentEventsList = currentEventsList.filter(e => e.docId !== docId);
                             purgeBatchCount++;
                             deletedCount++;
 

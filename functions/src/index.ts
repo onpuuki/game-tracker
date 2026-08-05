@@ -290,13 +290,16 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
     while (attempt < maxRetries) {
         try {
+            // @google/genai の仕様に合わせ、生成パラメータを config オブジェクト内にネスト
             return await (ai.interactions as any).create({
                 model: model,
                 input: contents,
-                store: true,
-                temperature: options.temperature,
-                responseFormat: options.responseFormat,
-                tools: options.tools
+                config: {
+                    store: true,
+                    temperature: options.temperature,
+                    responseMimeType: options.responseFormat?.type === "json_object" ? "application/json" : "text/plain",
+                    tools: options.tools
+                }
             });
         } catch (err: any) {
             attempt++;
@@ -662,7 +665,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         const interactionsOptions = {
             temperature: 0.0,
             responseFormat: { type: "json_object" },
-            tools: [{ type: "google_search" }]
+            // SDKの型定義に合わせた検索ツールの指定
+            tools: [{ googleSearch: {} }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);

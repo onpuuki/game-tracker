@@ -290,10 +290,11 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
     while (attempt < maxRetries) {
         try {
-            return await ai.models.generateContent({
+            return await ai.interactions.create({
                 model: model,
-                contents: contents,
-                config: config
+                input: contents,
+                store: true,
+                ...config
             });
         } catch (err: any) {
             attempt++;
@@ -658,12 +659,13 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 
         const generationConfig = {
             temperature: 0.0,
+            responseMimeType: "application/json",
             tools: [{ googleSearch: {} }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
 
-        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash-lite', promptText, generationConfig, traceId);
+        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', promptText, generationConfig, traceId);
 
         let extractedEvents: any[] = [];
         let livenessAuditPurges: { doc_id: string, purge_type?: string, purge_reason: string }[] = [];

@@ -285,7 +285,7 @@ interface ConfigItem {
     keywords?: string;
 }
 
-async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, config: any, traceId: string, maxRetries = 3): Promise<any> {
+async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents: string, options: any, traceId: string, maxRetries = 3): Promise<any> {
     let attempt = 0;
 
     while (attempt < maxRetries) {
@@ -293,7 +293,10 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
             return await ai.interactions.create({
                 model: model,
                 input: contents,
-                config: config
+                store: true,
+                generation_config: options.generation_config,
+                response_format: options.response_format,
+                tools: options.tools
             });
         } catch (err: any) {
             attempt++;
@@ -656,20 +659,22 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 \`\`\`
 `;
 
-        const generationConfig = {
-            temperature: 0.0,
-            responseMimeType: "application/json",
-            tools: [{ googleSearch: {} }],
+        const interactionsOptions = {
+            generation_config: { temperature: 0.0 },
+            response_format: { type: "text", mime_type: "application/json" },
+            tools: [{ type: "google_search" }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
 
-        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', promptText, generationConfig, traceId);
+        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', promptText, interactionsOptions, traceId);
 
         let extractedEvents: any[] = [];
         let livenessAuditPurges: { doc_id: string, purge_type?: string, purge_reason: string }[] = [];
-        if (response.text) {
-            let cleanText = response.text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const responseText = response.output_text || response.text || response.steps?.[response.steps?.length - 1]?.content?.[0]?.text;
+
+        if (responseText) {
+            let cleanText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
                 const parsedData = JSON.parse(cleanText) || {};
                 extractedEvents = parsedData.events || [];
@@ -688,7 +693,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                         throw new Error("Regex fallback failed to find a valid JSON object.");
                     }
                 } catch (fallbackError) {
-                    functions.logger.error(`[${traceId}] Failed to parse JSON object from response.`, { text: response.text });
+                    functions.logger.error(`[${traceId}] Failed to parse JSON object from response.`, { text: responseText });
                     throw new Error("Failed to parse JSON object from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
                 }
             }
@@ -730,7 +735,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 }
             }
 
-            await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: response.text });
+            await writeDebugLog(traceId, `Gemini Response for ${gameName}`, { text: responseText });
 
 
         } else {

@@ -290,16 +290,12 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
 
     while (attempt < maxRetries) {
         try {
-            // @google/genai の仕様に合わせ、生成パラメータを config オブジェクト内にネスト
             return await (ai.interactions as any).create({
                 model: model,
                 input: contents,
-                config: {
                     store: true,
-                    temperature: options.temperature,
-                    responseMimeType: options.responseFormat?.type === "json_object" ? "application/json" : "text/plain",
+                    generationConfig: options.generationConfig,
                     tools: options.tools
-                }
             });
         } catch (err: any) {
             attempt++;
@@ -663,9 +659,10 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 `;
 
         const interactionsOptions = {
-            temperature: 0.0,
-            responseFormat: { type: "json_object" },
-            // SDKの型定義に合わせた検索ツールの指定
+            generationConfig: {
+                temperature: 0.0,
+                responseMimeType: "application/json"
+            },
             tools: [{ googleSearch: {} }]
         };
 

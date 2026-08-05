@@ -660,7 +660,7 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
         const generationConfig = {
             temperature: 0.0,
             responseMimeType: "application/json",
-            tools: [{ googleSearch: {} }]
+            tools: [{ googleSearch: {} }],
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);

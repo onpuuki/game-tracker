@@ -293,8 +293,7 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
             return await ai.interactions.create({
                 model: model,
                 input: contents,
-                store: true,
-                ...config
+                config: config
             });
         } catch (err: any) {
             attempt++;

@@ -12,6 +12,7 @@ class TimerSettingsScreen extends StatefulWidget {
 class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
   List<TimeOfDay> _selectedTimes = [];
   bool _isPaused = false;
+  bool _isAllScan = false;
   bool _isLoading = false;
   bool _initialized = false;
 
@@ -99,6 +100,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
       await docRef.set({
         'scan_times': scanTimesStrings,
         'is_paused': _isPaused,
+        'is_all_scan': _isAllScan,
         'cron_schedule': FieldValue.delete(),
       }, SetOptions(merge: true));
 
@@ -138,6 +140,7 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
             final data = snapshot.data!.data() as Map<String, dynamic>?;
             if (data != null) {
               _isPaused = data['is_paused'] as bool? ?? false;
+              _isAllScan = data['is_all_scan'] as bool? ?? false;
               if (data['scan_times'] != null) {
                 final scanTimes = List<String>.from(data['scan_times']);
                 _selectedTimes = [];
@@ -192,6 +195,21 @@ class _TimerSettingsScreenState extends State<TimerSettingsScreen> {
                       },
                       contentPadding: EdgeInsets.zero,
                       activeThumbColor: Colors.redAccent,
+                    ),
+                    SwitchListTile(
+                      title: const Text(
+                        '全件スキャンを実行する',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text('ONにするとスケジュール実行時に全ゲームを順番にスキャンします'),
+                      value: _isAllScan,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _isAllScan = value;
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      activeThumbColor: Colors.blueAccent,
                     ),
                     const Divider(),
                     const SizedBox(height: 8),

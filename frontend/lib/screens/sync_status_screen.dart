@@ -180,13 +180,13 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
     });
   }
 
-  Future<void> _triggerSync() async {
+  Future<void> _triggerSync(bool isAll) async {
     final traceId = const Uuid().v4();
     final logManager = DebugLogManager();
     final messenger = ScaffoldMessenger.of(context);
 
     await logManager.addLog(
-      'Starting sync request via Firestore',
+      'Starting sync request via Firestore (isAll: $isAll)',
       traceId: traceId,
     );
 
@@ -196,6 +196,7 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
         databaseId: 'default',
       ).collection('sync_requests').add({
         'status': 'pending',
+        'type': isAll ? 'all' : 'single',
         'traceId': traceId,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -279,14 +280,30 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                           child: FilledButton(
                             onPressed: (isSyncRunning && !isStaleState)
                                 ? null
-                                : _triggerSync,
+                                : () => _triggerSync(false),
                             style: FilledButton.styleFrom(
                               minimumSize: const Size(double.infinity, 40),
                             ),
-                            child: const Text('AIスキャン'),
+                            child: const Text('AIスキャン (1件)'),
                           ),
                         ),
                         const SizedBox(width: 16),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: (isSyncRunning && !isStaleState)
+                                ? null
+                                : () => _triggerSync(true),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: const Text('AIスキャン(全件)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
                         Expanded(
                           child: FilledButton(
                             onPressed: _isCycleSyncRunning
@@ -307,29 +324,28 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 : const Text('サイクルスキャン'),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isManualPromptRunning
-                            ? null
-                            : _showManualPromptDialog,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 40),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isManualPromptRunning
+                                ? null
+                                : _showManualPromptDialog,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: _isManualPromptRunning
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('手動プロンプト実行'),
+                          ),
                         ),
-                        child: _isManualPromptRunning
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('手動プロンプト実行'),
-                      ),
+                      ],
                     ),
                   ],
                 ),

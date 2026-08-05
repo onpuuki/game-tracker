@@ -356,54 +356,94 @@ export const processSyncRequest = onDocumentCreated({
             return;
         }
 
-        let oldestGame: ConfigItem | null = null;
-        let oldestTime = Infinity;
+        const queue = getFunctions().taskQueue('locations/asia-northeast1/functions/syncSingleGameTask');
+        const debugInfo: any[] = [];
 
-        for (const game of targetGames) {
-            const safeGameName = game.gameName.replace(/\//g, '／');
-            const gameDoc = await db.collection('games').doc(safeGameName).get();
-            let checkTime = 0;
+        if (data.type === 'all') {
+            const gamesWithTime: { game: ConfigItem, time: number }[] = [];
+            for (const game of targetGames) {
+                const safeGameName = game.gameName.replace(/\//g, '／');
+                const gameDoc = await db.collection('games').doc(safeGameName).get();
+                let checkTime = 0;
+                if (gameDoc.exists) {
+                    const gameData = gameDoc.data();
+                    if (gameData && gameData.lastCheckedAt) {
+                        checkTime = typeof gameData.lastCheckedAt.toMillis === 'function'
+                            ? gameData.lastCheckedAt.toMillis()
+                            : new Date(gameData.lastCheckedAt).getTime();
+                    }
+                }
+                gamesWithTime.push({ game, time: checkTime });
+            }
 
-            if (gameDoc.exists) {
-                const gameData = gameDoc.data();
-                if (gameData && gameData.lastCheckedAt) {
-                    checkTime = typeof gameData.lastCheckedAt.toMillis === 'function'
-                        ? gameData.lastCheckedAt.toMillis()
-                        : new Date(gameData.lastCheckedAt).getTime();
+            gamesWithTime.sort((a, b) => a.time - b.time);
+
+            for (const item of gamesWithTime) {
+                await queue.enqueue({
+                    gameName: item.game.gameName,
+                    keywords: item.game.keywords,
+                    requestId,
+                    traceId
+                });
+                debugInfo.push({ stage: 'Dispatch', game: item.game.gameName, message: 'Task enqueued' });
+                functions.logger.info(`[${traceId}] Enqueued task for ${item.game.gameName}`);
+            }
+
+            await writeDebugLog(traceId, 'All tasks dispatched successfully.');
+            await snapshot.ref.update({
+                status: 'dispatched',
+                debugInfo,
+                totalTasks: targetGames.length,
+                completedTasks: 0,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+        } else {
+            let oldestGame: ConfigItem | null = null;
+            let oldestTime = Infinity;
+
+            for (const game of targetGames) {
+                const safeGameName = game.gameName.replace(/\//g, '／');
+                const gameDoc = await db.collection('games').doc(safeGameName).get();
+                let checkTime = 0;
+
+                if (gameDoc.exists) {
+                    const gameData = gameDoc.data();
+                    if (gameData && gameData.lastCheckedAt) {
+                        checkTime = typeof gameData.lastCheckedAt.toMillis === 'function'
+                            ? gameData.lastCheckedAt.toMillis()
+                            : new Date(gameData.lastCheckedAt).getTime();
+                    }
+                }
+
+                if (checkTime < oldestTime) {
+                    oldestTime = checkTime;
+                    oldestGame = game;
                 }
             }
 
-            if (checkTime < oldestTime) {
-                oldestTime = checkTime;
-                oldestGame = game;
+            if (!oldestGame) {
+                oldestGame = targetGames[0];
             }
+
+            await queue.enqueue({
+                gameName: oldestGame.gameName,
+                keywords: oldestGame.keywords,
+                requestId,
+                traceId
+            });
+            debugInfo.push({ stage: 'Dispatch', game: oldestGame.gameName, message: 'Task enqueued' });
+            functions.logger.info(`[${traceId}] Enqueued task for ${oldestGame.gameName}`);
+
+            await writeDebugLog(traceId, 'All tasks dispatched successfully.');
+            await snapshot.ref.update({
+                status: 'dispatched',
+                debugInfo,
+                totalTasks: 1,
+                completedTasks: 0,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
         }
-
-        if (!oldestGame) {
-            oldestGame = targetGames[0];
-        }
-
-        const queue = getFunctions().taskQueue('locations/asia-northeast1/functions/syncSingleGameTask');
-
-        const debugInfo: any[] = [];
-
-        await queue.enqueue({
-            gameName: oldestGame.gameName,
-            keywords: oldestGame.keywords,
-            requestId,
-            traceId
-        });
-        debugInfo.push({ stage: 'Dispatch', game: oldestGame.gameName, message: 'Task enqueued' });
-        functions.logger.info(`[${traceId}] Enqueued task for ${oldestGame.gameName}`);
-
-        await writeDebugLog(traceId, 'All tasks dispatched successfully.');
-        await snapshot.ref.update({
-            status: 'dispatched',
-            debugInfo,
-            totalTasks: 1,
-            completedTasks: 0,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
 
         return { success: true, message: 'Tasks dispatched' };
     } catch (error) {

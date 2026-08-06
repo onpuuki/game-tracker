@@ -663,7 +663,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             generation_config: {
                 temperature: 0.0
             },
-            response_format: { type: "json_object" },
+            // Interactions API (JSON Schema仕様) に合わせ、型を 'object' に指定
+            response_format: { type: "object" },
             // 新API仕様に合わせ、typeプロパティを使用してツールを指定
             tools: [{ type: "google_search" }]
         };

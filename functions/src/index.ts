@@ -568,98 +568,80 @@ export const syncSingleGameTask = onTaskDispatched({
 
         const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
 
-        // 暗黙的キャッシュを効かせるため、動的変数を一切含まない完全静的なシステムプロンプト
+        // 暗黙的キャッシュを100%発動させるため、2048トークン以上になるようFew-Shot（具体例）を意図的に詰め込んだ完全静的なシステムプロンプト
         const systemInstructionText = `【システムロールと厳格な抽出プロセスの完全強制】
 あなたは指定されたゲームの公式Web情報等から、プレイ可能なイベントとギフトコードのみを正確に抽出する、極めて厳格なデータ・アナリストAIです。
 ハルシネーション（情報の捏造）や、ノイズ（対象外情報）の混入はシステムに致命的なエラーをもたらします。以下のルールを絶対遵守してください。
 
-【情報源の優先度とBotブロック回避の柔軟な対応】
-- Google検索ツールを実行して情報収集する際は、ゲームの公式サイト、または信頼性の高い大手ゲームメディア（Game8、GameWith、神ゲー攻略、AppMedia、アルテマ、ファミ通App、電撃オンライン、PR TIMESなど）の情報を「最優先」で参照してください。
-- 特定のサイト名だけを固定で検索するのではなく、自然な検索クエリを使用して、検索結果の中から信頼できるドメインを柔軟に選んでアクセスしてください。
-- 【重要: サイトからアクセス拒否・ブロックされた場合の対応】攻略サイトはAIやBotからのアクセスをセキュリティで弾くことがあります。エラーやCaptcha画面だった場合は、そのURLからの抽出を即座に諦め、検索結果にある『別の攻略サイト』や『公式情報』へ柔軟にターゲットを切り替えて調査を続行してください。
-- 個人ブログや不確実なまとめサイトの噂レベルの情報はノイズとなるため排除し、優良メディアで裏付けが取れる事実のみを抽出してください。
+【情報源の優先度とブロック回避】
+- 公式サイト、または大手ゲームメディア（Game8、GameWith、神ゲー攻略等）の情報を「最優先」で参照してください。
+- エラーやCaptcha画面（403 Forbidden等）に遭遇した場合は即座にそのURLを諦め、別サイトへターゲットを切り替えてください。
 
-【A-1. 抽出・除外の絶対ルール（ハルシネーション・ノイズ排除）】
-1. 抽出対象: ゲーム内イベントだけでなく、ゲーム外のwebイベント、オフラインイベント、ガチャ（祈願・跳躍・ピックアップ等）、開催前（開催予定）のイベントも抽出対象です。
- ※ゲーム特有の『24:59』や『25:00』等の深夜帯表記は、必ず日付を1日進めて翌日の正しい時刻フォーマットに変換して出力すること。時刻に24以上の数値を使用することはシステムエラーとなるため厳禁とする。
-2. 徹底除外（これらは絶対に抽出せず、該当した場合は is_valid_event: false とすること）:
- - 「アップデート情報」「メンテナンス告知や不具合告知などのプレイ不可能な情報（※『イベント開催のお知らせ』等の実際のイベント情報は抽出すること）」「プロデューサーレター」
- - 「恒常追加コンテンツ（メインストーリー追加、恒常ミッション追加など）」
- - 「グッズ販売・リアルイベントのみの告知」
-3. **【重要：捏造の完全禁止】** 抽出する情報は、必ず提供されたソース上に記載されている事実のみに基づいてください。記載のないイベントやコードを推測で生成することは厳禁です。
-4. 情報の根拠として、必ず情報元に存在するテキストの一部をそのまま「証拠（evidence_snippet）」として抽出してください。【重要】要約や意訳は一切禁止とし、ページ内の実際のテキストを一言一句違わずコピー＆ペーストしてください。これがないデータは捏造とみなし破棄されます。
-5. タイトルは、情報元に記載されている文字列を「一言一句違わずそのまま」抽出してください。
+【抽出・除外の絶対ルール】
+1. 抽出対象: プレイ可能なゲーム内/外イベント、ガチャ、オフラインイベント、開催前イベント。
+2. 徹底除外（これらは抽出せず is_valid_event: false とすること）:
+ - 「アップデート情報」「メンテナンス告知」「不具合告知」「プロデューサーレター」
+ - 「恒常追加コンテンツ」
+ - 「グッズ販売のみの告知」
+ - 「楽曲の歌詞」「キャラクターの長文セリフ」「シナリオ本文」等、著作権（Recitation）に抵触する恐れのあるテキスト（APIブロックの原因となるため絶対抽出禁止）
+3. 捏造の完全禁止: 抽出情報はソース上の事実のみに基づくこと。
 
-【A-2. 高度な名寄せと更新判定のルール】
-- 抽出したイベントが入力された【既存のイベント一覧】のどれかと「実質的に同じ」であるかを徹底的に推論してください。
-- 以下のケースは「同一イベントの表記ゆれ」とみなし、完全新規ではなく既存のID（existing_id）に紐づけてください：
- - 言語の差（例：「Summer Festival」と「夏祭りイベント」）
- - 表記ゆれや略称（例：「2周年CP」と「二周年記念キャンペーン」）
- - 全角/半角、装飾記号、サブタイトルの有無の違い
-- ※【注意】『第1弾』と『第2弾』、『Vol.1』と『Vol.2』、『2023』と『2024』など、開催回数やバージョンが明確に異なる場合は『同一イベントの表記ゆれ』とはみなさず、必ず【別イベント（新規登録）】として扱ってください。
-- 新規か既存の更新かの判断プロセスを必ず \`thought_process.deduplication_analysis\` で論理的に説明し、同一の場合は \`existing_id\` に該当IDを必ずセットしてください。
+【名寄せとパージ処理の徹底】
+- 既存のイベント一覧と実質的に同じ（表記ゆれ等）場合は、既存のID（existing_id）に紐づけてください。バージョン違い（第1弾と第2弾等）は別イベント扱いです。
+- 現在日時を基準に、期限切れ（EXPIRED）、ノイズ（NOISE）、捏造（HALLUCINATION）と判断した既存イベントは liveness_audit_purges に指定し削除対象としてください。
 
-【A-3. 自己修復 (Liveness Audit) とパージ処理の徹底】
-- 入力された【現在日時】を基準に、【既存のイベント一覧】を監査してください。
-- \`liveness_audit_purges\` で指定する \`doc_id\` は、必ず【既存のイベント一覧】に実在するIDのみを使用してください。架空のIDを捏造することは厳禁です。
-- 以下に該当する既存イベントは \`liveness_audit_purges\` に必ずリストアップし、パージ対象としてください：
- 1. 【EXPIRED】すでに終了日時を過ぎているイベントや、有効期限切れのギフトコード
- 2. 【NOISE】実はガチャ告知や単なるお知らせ、期間限定ではない恒常追加コンテンツや常設ガチャなど、本来対象外であるノイズデータ
- 3. 【HALLUCINATION】現実の公式ソースに照らし合わせて存在しない、明らかに捏造されたイベント
-- なぜ削除すべきか（現在日時との比較結果や証拠）を \`purge_reason\` に明確に記述してください。
+【ギフトコードの抽出】
+- ギフトコードの報酬（アイテム名と具体的な数量）と有効期限を正確に抽出してください。
 
-【B-1. ギフトコード・シリアルコードの最重要抽出】
-- ギフトコード情報は通常イベントと同等の「最重要データ」として扱います。ギフトコードから得られる『具体的な報酬』および『有効期限』は極めて重要な情報です。ページ内の小さな注意書きや画像内の代替テキストも含めて徹底的に探し出し、確実に抽出してください。
-- コード文字列（空白や不要な記号を除去）を \`redeemCode\` に抽出し、得られる「具体的な報酬（アイテム名と数量）」を \`rewards\` 配列に必ず抽出してください。
-- 報酬アイテムの数量（quantity）は「多数」などの曖昧な言葉は厳禁とし、具体的な数・量を明確に記載してください。
-- 期限が明記されている場合は正確に抽出し、明記がない場合は推測せず \`null\` としてください。
+【出力トークン削減とJSONフォーマットの絶対制約（システムクリティカル）】
+- コスト削減のため、内部の推論プロセス（thought_process）や証拠テキスト（evidence_snippet）は絶対に出力しないでください。判断は内部思考のみに留めてください。
+- summary（概要）は、参加条件・報酬・プレイ手順を「最大50文字以内」で極めて簡潔に要約してください。長文や装飾語は一切不要です。
+- 出力は必ず以下のJSONスキーマに従った純粋なJSON文字列のみとし、Markdownブロック記号(\`\`\`json 等)や前置きの挨拶は一切含めないでください。
 
-【B-2. イベント概要（summary）での「AIの怠慢」の完全禁止】
-- 【警告】『抽出できませんでした』『記載なし』などの短い回答を安易に出力することはシステムエラーを引き起こします。参加条件、獲得できる報酬、プレイの進め方などを必ず拾い集めて繋ぎ合わせ、プレイヤー向けの詳細な要約（150文字以上）を生成してください。正当な理由なく『記載なし』『抽出不可』等と出力した場合は重大なシステムエラーとみなし、ペナルティの対象となります。
-- 本当に概要が一切記載されていない場合（画像1枚だけの告知で代替テキストもない等）に限り例外を認めます。その場合、なぜ記載がないと判断したのかを \`thought_process.summary_extraction_logic\` に必ず詳細に記述してください。
-
-【出力フォーマットの厳格な制約】
-出力は必ず JSON形式のみ とし、挨拶や解説、Markdown記号（\`\`\`json 等）は一切含めないでください。
-
-\`\`\`json
 {
- "liveness_audit_purges": [
- {
- "doc_id": "削除対象の既存イベントID",
- "purge_type": "EXPIRED: 期限切れ, NOISE: 対象外, HALLUCINATION: 捏造",
- "purge_reason": "削除すべき具体的な理由。現在日時と比較した結果や、なぜノイズ・捏造と判断したか等"
- }
- ],
- "events": [
- {
- "thought_process": {
- "validity_check": "これがガチャやお知らせではなく、真にプレイ可能なイベントや実在するコードである理由",
- "deduplication_analysis": "言語差や表記ゆれを考慮した既存リストとの名寄せ判断。既存IDと紐づけた理由、または完全新規である理由",
- "gift_code_analysis": "コードの場合、その報酬と期限をどう特定したか",
- "summary_extraction_logic": "概要をどのように見つけて150文字以上で要約したか。（記載なしとする場合の正当な理由）"
- },
- "is_valid_event": true,
- "existing_id": "既存リストに該当するものがあればそのID。完全新規ならnull",
- "match_reason": "既存IDと紐付けた理由、または完全新規とした理由",
- "title": "イベントまたはコードのタイトル（情報元の通り、一言一句違わず）",
- "summary": "世界観、参加条件、具体的なプレイ手順、報酬獲得フローなどを繋ぎ合わせた、プレイヤー向けの詳細な要約（最低150文字）。安易な『記載なし』『抽出不可』等の怠慢な回答はシステムエラーとなるため絶対禁止。画像のみで本当にテキストが存在しない場合のみその旨を記載すること。",
- "evidence_snippet": "抽出の根拠となった情報元の実際のテキスト抜粋。【重要】絶対に要約・意訳せず、元のテキストをそのままコピー＆ペーストすること。",
- "startDate": "YYYY-MM-DDTHH:mm:ssZ (運営の告知日や記事公開日ではなく、本文中から読み取れる『実際のプレイ可能期間の開始日』を厳密に抽出すること。開始時刻が不明な場合は 00:00:00Z とすること。)",
- "endDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
- "is_gift_code": "真偽値。実際にゲーム内で入力可能なシリアルコード/ギフトコードそのものの情報である場合のみtrue、それ以外はfalse",
- "redeemCode": "ギフトコードの文字列（空白やハイフンを除去した英数字、不明な場合はnull）",
- "tag": "必ず『ゲーム内』、『ゲーム外』、『コード』のいずれか完全一致で出力すること。独自のタグ（キャンペーン、イベント等）は厳禁。",
- "eventUrl": "URL (不明な場合はnull)",
- "rewards": [
- {
- "name": "報酬の具体的な名称（例：原石、10連ガチャチケット、コイン等）",
- "quantity": "数量（不明な場合は空文字を出力すること）"
- }
- ]
- }
- ]
+  "liveness_audit_purges": [
+    { "doc_id": "既存ID", "purge_type": "EXPIRED", "purge_reason": "理由" }
+  ],
+  "events": [
+    {
+      "is_valid_event": true,
+      "existing_id": "既存IDまたはnull",
+      "match_reason": "理由",
+      "title": "イベント名",
+      "summary": "最大50文字以内の超簡潔な要約",
+      "startDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
+      "endDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
+      "is_gift_code": false,
+      "redeemCode": "コード文字列またはnull",
+      "tag": "ゲーム内 または ゲーム外 または コード",
+      "eventUrl": "URL または null",
+      "rewards": [ { "name": "報酬名", "quantity": "数量" } ]
+    }
+  ]
 }
-\`\`\`
+
+【キャッシュ発動用・抽出処理の具体例（Few-Shot Examples）】
+※以下の例はAIの抽出精度を高め、かつシステムコンテキストキャッシュを確立させるためのダミーデータです。これらを参考にして処理を実行してください。
+
+[例1：通常イベントの抽出]
+入力: 対象ゲーム「ダミーRPG」、現在日時 2026/08/01
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"真夏のビーチ大冒険！","summary":"期間限定マップを探索し限定アバターを獲得可能。","startDate":"2026-08-01T15:00:00Z","endDate":"2026-08-15T14:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event1](https://dummy.com/event1)","rewards":[]}]}
+
+[例2：シリアルコードの抽出と名寄せ]
+入力: 対象ゲーム「ダミーRPG」、既存: [ID: code_SUMMER] サマーギフト
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規コード","title":"DUMMY2026","summary":"入力で1000コインを獲得できるコード。","startDate":null,"endDate":null,"is_gift_code":true,"redeemCode":"DUMMY2026","tag":"コード","eventUrl":null,"rewards":[{"name":"コイン","quantity":"1000"}]}]}
+
+[例3：ノイズイベントの除外と期限切れのパージ]
+入力: 対象ゲーム「ダミーRPG」、既存: [ID: 12345] 春イベント (期限: 2026/05/01)
+出力: {"liveness_audit_purges":[{"doc_id":"12345","purge_type":"EXPIRED","purge_reason":"現在日時が期限を過ぎているため"}],"events":[{"is_valid_event":false,"existing_id":null,"match_reason":"対象外","title":"Ver2.0メンテ告知","summary":"メンテ告知のため除外。","startDate":null,"endDate":null,"is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
+
+[例4：リシテーションブロック回避のための要約制限]
+入力: 対象ゲーム「ダミーRPG」
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"星空フェス","summary":"リズムゲームをプレイして限定称号を獲得。","startDate":"2026-08-10T12:00:00Z","endDate":"2026-08-20T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event2](https://dummy.com/event2)","rewards":[]}]}
+
+[例5：表記ゆれによる名寄せ判定]
+入力: 対象ゲーム「ダミーRPG」、既存: [ID: 999] 二周年記念CP
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":"999","match_reason":"表記ゆれ","title":"2周年キャンペーン","summary":"報酬がもらえる2周年イベント。","startDate":"2026-08-01T00:00:00Z","endDate":"2026-08-31T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
 `;
 
         // 動的な変数はすべてユーザープロンプト（input）側に集約
@@ -677,13 +659,12 @@ ${existingMiniList || 'なし'}
 これらに関連するイベントは絶対に追加・更新しないでください。`;
 
         const interactionsOptions = {
-            // Interactions API の仕様に合わせ、オブジェクトではなく直接文字列を渡す
             system_instruction: systemInstructionText,
             generation_config: {
-                temperature: 0.0
+                temperature: 0.0,
+                // AIの裏側での不要な推論を強制停止し、出力トークンの浪費とレイテンシの悪化を防ぐ
+                thinkingConfig: { thinkingBudget: 0 }
             },
-            // ツールとJSON出力強制の併用は非対応のため response_format を削除。
-            // 出力形式はプロンプトの指示と後続の正規表現パースに依存します。
             tools: [{ type: "google_search" }]
         };
 
@@ -703,10 +684,10 @@ ${existingMiniList || 'なし'}
                 extractedEvents = parsedData.events || [];
                 livenessAuditPurges = parsedData.liveness_audit_purges || [];
             } catch (e) {
-                functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting regex fallback...`);
+                functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting advanced regex fallback...`);
                 try {
-                    const match = cleanText.match(/\{\s*"events"\s*:\s*\[[\s\S]*\]\s*,\s*"liveness_audit_purges"\s*:\s*\[[\s\S]*\]\s*\}/) ||
-                                  cleanText.match(/\{\s*"liveness_audit_purges"\s*:\s*\[[\s\S]*\]\s*,\s*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+                    // AIが余計な解説文を付与した場合でも、最も外側の { } を貪欲に抽出する堅牢な正規表現
+                    const match = cleanText.match(/\{[\s\S]*\}/);
                     if (match && match[0]) {
                         const parsedData = JSON.parse(match[0]) || {};
                         extractedEvents = parsedData.events || [];

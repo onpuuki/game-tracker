@@ -345,6 +345,78 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                                 : const Text('手動プロンプト実行'),
                           ),
                         ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // スキャン強制停止ボタンを追加
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: isSyncRunning
+                          ? () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('スキャン強制停止'),
+                                  content: const Text('実行中および待機中のすべてのスキャンタスクを強制停止しますか？\n（すでにAIが処理を開始している1件については完了するまで停止しません）'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text('キャンセル'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      child: const Text('停止', style: TextStyle(color: Colors.red)),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                try {
+                                  final snapshot = await FirebaseFirestore.instanceFor(
+                                          app: Firebase.app(), databaseId: 'default')
+                                      .collection('sync_requests')
+                                      .where('status', whereIn: ['pending', 'processing', 'dispatched'])
+                                      .get();
+
+                                  final batch = FirebaseFirestore.instanceFor(
+                                          app: Firebase.app(), databaseId: 'default')
+                                      .batch();
+                                  for (var doc in snapshot.docs) {
+                                    batch.update(doc.reference, {
+                                      'status': 'error',
+                                      'error': 'ユーザー操作によってスキャンが手動停止されました。',
+                                      'updatedAt': FieldValue.serverTimestamp(),
+                                    });
+                                  }
+                                  await batch.commit();
+
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('スキャンを強制停止しました')),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('停止処理に失敗しました: $e')),
+                                    );
+                                  }
+                                }
+                              }
+                            }
+                          : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade400,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 40),
+                      ),
+                      icon: const Icon(Icons.stop_circle),
+                      label: const Text('スキャン強制停止'),
+                    ),
+                  ),
                       ],
                     ),
                   ],

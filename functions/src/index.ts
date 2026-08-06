@@ -665,8 +665,8 @@ ${existingMiniList || 'なし'}
 これらに関連するイベントは絶対に追加・更新しないでください。`;
 
         const interactionsOptions = {
-            // キャッシュ対象となる静的プロンプトを指定
-            system_instruction: { parts: [{ text: systemInstructionText }] },
+            // Interactions API の仕様に合わせ、オブジェクトではなく直接文字列を渡す
+            system_instruction: systemInstructionText,
             generation_config: {
                 temperature: 0.0
             },

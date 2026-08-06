@@ -474,6 +474,18 @@ export const syncSingleGameTask = onTaskDispatched({
     functions.logger.info(`[${traceId}] Starting worker for ${gameName} (safe: ${safeGameName})`, { traceId, gameName, safeGameName });
 
     try {
+        // キャンセルチェック: フロントエンド側でステータスがエラー(強制停止含む)に更新されていた場合、APIを呼ばずにタスクを即座に破棄する
+        if (requestId) {
+            const syncReqDoc = await db.collection('sync_requests').doc(requestId).get();
+            if (syncReqDoc.exists) {
+                const status = syncReqDoc.data()?.status;
+                if (status === 'error' || status === 'cancelled') {
+                    functions.logger.info(`[${traceId}] Sync request${requestId} was cancelled. Aborting task for ${gameName} to save costs.`);
+                    return;
+                }
+            }
+        }
+
         const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];

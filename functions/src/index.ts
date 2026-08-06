@@ -663,7 +663,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
                 temperature: 0.0,
                 responseMimeType: "application/json"
             },
-            tools: [{ googleSearch: {} }]
+            // 新API仕様に合わせ、typeプロパティを使用してツールを指定
+            tools: [{ type: "google_search" }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);

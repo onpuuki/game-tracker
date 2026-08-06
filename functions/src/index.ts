@@ -293,9 +293,9 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
             return await (ai.interactions as any).create({
                 model: model,
                 input: contents,
-                    store: true,
-                    generationConfig: options.generationConfig,
-                    tools: options.tools
+                store: true,
+                generation_config: options.generation_config,
+                tools: options.tools
             });
         } catch (err: any) {
             attempt++;
@@ -659,9 +659,9 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
 `;
 
         const interactionsOptions = {
-            generationConfig: {
+            generation_config: {
                 temperature: 0.0,
-                responseMimeType: "application/json"
+                response_mime_type: "application/json"
             },
             // 新API仕様に合わせ、typeプロパティを使用してツールを指定
             tools: [{ type: "google_search" }]

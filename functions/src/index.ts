@@ -295,7 +295,6 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
                 input: contents,
                 store: true,
                 generation_config: options.generation_config,
-                response_format: options.response_format,
                 tools: options.tools
             });
         } catch (err: any) {
@@ -663,9 +662,8 @@ ${keywords ? `【必須検索指定】以下のキーワードに関連するイ
             generation_config: {
                 temperature: 0.0
             },
-            // Interactions API (JSON Schema仕様) に合わせ、型を 'object' に指定
-            response_format: { type: "object" },
-            // 新API仕様に合わせ、typeプロパティを使用してツールを指定
+            // ツールとJSON出力強制の併用は非対応のため response_format を削除。
+            // 出力形式はプロンプトの指示と後続の正規表現パースに依存します。
             tools: [{ type: "google_search" }]
         };
 

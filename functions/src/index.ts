@@ -294,6 +294,8 @@ async function generateContentWithRetry(ai: GoogleGenAI, model: string, contents
                 model: model,
                 input: contents,
                 store: true,
+                // オプションからシステムプロンプト（静的キャッシュ対象）をAPIへ引き渡す
+                system_instruction: options.system_instruction,
                 generation_config: options.generation_config,
                 tools: options.tools
             });

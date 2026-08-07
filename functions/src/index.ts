@@ -575,6 +575,7 @@ export const syncSingleGameTask = onTaskDispatched({
 
 【情報源の優先度とブロック回避】
 - 公式サイト、または大手ゲームメディア（Game8、GameWith、神ゲー攻略等）の情報を「最優先」で参照してください。
+- 検索ツールの自律的な多重実行によるコスト高騰を防ぐため、検索クエリの実行は「対象ゲームにつき最大1回のみ」に厳格に制限します。情報の欠落があっても追加検索は行わないでください。
 - エラーやCaptcha画面（403 Forbidden等）に遭遇した場合は即座にそのURLを諦め、別サイトへターゲットを切り替えてください。
 
 【抽出・除外の絶対ルール】
@@ -660,18 +661,19 @@ ${existingMiniList || 'なし'}
 
         const interactionsOptions = {
             system_instruction: systemInstructionText,
+            // 履歴の連鎖による入力トークン爆発を防ぐため、サーバーサイドのステート管理を無効化
+            store: false,
             generation_config: {
-                temperature: 0.0,
-                // AIの裏側での不要な推論を強制停止し、出力トークンの浪費とレイテンシの悪化を防ぐ
-                thinkingConfig: { thinkingBudget: 0 }
+                // Gemini 3.5アーキテクチャに合わせて非推奨パラメータを削除し、思考レベルを最小化
+                thinking_level: "minimal"
             },
             tools: [{ type: "google_search" }]
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
 
-        // 分割した userPrompt を input として渡す
-        const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', userPrompt, interactionsOptions, traceId);
+        // モデルを最新かつ低コストな 3.5-flash-lite に変更
+        const response = await generateContentWithRetry(ai, 'gemini-3.5-flash-lite', userPrompt, interactionsOptions, traceId);
 
         let extractedEvents: any[] = [];
         let livenessAuditPurges: { doc_id: string, purge_type?: string, purge_reason: string }[] = [];
@@ -718,11 +720,7 @@ ${existingMiniList || 'なし'}
             livenessAuditPurges = uniqueLivenessAuditPurges;
 
             for (const event of extractedEvents) {
-                // 【A-1】証拠がないデータのコードレイヤーでの強制破棄
-                if (!event.evidence_snippet || event.evidence_snippet.trim() === '') {
-                    functions.logger.info(`[${traceId}] Skipping event due to missing evidence_snippet: ${event.title || 'Unknown Title'}`);
-                    event.is_valid_event = false;
-                }
+                // 【コスト最適化】出力トークン削減のため evidence_snippet の検証ロジックを完全に撤廃。
 
                 // 【防御的要件3】対象外データの早期除外 (1/2: 不要イベントのフラグ付け)
                 // もし今回AIが「無効なイベント（ガチャやノイズ）」と判定し、かつ既存DBと紐付いていた場合

@@ -578,14 +578,18 @@ export const syncSingleGameTask = onTaskDispatched({
 - 検索ツールの自律的な多重実行によるコスト高騰を防ぐため、検索クエリの実行は「対象ゲームにつき最大1回のみ」に厳格に制限します。情報の欠落があっても追加検索は行わないでください。
 - エラーやCaptcha画面（403 Forbidden等）に遭遇した場合は即座にそのURLを諦め、別サイトへターゲットを切り替えてください。
 
-【抽出・除外の絶対ルール】
-1. 抽出対象: プレイ可能なゲーム内/外イベント、ガチャ、オフラインイベント、開催前イベント。
-2. 徹底除外（これらは抽出せず is_valid_event: false とすること）:
- - 「アップデート情報」「メンテナンス告知」「不具合告知」「プロデューサーレター」
- - 「恒常追加コンテンツ」
- - 「グッズ販売のみの告知」
- - 「楽曲の歌詞」「キャラクターの長文セリフ」「シナリオ本文」等、著作権（Recitation）に抵触する恐れのあるテキスト（APIブロックの原因となるため絶対抽出禁止）
-3. 捏造の完全禁止: 抽出情報はソース上の事実のみに基づくこと。
+【実行時コンテキストと日付処理の絶対ルール】
+- ユーザーから入力される【現在日時】を基準とし、年号が省略されている場合は今年の年を補完して推測してください。
+- 抽出テキストの日付表記が「7月8日(水)メンテ後」「Ver3.5より」のように曖昧な場合でも、決してイベント全体を破棄しないでください。
+- startDate_raw / endDate_raw: テキストに記載されている生の文字列（例：「7月8日(水)メンテ後」）をそのまま一切加工せずに出力します。（必須）
+- startDate / endDate: ISO8601フォーマット（YYYY-MM-DDTHH:mm:ssZ）への変換が確実に可能な場合のみ出力します。「メンテ後」などで時刻の推測が困難な場合、無理に推測せず必ず null を出力してください。
+
+【イベント包含基準（ポジティブ・フィルタリング）】
+以下のいずれかの条件に該当するものは、すべて抽出対象とします。情報の欠落を理由に除外することは厳禁です。
+1. イベント名と開催期間（「メンテ後」「Ver3.5より」などの曖昧な表現も含む）が記載されているもの
+2. 「報酬」「任務」「ログインボーナス」「ガチャ」など、ユーザーに恩恵をもたらす期間限定の企画
+3. リンク（「▶解説記事はこちら」など）が併記されている個別の企画名称
+（※ただし、楽曲の歌詞やキャラクターの長文セリフなど、著作権に抵触するテキストはAPIブロックの原因となるため抽出しないでください）
 
 【名寄せとパージ処理の徹底】
 - 既存のイベント一覧と実質的に同じ（表記ゆれ等）場合は、既存のID（existing_id）に紐づけてください。バージョン違い（第1弾と第2弾等）は別イベント扱いです。
@@ -612,8 +616,10 @@ export const syncSingleGameTask = onTaskDispatched({
       "match_reason": "理由",
       "title": "イベント名",
       "summary": "最大50文字以内の超簡潔な要約",
-      "startDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
-      "endDate": "YYYY-MM-DDTHH:mm:ssZ (不明な場合はnull)",
+      "startDate_raw": "生の開始日時文字列（例: 7月8日メンテ後）。不明な場合はnull",
+      "endDate_raw": "生の終了日時文字列（例: 8月19日6:59）。不明な場合はnull",
+      "startDate": "YYYY-MM-DDTHH:mm:ssZ (確実に変換可能な場合のみ。困難な場合はnull)",
+      "endDate": "YYYY-MM-DDTHH:mm:ssZ (確実に変換可能な場合のみ。困難な場合はnull)",
       "is_gift_code": false,
       "redeemCode": "コード文字列またはnull",
       "tag": "ゲーム内 または ゲーム外 または コード",
@@ -628,23 +634,23 @@ export const syncSingleGameTask = onTaskDispatched({
 
 [例1：通常イベントの抽出]
 入力: 対象ゲーム「ダミーRPG」、現在日時 2026/08/01
-出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"真夏のビーチ大冒険！","summary":"期間限定マップを探索し限定アバターを獲得可能。","startDate":"2026-08-01T15:00:00Z","endDate":"2026-08-15T14:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event1](https://dummy.com/event1)","rewards":[]}]}
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"真夏のビーチ大冒険！","summary":"期間限定マップを探索し限定アバターを獲得可能。","startDate_raw":"2026年8月1日 15:00","endDate_raw":"2026年8月15日 14:59","startDate":"2026-08-01T15:00:00Z","endDate":"2026-08-15T14:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event1](https://dummy.com/event1)","rewards":[]}]}
 
 [例2：シリアルコードの抽出と名寄せ]
 入力: 対象ゲーム「ダミーRPG」、既存: [ID: code_SUMMER] サマーギフト
-出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規コード","title":"DUMMY2026","summary":"入力で1000コインを獲得できるコード。","startDate":null,"endDate":null,"is_gift_code":true,"redeemCode":"DUMMY2026","tag":"コード","eventUrl":null,"rewards":[{"name":"コイン","quantity":"1000"}]}]}
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規コード","title":"DUMMY2026","summary":"入力で1000コインを獲得できるコード。","startDate_raw":null,"endDate_raw":null,"startDate":null,"endDate":null,"is_gift_code":true,"redeemCode":"DUMMY2026","tag":"コード","eventUrl":null,"rewards":[{"name":"コイン","quantity":"1000"}]}]}
 
 [例3：ノイズイベントの除外と期限切れのパージ]
 入力: 対象ゲーム「ダミーRPG」、既存: [ID: 12345] 春イベント (期限: 2026/05/01)
-出力: {"liveness_audit_purges":[{"doc_id":"12345","purge_type":"EXPIRED","purge_reason":"現在日時が期限を過ぎているため"}],"events":[{"is_valid_event":false,"existing_id":null,"match_reason":"対象外","title":"Ver2.0メンテ告知","summary":"メンテ告知のため除外。","startDate":null,"endDate":null,"is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
+出力: {"liveness_audit_purges":[{"doc_id":"12345","purge_type":"EXPIRED","purge_reason":"現在日時が期限を過ぎているため"}],"events":[{"is_valid_event":false,"existing_id":null,"match_reason":"対象外","title":"Ver2.0メンテ告知","summary":"メンテ告知のため除外。","startDate_raw":null,"endDate_raw":null,"startDate":null,"endDate":null,"is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
 
 [例4：リシテーションブロック回避のための要約制限]
 入力: 対象ゲーム「ダミーRPG」
-出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"星空フェス","summary":"リズムゲームをプレイして限定称号を獲得。","startDate":"2026-08-10T12:00:00Z","endDate":"2026-08-20T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event2](https://dummy.com/event2)","rewards":[]}]}
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":null,"match_reason":"新規","title":"星空フェス","summary":"リズムゲームをプレイして限定称号を獲得。","startDate_raw":"8月10日 12:00","endDate_raw":"8月20日 23:59","startDate":"2026-08-10T12:00:00Z","endDate":"2026-08-20T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":"[https://dummy.com/event2](https://dummy.com/event2)","rewards":[]}]}
 
 [例5：表記ゆれによる名寄せ判定]
 入力: 対象ゲーム「ダミーRPG」、既存: [ID: 999] 二周年記念CP
-出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":"999","match_reason":"表記ゆれ","title":"2周年キャンペーン","summary":"報酬がもらえる2周年イベント。","startDate":"2026-08-01T00:00:00Z","endDate":"2026-08-31T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
+出力: {"liveness_audit_purges":[],"events":[{"is_valid_event":true,"existing_id":"999","match_reason":"表記ゆれ","title":"2周年キャンペーン","summary":"報酬がもらえる2周年イベント。","startDate_raw":"2026年8月1日","endDate_raw":"2026年8月31日","startDate":"2026-08-01T00:00:00Z","endDate":"2026-08-31T23:59:59Z","is_gift_code":false,"redeemCode":null,"tag":"ゲーム内","eventUrl":null,"rewards":[]}]}
 
 [例6：既存イベントから変更がない場合の差分スキップ]
 入力: 対象ゲーム「ダミーRPG」、既存: [{"id": "ev1", "title": "星空フェス", "status": "active"}] (※Web検索の結果、内容に変化なし)
@@ -906,6 +912,8 @@ ${existingMiniList || 'なし'}
                     if ((!existing.startDate || existing.startDate === 'UNKNOWN') && event.startDate && event.startDate !== 'UNKNOWN') {
                         existing.startDate = event.startDate;
                     }
+                    if (!existing.endDate_raw && event.endDate_raw) existing.endDate_raw = event.endDate_raw;
+                    if (!existing.startDate_raw && event.startDate_raw) existing.startDate_raw = event.startDate_raw;
                     if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
                     if (event.rewards && event.rewards.length > 0) {
                         existing.rewards = event.rewards;

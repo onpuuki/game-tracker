@@ -10,6 +10,13 @@ import { CloudSchedulerClient } from '@google-cloud/scheduler';
 
 import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
+
+import { responseSchema } from './schema';
+
 import { google } from 'googleapis';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -23,6 +30,65 @@ dayjs.tz.setDefault("Asia/Tokyo");
 
 admin.initializeApp();
 const db = getFirestore(admin.app(), 'default');
+
+
+async function fetchAndConvertHtmlToMarkdown(gameName: string, apiKey: string, cx: string): Promise<string> {
+    const customsearch = google.customsearch('v1');
+    const query = `${gameName} イベント site:game8.jp OR site:gamewith.jp`;
+
+    let urls: string[] = [];
+    try {
+        const res = await customsearch.cse.list({
+            cx: cx,
+            q: query,
+            auth: apiKey,
+            num: 2
+        });
+
+        if (res.data.items) {
+            urls = res.data.items.map(item => item.link).filter(link => link) as string[];
+        }
+    } catch (error) {
+        functions.logger.error(`Failed to fetch custom search results for ${gameName}`, error);
+        return "";
+    }
+
+    let combinedMarkdown = "";
+
+    for (const url of urls) {
+        try {
+            const response = await axios.get(url, {
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                timeout: 10000
+            });
+
+            const $ = cheerio.load(response.data);
+            $('script, style, nav, footer, header, noscript, iframe, aside').remove();
+
+            const html = $('body').html() || '';
+
+            const turndownService = new TurndownService({
+                headingStyle: 'atx',
+                codeBlockStyle: 'fenced'
+            });
+            turndownService.use(gfm);
+
+            const markdown = turndownService.turndown(html);
+            combinedMarkdown += `
+
+--- Source: ${url} ---
+
+${markdown}`;
+
+        } catch (error) {
+            functions.logger.error(`Failed to fetch or convert HTML from ${url}`, error);
+            // Skip to next URL
+        }
+    }
+
+    return combinedMarkdown;
+}
 
 function countJapaneseChars(str: string): number {
     if (!str) return 0;
@@ -486,13 +552,15 @@ export const syncSingleGameTask = onTaskDispatched({
             }
         }
 
-        const configDoc = await db.collection('settings').doc('config').get();
+                const configDoc = await db.collection('settings').doc('config').get();
         const configData = configDoc?.data();
         const codeUrls: { gameName: string, url: string }[] = configData?.codeUrls || [];
         const geminiApiKey = configData?.geminiApiKey;
+        const googleSearchApiKey = configData?.googleSearchApiKey;
+        const googleSearchEngineId = configData?.googleSearchEngineId;
 
-        if (!geminiApiKey) {
-            throw new Error('Gemini API key is missing');
+        if (!geminiApiKey || !googleSearchApiKey || !googleSearchEngineId) {
+            throw new Error('API keys are missing');
         }
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
@@ -566,7 +634,10 @@ export const syncSingleGameTask = onTaskDispatched({
             }
         });
 
-        const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
+                const currentDate = dayjs().tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm:ss");
+
+        const markdownContent = await fetchAndConvertHtmlToMarkdown(gameName, googleSearchApiKey, googleSearchEngineId);
+
 
         // 暗黙的キャッシュを100%発動させるため、2048トークン以上になるようFew-Shot（具体例）を意図的に詰め込んだ完全静的なシステムプロンプト
         const systemInstructionText = `【システムロールと厳格な抽出プロセスの完全強制】
@@ -657,12 +728,15 @@ export const syncSingleGameTask = onTaskDispatched({
 出力: {"liveness_audit_purges":[],"events":[]}
 `;
 
-        // 動的な変数はすべてユーザープロンプト（input）側に集約
-        const userPrompt = `以下の情報に基づき、対象ゲームの最新イベントとギフトコードを検索・抽出してください。
+                        // 動的な変数はすべてユーザープロンプト（input）側に集約
+        const userPrompt = `以下の情報に基づき、対象ゲームの最新イベントとギフトコードを抽出してください。
 
 【対象ゲーム】: ${gameName}
 【検索キーワード指定】: ${keywords || 'なし'}
 【現在日時】: ${currentDate}
+
+【最新の検索結果（Markdown）】:
+${markdownContent || 'なし'}
 
 【既存のイベント一覧（名寄せ・パージ用）】:
 ${existingMiniList || 'なし'}
@@ -671,15 +745,14 @@ ${existingMiniList || 'なし'}
 [ ${cycleEventTitles.join(', ')} ]
 これらに関連するイベントは絶対に追加・更新しないでください。`;
 
-        const interactionsOptions = {
+                const interactionsOptions = {
             system_instruction: systemInstructionText,
-            // 履歴の連鎖による入力トークン爆発を防ぐため、サーバーサイドのステート管理を無効化
             store: false,
             generation_config: {
-                // Gemini 3.5アーキテクチャに合わせて非推奨パラメータを削除し、思考レベルを最小化
-                thinking_level: "minimal"
-            },
-            tools: [{ type: "google_search" }]
+                thinking_level: "minimal",
+                responseMimeType: "application/json",
+                responseSchema: responseSchema.toJSONSchema()
+            }
         };
 
         functions.logger.info(`[${traceId}] Calling Gemini API for ${gameName}`);
@@ -687,33 +760,18 @@ ${existingMiniList || 'なし'}
         // モデルを最新かつ低コストな 3.5-flash-lite に変更
         const response = await generateContentWithRetry(ai, 'gemini-3.5-flash-lite', userPrompt, interactionsOptions, traceId);
 
-        let extractedEvents: any[] = [];
+                let extractedEvents: any[] = [];
         let livenessAuditPurges: { doc_id: string, purge_type?: string, purge_reason: string }[] = [];
         const responseText = response?.output_text || response?.text || response?.steps?.[response.steps?.length - 1]?.content?.[0]?.text || "";
 
         if (responseText) {
-            let cleanText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
             try {
-                const parsedData = JSON.parse(cleanText) || {};
+                const parsedData = JSON.parse(responseText) || {};
                 extractedEvents = parsedData.events || [];
                 livenessAuditPurges = parsedData.liveness_audit_purges || [];
             } catch (e) {
-                functions.logger.warn(`[${traceId}] Failed to parse JSON via normal method. Attempting advanced regex fallback...`);
-                try {
-                    // AIが余計な解説文を付与した場合でも、最も外側の { } を貪欲に抽出する堅牢な正規表現
-                    const match = cleanText.match(/\{[\s\S]*\}/);
-                    if (match && match[0]) {
-                        const parsedData = JSON.parse(match[0]) || {};
-                        extractedEvents = parsedData.events || [];
-                        livenessAuditPurges = parsedData.liveness_audit_purges || [];
-                        functions.logger.info(`[${traceId}] Successfully parsed JSON using regex fallback.`);
-                    } else {
-                        throw new Error("Regex fallback failed to find a valid JSON object.");
-                    }
-                } catch (fallbackError) {
-                    functions.logger.error(`[${traceId}] Failed to parse JSON object from response.`, { text: responseText });
-                    throw new Error("Failed to parse JSON object from response: " + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
-                }
+                functions.logger.error(`[${traceId}] Failed to parse JSON object from response.`, { text: responseText });
+                throw new Error("Failed to parse JSON object from response: " + (e instanceof Error ? e.message : String(e)));
             }
 
             // 【防御的要件4】LLMの気まぐれ対策（空配列のフォールバック）

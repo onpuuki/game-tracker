@@ -13,6 +13,7 @@ import * as crypto from 'crypto';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
+// @ts-ignore
 import { gfm } from 'turndown-plugin-gfm';
 
 import { responseSchema } from './schema';

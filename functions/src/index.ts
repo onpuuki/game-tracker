@@ -750,8 +750,8 @@ ${existingMiniList || 'なし'}
             store: false,
             generation_config: {
                 thinking_level: "minimal",
-                responseMimeType: "application/json",
-                responseSchema: responseSchema.toJSONSchema()
+                response_mime_type: "application/json",
+                response_schema: responseSchema.toJSONSchema()
             }
         };
 

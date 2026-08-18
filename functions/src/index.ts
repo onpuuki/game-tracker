@@ -878,539 +878,428 @@ ${existingMiniList || 'なし'}
                     await purgeBatch.commit();
                 }
             }
-
-        if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
-            const matchedDocIds = new Set<string>();
-
-            const nowMs = new Date().getTime();
-
-            // 1. AIレスポンス内の自己重複を排除する（より情報が多い方を優先してマージ）
-            const uniqueExtractedEvents: any[] = [];
-            for (const event of extractedEvents) {
-                event.rewards = event.rewards || [];
-                if (event.is_valid_event === false) {
-                    functions.logger.info(`[${traceId}] Skipping invalid event from AI: ${event.title || 'Unknown Title'}`);
-                    continue;
-                }
-                // 【防御的要件3】対象外データの確実な早期除外
-                if (event.is_valid_event === false) {
-                    functions.logger.info(`[${traceId}] Skipping invalid event from AI: ${event.title || 'Unknown Title'}`);
-                    continue;
-                }
-
-                // 【B-1】ギフトコードの強制正規化とタグ付け
-                if (event.is_gift_code === true) {
-                    event.tag = 'コード';
-                }
-                if (event.redeemCode) {
-                    event.redeemCode = normalizeCode(event.redeemCode);
-                }
-
-                const duplicateIdx = uniqueExtractedEvents.findIndex(u => {
-                    if ((event.tag === 'コード' || u.tag === 'コード' || event.is_gift_code || u.is_gift_code) && event.redeemCode && u.redeemCode) {
-                        if (normalizeCode(event.redeemCode) === normalizeCode(u.redeemCode)) return true;
-                    }
-                    if (event.eventUrl && u.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(u.eventUrl)) return true;
-
-                    if (u.title && event.title) {
-                        const normAI = normalizeString(event.title);
-                        const normDB = normalizeString(u.title);
-
-                        if (normAI === normDB) {
-                            // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
-                            const numsAI = extractVersionMarkers(event.title || '');
-                            const numsDB = extractVersionMarkers(u.title || '');
-                            if (numsAI !== numsDB) {
-                                return false;
-                            }
-                            return true;
-                        }
-                        if (calculateSimilarity(u.title, event.title) >= 0.85) {
-                            // 【A-2】バージョン（数字）違いの誤マージ防止
-                            const numsAI = extractVersionMarkers(event.title || '');
-                            const numsDB = extractVersionMarkers(u.title || '');
-                            if (numsAI !== numsDB) {
-                                return false; // 数字が異なる場合はマージしない
-                            }
-                            return true;
-                        }
-
-                        // 【防御的要件1】誤検知防止: 短い場合は完全一致のみを許可、包含判定は文字列長5以上の場合のみ
-                        if (normDB.length >= 5 && normAI.length >= 5) {
-                            if (normAI.includes(normDB) || normDB.includes(normAI)) {
-                                const numsAI = extractVersionMarkers(event.title || '');
-                                const numsDB = extractVersionMarkers(u.title || '');
-                                if (numsAI !== numsDB) {
-                                    return false;
-                                }
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                });
-
-                if (duplicateIdx === -1) {
-                    uniqueExtractedEvents.push(event);
-                } else {
-                    // すでに配列内にある場合、情報（URLや終了日）を補完してマージする
-                    const existing = uniqueExtractedEvents[duplicateIdx];
-
-                    const betterTitle = selectBetterTitle(existing.title, event.title);
-                    if (betterTitle) existing.title = betterTitle;
-
-                    if (!existing.eventUrl && event.eventUrl) existing.eventUrl = event.eventUrl;
-                    if ((!existing.endDate || existing.endDate === 'UNKNOWN') && event.endDate && event.endDate !== 'UNKNOWN') {
-                        existing.endDate = event.endDate;
-                    }
-                    if ((!existing.startDate || existing.startDate === 'UNKNOWN') && event.startDate && event.startDate !== 'UNKNOWN') {
-                        existing.startDate = event.startDate;
-                    }
-                    if (!existing.endDate_raw && event.endDate_raw) existing.endDate_raw = event.endDate_raw;
-                    if (!existing.startDate_raw && event.startDate_raw) existing.startDate_raw = event.startDate_raw;
-                    if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
-                    if (event.rewards && event.rewards.length > 0) {
-                        existing.rewards = event.rewards;
-                    }
-                }
-            }
-
-            for (const event of uniqueExtractedEvents) {
-                // 【防御的要件3】対象外データの確実な早期除外
-                if (event.is_valid_event === false) {
-                    functions.logger.info(`[${traceId}] Skipping invalid event/news: ${event.title || 'Unknown Title'}`);
-                    continue;
-                }
-
-                if (!event.title) continue;
-
-                if (event.startDate === 'UNKNOWN') event.startDate = null;
-                if (event.endDate === 'UNKNOWN') event.endDate = null;
-
-                if (event.endDate) {
-                    const endDateObj = getSafeDateObj(event.endDate);
-                    if (endDateObj && endDateObj.getTime() < nowMs) {
-                        functions.logger.info(`[${traceId}] Skipping past event: ${event.title} (endDate: ${event.endDate})`);
-                        continue;
-                    }
-                }
-
-                if (event.tag === 'コード' && event.redeemCode) {
-                    if (!/^[a-zA-Z0-9_-]+$/.test(event.redeemCode)) {
-                        functions.logger.warn(`[${traceId}] Invalid redeemCode detected and skipped: ${event.redeemCode}`);
-                        continue;
-                    }
-                    const matchingConfig = codeUrls.find(c => c.gameName === gameName);
-                    if (matchingConfig && matchingConfig.url) {
-                        event.eventUrl = matchingConfig.url.replace('（コード）', event.redeemCode);
-                    }
-                }
-
-
-
-                let existingEvent: any = undefined;
-
-                // 【B-0】サイクルイベントの「タスク名」との名寄せ（タスク名とAI抽出タイトルが一致する場合はスキップ）
-                let matchedWithCycleTask = false;
-                if (event.title) {
-                    const normAI = normalizeString(event.title);
-                    for (const existingDoc of currentEventsList) {
-                        const eData = existingDoc.data;
-                        if (eData.isCycleEvent === true && Array.isArray(eData.tasks)) {
-                            for (const task of eData.tasks) {
-                                if (task && task.name) {
-                                    const normDB = normalizeString(task.name);
-                                    let isMatch = false;
-
-                                    if (normAI === normDB) {
-                                        const numsAI = extractVersionMarkers(event.title || '');
-                                        const numsDB = extractVersionMarkers(task.name || '');
-                                        if (numsAI === numsDB) {
-                                            isMatch = true;
-                                        }
-                                    } else if (calculateSimilarity(task.name, event.title) >= 0.85) {
-                                        const numsAI = extractVersionMarkers(event.title || '');
-                                        const numsDB = extractVersionMarkers(task.name || '');
-                                        if (numsAI === numsDB) {
-                                            isMatch = true;
-                                        }
-                                    } else if (normDB.length >= 5 && normAI.length >= 5) {
-                                        if (normAI.includes(normDB) || normDB.includes(normAI)) {
-                                            const numsAI = extractVersionMarkers(event.title || '');
-                                            const numsDB = extractVersionMarkers(task.name || '');
-                                            if (numsAI === numsDB) {
-                                                isMatch = true;
-                                            }
-                                        }
-                                    }
-
-                                    if (isMatch) {
-                                        functions.logger.info(`[${traceId}] Found match with existing cycle event task: ${event.title} -> ${existingDoc.docId} (Task: ${task.name})`);
-                                        matchedWithCycleTask = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (matchedWithCycleTask) break;
-                    }
-                }
-
-                if (matchedWithCycleTask) {
-                    continue; // サイクルイベントのタスクと重複した場合は抽出イベントを破棄
-                }
-
-                // 【B】重複登録を防ぐロジック: ギフトコード判定
-                if (event.is_gift_code === true || event.redeemCode) {
-                    const normAI = normalizeCode(event.redeemCode);
-                    if (normAI) {
-                        existingEvent = currentEventsList.find(d => normalizeCode(d.data.redeemCode) === normAI);
-                        if (existingEvent) {
-                            functions.logger.info(`[${traceId}] Found exact redeemCode match for: ${event.title} -> ${existingEvent.docId}`);
-                        }
-                    }
-                }
-
-                if (!existingEvent && event.existing_id && !matchedDocIds.has(event.existing_id)) {
-                    existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
-                    if (existingEvent) {
-                        const aiMarkers = extractVersionMarkers(event.title || '');
-                        const dbMarkers = extractVersionMarkers(existingEvent.data.title || '');
-                        if (aiMarkers !== dbMarkers) {
-                            functions.logger.warn(`[${traceId}] Rejecting AI existing_id ${event.existing_id} due to version mismatch. AI: ${aiMarkers}, DB: ${dbMarkers}`);
-                            existingEvent = undefined; // バージョン違いの場合は強制的に棄却し、新規扱い・名寄せルートへ回す
-                        }
-                    }
-                }
-
-                if (!existingEvent) {
-                    existingEvent = currentEventsList.find(e => {
-                        // URLが完全に一致していれば同一イベント
-                        if (event.eventUrl && e.data.eventUrl) {
-                            const extractedBaseUrl = getBaseUrl(event.eventUrl);
-                            const dbBaseUrl = getBaseUrl(e.data.eventUrl);
-                            if (extractedBaseUrl && dbBaseUrl && extractedBaseUrl === dbBaseUrl) {
-                                return true;
-                            }
-                        }
-
-                        // タイトルによる高度な類似度判定
-                        if (event.title && e.data.title) {
-                            const normAI = normalizeString(event.title);
-                            const normDB = normalizeString(e.data.title);
-
-                            if (normAI === normDB) {
-                                // 【A-2】バージョン（数字）違いの誤マージ防止（完全一致の場合も念のためガード）
-                                const numsAI = extractVersionMarkers(event.title || '');
-                                const numsDB = extractVersionMarkers(e.data.title || '');
-                                if (numsAI !== numsDB) {
-                                    return false;
-                                }
-                                return true;
-                            }
-                            // 類似度が85%以上
-                            if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
-                            // 【A-2】バージョン（数字）違いの誤マージ防止
-                            const numsAI = extractVersionMarkers(event.title || '');
-                            const numsDB = extractVersionMarkers(e.data.title || '');
-                            if (numsAI !== numsDB) {
-                                return false; // 数字が異なる場合はマージしない
-                            }
-
-                                return true;
-                            }
-
-                            // 一方がもう一方の文字列を完全に内包している場合（略称やサブタイトル違いの吸収）
-                            // 【防御的要件1】誤検知防止: 短い場合は完全一致のみを許可、包含判定は文字列長5以上の場合のみ
-                            if (normDB.length >= 5 && normAI.length >= 5) {
-                                if (normAI.includes(normDB) || normDB.includes(normAI)) {
-                                    const numsAI = extractVersionMarkers(event.title || '');
-                                    const numsDB = extractVersionMarkers(e.data.title || '');
-                                    if (numsAI !== numsDB) {
-                                        return false;
-                                    }
-                                    return true;
-                                }
-                            }
-                        }
-                        return false;
-                    });
-                }
-
-                if (existingEvent) {
-                    matchedDocIds.add(existingEvent.docId);
-
-                    const eData = existingEvent.data;
-                    if (eData.isLocked === true || eData.isUpdateLocked === true) {
-                        unchangedCount++;
-                        continue;
-                    }
-
-                    const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
-                    const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
-
-                    const newTitle = selectBetterTitle(event.title, eData.title);
-
-                    let changes: string[] = [];
-                    if (newTitle && eData.title !== newTitle) changes.push('タイトル');
-                    if (event.summary && eData.summary !== event.summary) changes.push('概要');
-                    if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
-                    if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
-                    if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
-                    if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
-                    if (event.tag && eData.tag !== event.tag) changes.push('タグ');
-
-                    const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
-                    const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
-                    if (event.rewards && newRewardsStr !== oldRewardsStr) {
-                        changes.push('報酬');
-                    }
-
-                    if (changes.length === 0) {
-                        unchangedCount++;
-                        continue;
-                    }
-
-                    // 【防御的要件5】AIの手抜き（極端に短い概要）による既存良質データの上書きを防止
-                    let safeSummary = event.summary;
-                    if (eData.summary && (!event.summary || event.summary.length < 50)) {
-                        safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
-                    }
-
-                    const startObj = getSafeDateObj(formattedStart);
-                    const endObj = getSafeDateObj(formattedEnd);
-
-                    const updateData: any = {
-                        title: newTitle,
-                        summary: safeSummary || eData.summary,
-                        startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
-                        endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
-                        redeemCode: event.redeemCode || eData.redeemCode || null,
-                        eventUrl: event.eventUrl || eData.eventUrl || null,
-                        tag: event.tag || eData.tag || null,
-                        rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
-                        isCustomGame: admin.firestore.FieldValue.delete(),
-                        isStandard: true,
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    };
-
-                    if (!(changes.length === 1 && changes[0] === '概要')) {
-                        const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
-                        updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
-                    }
-
-                    batch.update(eventsCollection.doc(existingEvent.docId), updateData);
-                    batchCount++;
-                    updatedCount++;
-                    await commitBatchIfNeeded();
-                } else {
-                    const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
-                    const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
-
-                    const docRef = eventsCollection.doc(docId);
-
-                    // Check if it exists in currentEventsList to avoid overwriting existing events by coincidence (e.g. hash collision)
-                    const existingByHash = currentEventsList.find(e => e.docId === docId);
-
-                    if (existingByHash) {
-                        matchedDocIds.add(docId);
-                        const eData = existingByHash.data;
-                        if (eData.isLocked === true || eData.isUpdateLocked === true) {
-                            unchangedCount++;
-                            continue;
-                        }
-
-                        const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
-                        const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
-
-                        const newTitle = selectBetterTitle(event.title, eData.title);
-
-                        let changes: string[] = [];
-                        if (newTitle && eData.title !== newTitle) changes.push('タイトル');
-                        if (event.summary && eData.summary !== event.summary) changes.push('概要');
-                        if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
-                        if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
-                        if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
-                        if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
-                        if (event.tag && eData.tag !== event.tag) changes.push('タグ');
-
-                        const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
-                        const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
-                        if (event.rewards && newRewardsStr !== oldRewardsStr) {
-                            changes.push('報酬');
-                        }
-
-                        if (changes.length === 0) {
-                            unchangedCount++;
-                            continue;
-                        }
-
-                        // 【防御的要件5】AIの手抜き（極端に短い概要）による既存良質データの上書きを防止
-                        let safeSummary = event.summary;
-                        if (eData.summary && (!event.summary || event.summary.length < 50)) {
-                            safeSummary = eData.summary; // 既存データがしっかりあるのに今回50文字未満なら既存を維持
-                        }
-
-                        const startObj = getSafeDateObj(formattedStart);
-                        const endObj = getSafeDateObj(formattedEnd);
-
-                        const updateData: any = {
-                            title: newTitle,
-                            summary: safeSummary || eData.summary,
-                            startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
-                            endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
-                            redeemCode: event.redeemCode || eData.redeemCode || null,
-                            eventUrl: event.eventUrl || eData.eventUrl || null,
-                            tag: event.tag || eData.tag || null,
-                            rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
-                            isCustomGame: admin.firestore.FieldValue.delete(),
-                        isStandard: true,
-                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        };
-
-                        if (!(changes.length === 1 && changes[0] === '概要')) {
-                            const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
-                            updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
-                        }
-
-                        batch.update(docRef, updateData);
-                        batchCount++;
-                        updatedCount++;
-                        await commitBatchIfNeeded();
-                    } else {
-                        // 【防御的要件5】新規イベント登録時のサマリー手抜き防止
-                        let safeNewSummary = event.summary || '';
-                        const isShort = safeNewSummary.length < 50;
-                        const hasFailureKeywords = /抽出不可|記載なし|不明|ありません|記載されていません/.test(safeNewSummary);
-                        if (isShort || hasFailureKeywords) {
-                            safeNewSummary = '詳細は公式サイトやゲーム内のお知らせ等でご確認ください。';
-                        }
-
-                        const startObj = getSafeDateObj(event.startDate);
-                        const endObj = getSafeDateObj(event.endDate);
-                        const { startDate: _sd, endDate: _ed, ...eventWithoutDates } = event;
-
-                        batch.set(docRef, {
-                            ...eventWithoutDates,
-                            startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
-                            endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
-                            summary: safeNewSummary,
-                            gameName: gameName,
-                            subTag: null,
-                            imageUrl: null,
-                            isLocked: false,
-                            isUpdateLocked: false,
-                            isCreationLocked: false,
-                            isDeleted: false,
-                            tasks: [],
-                            isCycleEvent: false,
-                            isStandard: true,
-                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            updateHistory: [`[${currentDate}] Created by AI Sync`]
-                        });
-                        batchCount++;
-                        addedCount++;
-                        await commitBatchIfNeeded();
-                    }
-                }
-            }
-
-            for (const existingEvent of currentEventsList) {
-                if (!matchedDocIds.has(existingEvent.docId)) {
-                    const eData = existingEvent.data;
-                    if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isCreationLocked === true || eData.isDeleted === true) {
-                        continue;
-                    }
-
-                    if (eData.endDate) {
-                        const endDateObj = getSafeDateObj(eData.endDate);
-                        if (endDateObj && endDateObj.getTime() < nowMs) {
-                            batch.delete(eventsCollection.doc(existingEvent.docId));
-                            batchCount++;
-                            deletedCount++;
-                            await commitBatchIfNeeded();
-                        }
-                    }
-                }
-            }
-
-            if (batchCount > 0) {
-                await batch.commit();
-            }
-
-            const syncRequestRef = db.collection('sync_requests').doc(requestId);
-            await db.runTransaction(async (t) => {
-                const doc = await t.get(syncRequestRef);
-                if (doc.exists) {
-                    const docData = doc.data()!;
-                    const newTotalTokens = (docData.totalTokens || 0) + totalTokens;
-
-                    const newDebugInfo = {
-                        stage: 'Processed',
-                        game: gameName,
-                        added: addedCount,
-                        updated: updatedCount,
-                        deleted: deletedCount,
-                        unchanged: unchangedCount,
-                        tokens: totalTokens
-                    };
-
-                    const newCompletedTasks = (docData.completedTasks || 0) + 1;
-                    const totalTasks = docData.totalTasks || 0;
-
-                    const updateData: any = {
-                        totalTokens: newTotalTokens,
-                        completedTasks: newCompletedTasks,
-                        debugInfo: admin.firestore.FieldValue.arrayUnion(newDebugInfo),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    };
-
-                    if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
-                        updateData.status = 'completed';
-                    }
-
-                    t.update(syncRequestRef, updateData);
-                }
-            });
-
-            const updatedDoc = await syncRequestRef.get();
-            const uData = updatedDoc.data();
-            if (uData && uData.status === 'completed') {
-                 await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
-            }
-
-        } else {
-             const syncRequestRef = db.collection('sync_requests').doc(requestId);
-             await db.runTransaction(async (t) => {
-                 const doc = await t.get(syncRequestRef);
-                 if (doc.exists) {
-                     const docData = doc.data()!;
-                     const newTotalTokens = (docData.totalTokens || 0) + totalTokens;
-                     const newCompletedTasks = (docData.completedTasks || 0) + 1;
-                     const totalTasks = docData.totalTasks || 0;
-
-                     const updateData: any = {
-                         totalTokens: newTotalTokens,
-                         completedTasks: newCompletedTasks,
-                         debugInfo: admin.firestore.FieldValue.arrayUnion({ stage: 'Processed', game: gameName, message: 'No events found', tokens: totalTokens }),
-                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                     };
-
-                     if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
-                         updateData.status = 'completed';
-                     }
-
-                     t.update(syncRequestRef, updateData);
-                 }
-             });
-
-             const updatedDoc = await syncRequestRef.get();
-             const uData = updatedDoc.data();
-             if (uData && uData.status === 'completed') {
-                  await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
-             }
+    const matchedDocIds = new Set<string>();
+    const nowMs = new Date().getTime();
+
+    if (Array.isArray(extractedEvents) && extractedEvents.length > 0) {
+      // 1. AIレスポンス内の自己重複を排除する（より情報が多い方を優先してマージ）
+      const uniqueExtractedEvents: any[] = [];
+      for (const event of extractedEvents) {
+        event.rewards = event.rewards || [];
+        if (event.is_valid_event === false) {
+          functions.logger.info(`[${traceId}] Skipping invalid event from AI: ${event.title || 'Unknown Title'}`);
+          continue;
         }
+
+        // 【B-1】ギフトコードの強制正規化とタグ付け
+        if (event.is_gift_code === true) {
+          event.tag = 'コード';
+        }
+        if (event.redeemCode) {
+          event.redeemCode = normalizeCode(event.redeemCode);
+        }
+
+        const duplicateIdx = uniqueExtractedEvents.findIndex(u => {
+          if ((event.tag === 'コード' || u.tag === 'コード' || event.is_gift_code || u.is_gift_code) && event.redeemCode && u.redeemCode) {
+            if (normalizeCode(event.redeemCode) === normalizeCode(u.redeemCode)) return true;
+          }
+          if (event.eventUrl && u.eventUrl && getBaseUrl(event.eventUrl) === getBaseUrl(u.eventUrl)) return true;
+
+          if (u.title && event.title) {
+            const normAI = normalizeString(event.title);
+            const normDB = normalizeString(u.title);
+
+            if (normAI === normDB) {
+              const numsAI = extractVersionMarkers(event.title || '');
+              const numsDB = extractVersionMarkers(u.title || '');
+              if (numsAI !== numsDB) return false;
+              return true;
+            }
+            if (calculateSimilarity(u.title, event.title) >= 0.85) {
+              const numsAI = extractVersionMarkers(event.title || '');
+              const numsDB = extractVersionMarkers(u.title || '');
+              if (numsAI !== numsDB) return false;
+              return true;
+            }
+
+            if (normDB.length >= 5 && normAI.length >= 5) {
+              if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                const numsAI = extractVersionMarkers(event.title || '');
+                const numsDB = extractVersionMarkers(u.title || '');
+                if (numsAI !== numsDB) return false;
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        if (duplicateIdx === -1) {
+          uniqueExtractedEvents.push(event);
+        } else {
+          const existing = uniqueExtractedEvents[duplicateIdx];
+          const betterTitle = selectBetterTitle(existing.title, event.title);
+          if (betterTitle) existing.title = betterTitle;
+
+          if (!existing.eventUrl && event.eventUrl) existing.eventUrl = event.eventUrl;
+          if ((!existing.endDate || existing.endDate === 'UNKNOWN') && event.endDate && event.endDate !== 'UNKNOWN') {
+            existing.endDate = event.endDate;
+          }
+          if ((!existing.startDate || existing.startDate === 'UNKNOWN') && event.startDate && event.startDate !== 'UNKNOWN') {
+            existing.startDate = event.startDate;
+          }
+          if (!existing.endDate_raw && event.endDate_raw) existing.endDate_raw = event.endDate_raw;
+          if (!existing.startDate_raw && event.startDate_raw) existing.startDate_raw = event.startDate_raw;
+          if (!existing.redeemCode && event.redeemCode) existing.redeemCode = event.redeemCode;
+          if (event.rewards && event.rewards.length > 0) {
+            existing.rewards = event.rewards;
+          }
+        }
+      }
+
+      for (const event of uniqueExtractedEvents) {
+        if (event.is_valid_event === false) continue;
+        if (!event.title) continue;
+
+        if (event.startDate === 'UNKNOWN') event.startDate = null;
+        if (event.endDate === 'UNKNOWN') event.endDate = null;
+
+        if (event.endDate) {
+          const endDateObj = getSafeDateObj(event.endDate);
+          if (endDateObj && endDateObj.getTime() < nowMs) continue;
+        }
+
+        if (event.tag === 'コード' && event.redeemCode) {
+          if (!/^[a-zA-Z0-9_-]+$/.test(event.redeemCode)) continue;
+          const matchingConfig = codeUrls.find(c => c.gameName === gameName);
+          if (matchingConfig && matchingConfig.url) {
+            event.eventUrl = matchingConfig.url.replace('（コード）', event.redeemCode);
+          }
+        }
+
+        let existingEvent: any = undefined;
+        let matchedWithCycleTask = false;
+
+        if (event.title) {
+          const normAI = normalizeString(event.title);
+          for (const existingDoc of currentEventsList) {
+            const eData = existingDoc.data;
+            if (eData.isCycleEvent === true && Array.isArray(eData.tasks)) {
+              for (const task of eData.tasks) {
+                if (task && task.name) {
+                  const normDB = normalizeString(task.name);
+                  let isMatch = false;
+
+                  if (normAI === normDB) {
+                    if (extractVersionMarkers(event.title || '') === extractVersionMarkers(task.name || '')) isMatch = true;
+                  } else if (calculateSimilarity(task.name, event.title) >= 0.85) {
+                    if (extractVersionMarkers(event.title || '') === extractVersionMarkers(task.name || '')) isMatch = true;
+                  } else if (normDB.length >= 5 && normAI.length >= 5) {
+                    if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                      if (extractVersionMarkers(event.title || '') === extractVersionMarkers(task.name || '')) isMatch = true;
+                    }
+                  }
+
+                  if (isMatch) {
+                    matchedWithCycleTask = true;
+                    break;
+                  }
+                }
+              }
+            }
+            if (matchedWithCycleTask) break;
+          }
+        }
+
+        if (matchedWithCycleTask) continue;
+
+        if (event.is_gift_code === true || event.redeemCode) {
+          const normAI = normalizeCode(event.redeemCode);
+          if (normAI) existingEvent = currentEventsList.find(d => normalizeCode(d.data.redeemCode) === normAI);
+        }
+
+        if (!existingEvent && event.existing_id && !matchedDocIds.has(event.existing_id)) {
+          existingEvent = currentEventsList.find(e => e.docId === event.existing_id);
+          if (existingEvent) {
+            const aiMarkers = extractVersionMarkers(event.title || '');
+            const dbMarkers = extractVersionMarkers(existingEvent.data.title || '');
+            if (aiMarkers !== dbMarkers) existingEvent = undefined;
+          }
+        }
+
+        if (!existingEvent) {
+          existingEvent = currentEventsList.find(e => {
+            if (event.eventUrl && e.data.eventUrl) {
+              const extractedBaseUrl = getBaseUrl(event.eventUrl);
+              const dbBaseUrl = getBaseUrl(e.data.eventUrl);
+              if (extractedBaseUrl && dbBaseUrl && extractedBaseUrl === dbBaseUrl) return true;
+            }
+
+            if (event.title && e.data.title) {
+              const normAI = normalizeString(event.title);
+              const normDB = normalizeString(e.data.title);
+
+              if (normAI === normDB) {
+                if (extractVersionMarkers(event.title || '') !== extractVersionMarkers(e.data.title || '')) return false;
+                return true;
+              }
+              if (calculateSimilarity(e.data.title, event.title) >= 0.85) {
+                if (extractVersionMarkers(event.title || '') !== extractVersionMarkers(e.data.title || '')) return false;
+                return true;
+              }
+
+              if (normDB.length >= 5 && normAI.length >= 5) {
+                if (normAI.includes(normDB) || normDB.includes(normAI)) {
+                  if (extractVersionMarkers(event.title || '') !== extractVersionMarkers(e.data.title || '')) return false;
+                  return true;
+                }
+              }
+            }
+            return false;
+          });
+        }
+
+        if (existingEvent) {
+          matchedDocIds.add(existingEvent.docId);
+
+          const eData = existingEvent.data;
+          if (eData.isLocked === true || eData.isUpdateLocked === true) {
+            unchangedCount++;
+            continue;
+          }
+
+          const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
+          const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
+          const newTitle = selectBetterTitle(event.title, eData.title);
+
+          let changes: string[] = [];
+          if (newTitle && eData.title !== newTitle) changes.push('タイトル');
+          if (event.summary && eData.summary !== event.summary) changes.push('概要');
+          if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
+          if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
+          if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
+          if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
+          if (event.tag && eData.tag !== event.tag) changes.push('タグ');
+
+          const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
+          const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
+          if (event.rewards && newRewardsStr !== oldRewardsStr) {
+            changes.push('報酬');
+          }
+
+          if (changes.length === 0) {
+            unchangedCount++;
+            continue;
+          }
+
+          let safeSummary = event.summary;
+          if (eData.summary && (!event.summary || event.summary.length < 50)) {
+            safeSummary = eData.summary;
+          }
+
+          const startObj = getSafeDateObj(formattedStart);
+          const endObj = getSafeDateObj(formattedEnd);
+
+          const updateData: any = {
+            title: newTitle,
+            summary: safeSummary || eData.summary,
+            startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+            endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
+            redeemCode: event.redeemCode || eData.redeemCode || null,
+            eventUrl: event.eventUrl || eData.eventUrl || null,
+            tag: event.tag || eData.tag || null,
+            rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
+            isCustomGame: admin.firestore.FieldValue.delete(),
+            isStandard: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          if (!(changes.length === 1 && changes[0] === '概要')) {
+            const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+            updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
+          }
+
+          batch.update(eventsCollection.doc(existingEvent.docId), updateData);
+          batchCount++;
+          updatedCount++;
+          await commitBatchIfNeeded();
+        } else {
+          let safeNewSummary = event.summary || '';
+          const isShort = safeNewSummary.length < 50;
+          const hasFailureKeywords = /抽出不可|記載なし|不明|ありません|記載されていません/.test(safeNewSummary);
+          if (isShort || hasFailureKeywords) {
+            safeNewSummary = '詳細は公式サイトやゲーム内のお知らせ等でご確認ください。';
+          }
+
+          const docIdRaw = gameName + '_' + (event.eventUrl || event.title);
+          const docId = event.tag === 'コード' && event.redeemCode ? 'code_' + event.redeemCode.toUpperCase().replace(/\s+/g, '') : crypto.createHash('md5').update(docIdRaw).digest('hex');
+          const docRef = eventsCollection.doc(docId);
+          const existingByHash = currentEventsList.find(e => e.docId === docId);
+
+          if (existingByHash) {
+            matchedDocIds.add(docId);
+            const eData = existingByHash.data;
+            if (eData.isLocked === true || eData.isUpdateLocked === true) {
+              unchangedCount++;
+              continue;
+            }
+
+            const formattedStart = event.startDate && event.startDate !== 'UNKNOWN' ? event.startDate : eData.startDate;
+            const formattedEnd = event.endDate && event.endDate !== 'UNKNOWN' ? event.endDate : eData.endDate;
+            const newTitle = selectBetterTitle(event.title, eData.title);
+
+            let changes: string[] = [];
+            if (newTitle && eData.title !== newTitle) changes.push('タイトル');
+            if (event.summary && eData.summary !== event.summary) changes.push('概要');
+            if (eData.startDate !== formattedStart) changes.push(`開始日(${eData.startDate || 'なし'}→${formattedStart})`);
+            if (eData.endDate !== formattedEnd) changes.push(`終了日(${eData.endDate || 'なし'}→${formattedEnd})`);
+            if (event.redeemCode && eData.redeemCode !== event.redeemCode) changes.push(`コード(${eData.redeemCode || 'なし'}→${event.redeemCode})`);
+            if (event.eventUrl && eData.eventUrl !== event.eventUrl) changes.push('URL');
+            if (event.tag && eData.tag !== event.tag) changes.push('タグ');
+
+            const newRewardsStr = Array.isArray(event.rewards) ? JSON.stringify(event.rewards) : '';
+            const oldRewardsStr = Array.isArray(eData.rewards) ? JSON.stringify(eData.rewards) : '';
+            if (event.rewards && newRewardsStr !== oldRewardsStr) {
+              changes.push('報酬');
+            }
+
+            if (changes.length === 0) {
+              unchangedCount++;
+              continue;
+            }
+
+            let safeSummaryHash = event.summary;
+            if (eData.summary && (!event.summary || event.summary.length < 50)) {
+              safeSummaryHash = eData.summary;
+            }
+
+            const startObj = getSafeDateObj(formattedStart);
+            const endObj = getSafeDateObj(formattedEnd);
+
+            const updateData: any = {
+              title: newTitle,
+              summary: safeSummaryHash || eData.summary,
+              startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+              endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
+              redeemCode: event.redeemCode || eData.redeemCode || null,
+              eventUrl: event.eventUrl || eData.eventUrl || null,
+              tag: event.tag || eData.tag || null,
+              rewards: (event.rewards && event.rewards.length > 0) ? event.rewards : (eData.rewards || []),
+              isCustomGame: admin.firestore.FieldValue.delete(),
+              isStandard: true,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
+
+            if (!(changes.length === 1 && changes[0] === '概要')) {
+              const historyMsg = `[${currentDate}] 自動同期: 変更あり（${changes.join(', ')}）`;
+              updateData.updateHistory = admin.firestore.FieldValue.arrayUnion(historyMsg);
+            }
+
+            batch.update(docRef, updateData);
+            batchCount++;
+            updatedCount++;
+            await commitBatchIfNeeded();
+          } else {
+            const startObj = getSafeDateObj(event.startDate);
+            const endObj = getSafeDateObj(event.endDate);
+            const { startDate: _sd, endDate: _ed, ...eventWithoutDates } = event;
+
+            batch.set(docRef, {
+              ...eventWithoutDates,
+              startDate: startObj ? admin.firestore.Timestamp.fromDate(startObj) : null,
+              endDate: endObj ? admin.firestore.Timestamp.fromDate(endObj) : null,
+              summary: safeNewSummary,
+              gameName: gameName,
+              subTag: null,
+              imageUrl: null,
+              isLocked: false,
+              isUpdateLocked: false,
+              isCreationLocked: false,
+              isDeleted: false,
+              tasks: [],
+              isCycleEvent: false,
+              isStandard: true,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updateHistory: [`[${currentDate}] Created by AI Sync`]
+            });
+            batchCount++;
+            addedCount++;
+            await commitBatchIfNeeded();
+          }
+        }
+      }
+    }
+
+    // 抽出イベントの有無に関わらず、既存イベントの期限切れチェックとunchangedCountの計算を行う
+    for (const existingEvent of currentEventsList) {
+      if (!matchedDocIds.has(existingEvent.docId)) {
+        const eData = existingEvent.data;
+        if (eData.isCycleEvent === true || eData.isLocked === true || eData.isUpdateLocked === true || eData.isCreationLocked === true || eData.isDeleted === true) {
+          unchangedCount++;
+          continue;
+        }
+
+        if (eData.endDate) {
+          const endDateObj = getSafeDateObj(eData.endDate);
+          if (endDateObj && endDateObj.getTime() < nowMs) {
+            batch.delete(eventsCollection.doc(existingEvent.docId));
+            batchCount++;
+            deletedCount++;
+            await commitBatchIfNeeded();
+          } else {
+            unchangedCount++;
+          }
+        } else {
+          unchangedCount++;
+        }
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    const syncRequestRef = db.collection('sync_requests').doc(requestId);
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(syncRequestRef);
+      if (doc.exists) {
+        const docData = doc.data()!;
+        const newTotalTokens = (docData.totalTokens || 0) + totalTokens;
+
+        const newDebugInfo = {
+          stage: 'Processed',
+          game: gameName,
+          added: addedCount,
+          updated: updatedCount,
+          deleted: deletedCount,
+          unchanged: unchangedCount,
+          tokens: totalTokens
+        };
+
+        const newCompletedTasks = (docData.completedTasks || 0) + 1;
+        const totalTasks = docData.totalTasks || 0;
+
+        const updateData: any = {
+          totalTokens: newTotalTokens,
+          completedTasks: newCompletedTasks,
+          debugInfo: admin.firestore.FieldValue.arrayUnion(newDebugInfo),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (totalTasks > 0 && newCompletedTasks >= totalTasks) {
+          updateData.status = 'completed';
+        }
+
+        t.update(syncRequestRef, updateData);
+      }
+    });
+
+    const updatedDoc = await syncRequestRef.get();
+    const uData = updatedDoc.data();
+    if (uData && uData.status === 'completed') {
+      await writeDebugLog(traceId, 'All tasks completed successfully.', { requestId });
+    }
     } catch (error) {
         functions.logger.error(`[${traceId}] Error processing ${gameName}: ${error}`);
         const syncRequestRef = db.collection('sync_requests').doc(requestId);

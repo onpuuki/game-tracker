@@ -15,8 +15,6 @@ import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
-import { responseSchema } from './schema';
-
 import { google } from 'googleapis';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -749,9 +747,7 @@ ${existingMiniList || 'なし'}
             system_instruction: systemInstructionText,
             store: false,
             generation_config: {
-                thinking_level: "minimal",
-                response_mime_type: "application/json",
-                response_schema: responseSchema.toJSONSchema()
+                thinking_level: "minimal"
             }
         };
 

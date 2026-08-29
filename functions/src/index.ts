@@ -718,7 +718,7 @@ ${existingMiniList || 'なし'}
             store: false,
             generation_config: {
                 thinking_level: "minimal",
-                response_mime_type: "application/json"
+                responseMimeType: "application/json"
             }
         };
 

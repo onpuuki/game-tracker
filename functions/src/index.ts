@@ -711,14 +711,15 @@ ${existingMiniList || 'なし'}
 
 【追加禁止イベント（システム管理外）】:
 [ ${cycleEventTitles.join(', ')} ]
-これらに関連するイベントは絶対に追加・更新しないでください。`;
+これらに関連するイベントは絶対に追加・更新しないでください。
+
+【重要】出力は必ずJSON形式のみで行ってください。マークダウン（\`\`\`json など）による装飾は一切含めず、純粋なJSON文字列として出力してください。`;
 
         const interactionsOptions = {
             system_instruction: systemInstructionText,
             store: false,
             generation_config: {
-                thinking_level: "minimal",
-                responseMimeType: "application/json"
+                thinking_level: "minimal"
             }
         };
 
@@ -2557,12 +2558,12 @@ export const executeManualPrompt = functions.region('asia-northeast1').runWith({
 
         const generationConfig = {
             temperature: 0.1,
-            responseMimeType: "application/json",
         };
 
+        const jsonInstruction = '\n\n【重要】出力は必ずJSON形式のみで行ってください。マークダウン（```json など）による装飾は一切含めず、純粋なJSON文字列として出力してください。';
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [{ text: systemInstruction + '\n\n【修正指示プロンプト】\n' + prompt }] }],
+            contents: [{ role: 'user', parts: [{ text: systemInstruction + '\n\n【修正指示プロンプト】\n' + prompt + jsonInstruction }] }],
             config: generationConfig,
         });
 

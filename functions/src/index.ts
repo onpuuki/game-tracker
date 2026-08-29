@@ -11,9 +11,9 @@ import { CloudSchedulerClient } from '@google-cloud/scheduler';
 import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
-import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
+// import * as cheerio from 'cheerio';
+// import TurndownService from 'turndown';
+// import { gfm } from 'turndown-plugin-gfm';
 
 import { google } from 'googleapis';
 import dayjs from 'dayjs';
@@ -31,61 +31,31 @@ const db = getFirestore(admin.app(), 'default');
 
 
 async function fetchAndConvertHtmlToMarkdown(gameName: string, apiKey: string, cx: string): Promise<string> {
-    const customsearch = google.customsearch('v1');
-    const query = `${gameName} イベント site:game8.jp OR site:gamewith.jp`;
+  const customsearch = google.customsearch('v1');
+  const query = `${gameName} イベント site:game8.jp OR site:gamewith.jp`;
+  let urls: string[] = [];
+  try {
+    const res = await customsearch.cse.list({ cx, q: query, auth: apiKey, num: 2 });
+    if (res.data.items) urls = res.data.items.map(item => item.link).filter(link => link) as string[];
+  } catch (error) {
+    functions.logger.error(`Failed to fetch search results for ${gameName}`, error);
+    return "";
+  }
 
-    let urls: string[] = [];
+  let combinedMarkdown = "";
+  for (const url of urls) {
     try {
-        const res = await customsearch.cse.list({
-            cx: cx,
-            q: query,
-            auth: apiKey,
-            num: 2
-        });
-
-        if (res.data.items) {
-            urls = res.data.items.map(item => item.link).filter(link => link) as string[];
-        }
-    } catch (error) {
-        functions.logger.error(`Failed to fetch custom search results for ${gameName}`, error);
-        return "";
+      const response = await axios.get(`https://r.jina.ai/${url}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GameTrackerBot/1.0)', 'Accept': 'text/plain, text/markdown' },
+        timeout: 15000
+      });
+      const markdown = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      combinedMarkdown += `\n\n--- Source: ${url} ---\n\n${markdown}`;
+    } catch (error: any) {
+      functions.logger.warn(`Failed to fetch via Jina from ${url}: ${error.message}`);
     }
-
-    let combinedMarkdown = "";
-
-    for (const url of urls) {
-        try {
-            const response = await axios.get(url, {
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-                timeout: 10000
-            });
-
-            const $ = cheerio.load(response.data);
-            $('script, style, nav, footer, header, noscript, iframe, aside').remove();
-
-            const html = $('body').html() || '';
-
-            const turndownService = new TurndownService({
-                headingStyle: 'atx',
-                codeBlockStyle: 'fenced'
-            });
-            turndownService.use(gfm);
-
-            const markdown = turndownService.turndown(html);
-            combinedMarkdown += `
-
---- Source: ${url} ---
-
-${markdown}`;
-
-        } catch (error) {
-            functions.logger.error(`Failed to fetch or convert HTML from ${url}`, error);
-            // Skip to next URL
-        }
-    }
-
-    return combinedMarkdown;
+  }
+  return combinedMarkdown;
 }
 
 function countJapaneseChars(str: string): number {
@@ -558,7 +528,7 @@ export const syncSingleGameTask = onTaskDispatched({
         const googleSearchEngineId = configData?.googleSearchEngineId;
 
         if (!geminiApiKey || !googleSearchApiKey || !googleSearchEngineId) {
-            throw new Error('API keys are missing');
+            throw new Error('API keys are missing in settings/config');
         }
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey.trim() });
@@ -733,8 +703,8 @@ export const syncSingleGameTask = onTaskDispatched({
 【検索キーワード指定】: ${keywords || 'なし'}
 【現在日時】: ${currentDate}
 
-【最新の検索結果（Markdown）】:
-${markdownContent || 'なし'}
+【最新の攻略サイト情報（Markdown）】:
+${markdownContent || 'なし（情報が取得できませんでした）'}
 
 【既存のイベント一覧（名寄せ・パージ用）】:
 ${existingMiniList || 'なし'}
@@ -743,11 +713,12 @@ ${existingMiniList || 'なし'}
 [ ${cycleEventTitles.join(', ')} ]
 これらに関連するイベントは絶対に追加・更新しないでください。`;
 
-                const interactionsOptions = {
+        const interactionsOptions = {
             system_instruction: systemInstructionText,
             store: false,
             generation_config: {
-                thinking_level: "minimal"
+                thinking_level: "minimal",
+                response_mime_type: "application/json"
             }
         };
 
